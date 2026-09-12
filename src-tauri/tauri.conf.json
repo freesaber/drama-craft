@@ -1,0 +1,18 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "DramaCraft",
+  "version": "0.1.0",
+  "identifier": "io.dramacraft.desktop",
+  "build": {
+    "beforeDevCommand": "npm run dev", "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build", "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [{ "label": "main", "title": "DramaCraft · 剧匠", "width": 1500, "height": 940, "minWidth": 1024, "minHeight": 680 }],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost; media-src 'self' asset: http://asset.localhost; connect-src ipc: http://ipc.localhost; object-src 'none'; frame-src 'none'",
+      "assetProtocol": { "enable": true, "scope": [] }
+    }
+  },
+  "bundle": { "active": true, "targets": ["nsis"], "icon": ["icons/icon.ico"] }
+}

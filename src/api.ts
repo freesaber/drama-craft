@@ -1,0 +1,51 @@
+import { invoke, isTauri } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
+import type {
+  Candidate,
+  DocumentEntry,
+  Media,
+  Project,
+  Recent,
+  Snapshot,
+} from "./types";
+import { ui } from "./i18n";
+export const desktop = isTauri();
+export const api = {
+  inspect: (path: string) => invoke<Candidate[]>("inspect_directory", { path }),
+  open: (path: string) => invoke<Project>("open_project", { path }),
+  close: (handle: string) => invoke<void>("close_project", { handle }),
+  create: (parent: string, name: string) =>
+    invoke<Project>("create_project", { parent, name }),
+  scan: (handle: string) =>
+    invoke<{ documents: DocumentEntry[]; warnings: string[] }>("scan_project", {
+      handle,
+    }),
+  read: (handle: string, path: string) =>
+    invoke<Snapshot>("read_document", { handle, path }),
+  save: (handle: string, path: string, text: string, expectedHash: string) =>
+    invoke<Snapshot>("save_document", { handle, path, text, expectedHash }),
+  newDoc: (handle: string, path: string, text: string) =>
+    invoke<Snapshot>("create_document", { handle, path, text }),
+  media: (handle: string, document: string, reference: string) =>
+    invoke<Media>("resolve_media", { handle, document, reference }),
+  openMedia: (handle: string, document: string, reference: string) =>
+    invoke<void>("open_media", { handle, document, reference }),
+  preferences: () =>
+    invoke<{ recent: Recent[]; previewVisible?: boolean }>("get_preferences"),
+  setPreview: (visible: boolean) =>
+    invoke<void>("set_preview_visible", { visible }),
+};
+export async function chooseDirectory(): Promise<string | null> {
+  if (!desktop) return null;
+  const path = await open({
+    directory: true,
+    multiple: false,
+    title: ui.choose,
+  });
+  return typeof path === "string" ? path : null;
+}
+export function errorMessage(error: unknown): string {
+  if (error && typeof error === "object" && "message" in error)
+    return String(error.message);
+  return typeof error === "string" ? error : ui.errors.unknown;
+}
