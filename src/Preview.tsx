@@ -11,11 +11,13 @@ export function Asset({
   document,
   reference,
   refreshKey,
+  hero = false,
 }: {
   project: Project;
   document: string;
   reference: string;
   refreshKey: number;
+  hero?: boolean;
 }) {
   const [media, setMedia] = useState<Media | null>(null);
   const [error, setError] = useState("");
@@ -52,6 +54,12 @@ export function Asset({
           <span className={`asset-state ${media.exists ? "" : "missing"}`}>
             {media.exists ? ui.available : ui.missing}
           </span>
+          {hero && !media.exists && (
+            <div className="media-placeholder">
+              <span>▧</span>
+              {ui.missing}
+            </div>
+          )}
           {src &&
             !failed &&
             (media.kind === "image" ? (
@@ -67,7 +75,7 @@ export function Asset({
               <video
                 src={src}
                 controls
-                preload="metadata"
+                preload="none"
                 onError={() => setFailed(true)}
               />
             ))}

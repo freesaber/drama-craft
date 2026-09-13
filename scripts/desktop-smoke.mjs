@@ -9,6 +9,7 @@ import {
   readFile,
   writeFile,
   copyFile,
+  chmod,
   rm,
   access,
 } from "node:fs/promises";
@@ -70,20 +71,157 @@ try {
     testRoot,
   );
   await page.getByRole("button", { name: "确认", exact: true }).click();
-  await expect(page.getByLabel("Markdown 文档编辑器")).toBeVisible();
+  await expect(page.locator(".board-document").first()).toBeVisible();
+  await expect(page.getByLabel("Markdown 文档编辑器")).not.toBeVisible();
   const root = join(testRoot, "01 原创 渡口");
   await access(join(root, ".drama-craft", "project.json"));
   await page.getByRole("button", { name: "新建文档", exact: false }).click();
   await page.getByLabel("文档文件名").fill("01 灯火.md");
   await page.getByRole("button", { name: "确认", exact: true }).click();
+  const firstCard = () => page.locator(".shot-card").first();
+  const toSource = async () =>
+    page
+      .locator(".mode-switch")
+      .getByRole("button", { name: "Markdown 源码", exact: true })
+      .click();
+  const toBoard = async () =>
+    page
+      .locator(".mode-switch")
+      .getByRole("button", { name: "故事板", exact: true })
+      .click();
+  // Fixed-format data is displayed as bound character cards, not Markdown tables.
+  await copyFile("src-tauri/icons/source.png", join(root, "角色 图.png"));
+  const silentVoice = Buffer.alloc(44 + 1600);
+  silentVoice.write("RIFF", 0);
+  silentVoice.writeUInt32LE(silentVoice.length - 8, 4);
+  silentVoice.write("WAVEfmt ", 8);
+  silentVoice.writeUInt32LE(16, 16);
+  silentVoice.writeUInt16LE(1, 20);
+  silentVoice.writeUInt16LE(1, 22);
+  silentVoice.writeUInt32LE(8000, 24);
+  silentVoice.writeUInt32LE(16000, 28);
+  silentVoice.writeUInt16LE(2, 32);
+  silentVoice.writeUInt16LE(16, 34);
+  silentVoice.write("data", 36);
+  silentVoice.writeUInt32LE(1600, 40);
+  await writeFile(join(root, "角色 声音.wav"), silentVoice);
+  await toSource();
+  const setupEditor = page.getByLabel("Markdown 文档编辑器");
+  await setupEditor.fill(
+    (await setupEditor.inputValue())
+      .replace(
+        "|---|---|---|---|---|---|",
+        "|---|---|---|---|---|---|\n| C001 | 旅人 | `角色 图.png` | `角色 声音.wav` | 候选未试听 | S001 |",
+      )
+      .replace("角色：—", "角色：C001"),
+  );
+  await toBoard();
+  await expect(page.locator(".storyboard-scroll .markdown-body")).toHaveCount(
+    0,
+  );
+  const rolesSummary = page
+    .locator(".episode-overview > details > summary")
+    .filter({ hasText: "角色与声音" });
+  await rolesSummary.click();
+  const boundRole = page.locator('.character-card[data-character-id="C001"]');
+  await boundRole.scrollIntoViewIfNeeded();
+  await expect(boundRole.getByAltText("角色 图.png")).toBeVisible();
+  await expect(boundRole.locator("audio")).toBeVisible();
+  await expect(
+    boundRole.getByText("候选未试听", { exact: true }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: join(output, "desktop-character-binding.png"),
+  });
+  await rolesSummary.click();
+  await expect(firstCard()).toBeVisible();
+  await expect(
+    firstCard().getByRole("button", { name: "生成视频", exact: true }),
+  ).toBeEnabled();
+  await page.getByRole("button", { name: "视频 API", exact: true }).click();
+  await expect(page.getByLabel("API 服务地址", { exact: true })).toBeVisible();
+  await expect(page.locator('.modal input[type="password"]')).toBeVisible();
+  await page.getByRole("button", { name: "取消", exact: true }).click();
+  await firstCard().getByLabel("镜头标题", { exact: true }).fill("灯下相逢");
+  await firstCard()
+    .getByLabel("故事走向", { exact: true })
+    .fill("旅人点灯。\n\n船夫循光靠岸。");
+  // Exercise real keystrokes, including a trailing newline, across reparsing.
+  await firstCard().getByLabel("故事走向", { exact: true }).press("End");
+  await firstCard().getByLabel("故事走向", { exact: true }).press("Enter");
+  await firstCard()
+    .getByLabel("故事走向", { exact: true })
+    .pressSequentially("灯火未熄。", { delay: 15 });
+  await expect(firstCard().getByLabel("故事走向", { exact: true })).toHaveValue(
+    "旅人点灯。\n\n船夫循光靠岸。\n灯火未熄。",
+  );
+  await page.keyboard.press("Control+s");
+  await expect
+    .poll(() => readFile(join(root, "01 灯火.md"), "utf8"))
+    .toContain("船夫循光靠岸。");
+  await page.getByRole("button", { name: "新增分镜", exact: false }).click();
+  await expect(page.locator(".shot-card")).toHaveCount(2);
+  await page.getByRole("button", { name: "S002 上移", exact: true }).click();
+  await expect(firstCard()).toHaveAttribute("data-shot-id", "S002");
+  await page.getByRole("button", { name: "S002 下移", exact: true }).click();
+  await expect(firstCard()).toHaveAttribute("data-shot-id", "S001");
+  await page
+    .getByRole("button", { name: "S002 删除分镜", exact: true })
+    .click();
+  await page.getByRole("button", { name: "取消", exact: true }).click();
+  await expect(page.locator(".shot-card")).toHaveCount(2);
+  await page
+    .getByRole("button", { name: "S002 删除分镜", exact: true })
+    .click();
+  await page.getByRole("button", { name: "确认删除", exact: true }).click();
+  await expect(page.locator(".shot-card")).toHaveCount(1);
+  await toSource();
   const editor = page.getByLabel("Markdown 文档编辑器");
   await expect(editor).toContainText("");
   await expect.poll(() => editor.inputValue()).toContain("### 首帧生成");
   const original = await editor.inputValue();
+  assert.ok(original.includes("### 故事走向"));
   const edited =
-    original.replace("## S001 镜头名", "## S001 点亮渡口") +
-    "\n自定义段落：旅人在灯下停步。\n\n[参考图](<参考 图.png>)\n\n`missing.mp4`\n";
+    original.replace("## S001 灯下相逢", "## S001 点亮渡口") +
+    "\n### 创作备注\n\n自定义段落：旅人在灯下停步。\n\n[参考图](<参考 图.png>)\n\n`missing.mp4`\n";
   await copyFile("src-tauri/icons/source.png", join(root, "参考 图.png"));
+  await copyFile("src-tauri/icons/source.png", join(root, "01 首帧_S001.png"));
+  await writeFile(join(root, "损坏 图片.png"), "synthetic invalid image");
+  // Create an original, silent local video fixture using this WebView's encoder.
+  const videoBytes = await page.evaluate(async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 320;
+    canvas.height = 180;
+    const context = canvas.getContext("2d");
+    const stream = canvas.captureStream(10);
+    const recorder = new MediaRecorder(stream, {
+      mimeType: "video/webm;codecs=vp8",
+    });
+    const chunks = [];
+    recorder.ondataavailable = (event) => chunks.push(event.data);
+    const stopped = new Promise((resolve) => {
+      recorder.onstop = resolve;
+    });
+    recorder.start();
+    let frame = 0;
+    const timer = setInterval(() => {
+      context.fillStyle = "#234638";
+      context.fillRect(0, 0, 320, 180);
+      context.fillStyle = "#efcf83";
+      context.fillRect(20 + frame++ * 4, 65, 30, 50);
+    }, 100);
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    clearInterval(timer);
+    recorder.stop();
+    await stopped;
+    stream.getTracks().forEach((track) => track.stop());
+    return Array.from(
+      new Uint8Array(
+        await new Blob(chunks, { type: "video/webm" }).arrayBuffer(),
+      ),
+    );
+  });
+  await writeFile(join(root, "本地样片.webm"), Buffer.from(videoBytes));
   await editor.fill(edited);
   await page.keyboard.press("Control+s");
   await expect
@@ -97,7 +235,26 @@ try {
     edited.indexOf("## S001"),
   );
   await page.screenshot({ path: join(output, "desktop-editor.png") });
-  await page.getByRole("button", { name: "素材引用", exact: false }).click();
+  await toBoard();
+  await firstCard().locator(".generation-thumb").first().click();
+  await expect(
+    page.locator(".generation-preview .asset-card img"),
+  ).toBeVisible();
+  await page.locator(".generation-preview .modal-close").click();
+  await firstCard()
+    .locator("summary")
+    .filter({ hasText: "原文与补充内容" })
+    .click();
+  await firstCard()
+    .locator('input[value="参考 图.png"]')
+    .scrollIntoViewIfNeeded();
+  const referenceInput = firstCard()
+    .getByLabel("引用路径", { exact: true })
+    .nth(3);
+  await referenceInput.fill("");
+  await referenceInput.pressSequentially("参考 图.png", { delay: 20 });
+  await expect(referenceInput).toHaveValue("参考 图.png");
+  await referenceInput.press("Tab");
   await expect(page.getByAltText("参考 图.png")).toBeVisible();
   await expect
     .poll(() =>
@@ -105,10 +262,54 @@ try {
     )
     .toBeGreaterThan(0);
   await expect(
-    page.getByText("文件缺失", { exact: true }).first(),
+    firstCard().locator(".shot-details .asset-state.missing").first(),
   ).toBeVisible();
+  await firstCard()
+    .getByLabel("首帧文件", { exact: true })
+    .fill("损坏 图片.png");
+  await expect(firstCard().locator(".generation-thumb").first()).toBeVisible();
+  await firstCard()
+    .getByLabel("首帧文件", { exact: true })
+    .fill("01 首帧_S001.png");
+  await firstCard()
+    .getByLabel("视频文件", { exact: true })
+    .fill("本地样片.webm");
+  await firstCard().locator(".shot-media").scrollIntoViewIfNeeded();
+  const video = firstCard().locator(".shot-media video");
+  await video.scrollIntoViewIfNeeded();
+  await expect(video).toBeVisible();
+  await video.evaluate(async (element) => {
+    await element.play();
+  });
+  await expect
+    .poll(() => video.evaluate((element) => element.currentTime))
+    .toBeGreaterThan(0);
+  await video.evaluate((element) => element.pause());
   await page.screenshot({ path: join(output, "desktop-assets.png") });
-  await page.getByRole("button", { name: "文档预览", exact: true }).click();
+  await firstCard().getByLabel("时长（秒）", { exact: true }).fill("8");
+  await firstCard()
+    .getByLabel("视频提示词", { exact: true })
+    .fill("<Picture 1>：灯光映亮面孔。\n旅人转身，看向船夫。");
+  await page.setViewportSize({ width: 1024, height: 680 });
+  await firstCard().evaluate((element) =>
+    element.scrollIntoView({ block: "start" }),
+  );
+  await page.screenshot({
+    path: join(output, "desktop-storyboard-minimum.png"),
+  });
+  assert.equal(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth,
+    ),
+    false,
+  );
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await firstCard().evaluate((element) =>
+    element.scrollIntoView({ block: "start" }),
+  );
+  await page.screenshot({ path: join(output, "desktop-storyboard.png") });
+  await toSource();
+  await expect(editor).toHaveValue(/duration=8/);
   await editor.fill(edited + "\n客户端编辑\n");
   const diskEdit = edited + "\n外部编辑器写入\n";
   await writeFile(join(root, "01 灯火.md"), diskEdit);
@@ -127,8 +328,11 @@ try {
     .click();
   await page.getByLabel("文档文件名").fill("01 灯火 保留.md");
   await page.getByRole("button", { name: "确认", exact: true }).click();
-  await expect.poll(() => readFile(join(root, "01 灯火 保留.md"), "utf8").catch(() => '')).toContain("客户端编辑");
-  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await expect
+    .poll(() => readFile(join(root, "01 灯火 保留.md"), "utf8").catch(() => ""))
+    .toContain("客户端编辑");
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await toSource();
   // Clean editor reloads an external modification.
   const changed = "# 外部新内容\n\n## S002 回家\n";
   await writeFile(join(root, "01 灯火 保留.md"), changed);
@@ -140,6 +344,53 @@ try {
   await expect(page.getByRole("alertdialog")).toBeVisible();
   await page.getByRole("button", { name: "继续编辑", exact: true }).click();
   await expect(editor).toHaveValue(changed + "\n未保存的心愿\n");
+  // A deleted document stays deleted; the storyboard draft can be saved elsewhere.
+  await toBoard();
+  await firstCard()
+    .getByLabel("镜头标题", { exact: true })
+    .fill("保留被删除文档的编辑");
+  await rm(join(root, "01 灯火 保留.md"));
+  await page.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(page.locator(".conflict")).toBeVisible();
+  await assert.rejects(access(join(root, "01 灯火 保留.md")));
+  await page
+    .locator(".conflict")
+    .getByRole("button", { name: "另存为", exact: true })
+    .click();
+  await page.getByLabel("文档文件名").fill("02 恢复草稿.md");
+  await page.getByRole("button", { name: "确认", exact: true }).click();
+  await expect
+    .poll(() => readFile(join(root, "02 恢复草稿.md"), "utf8").catch(() => ""))
+    .toContain("保留被删除文档的编辑");
+  // Read-only originals permit draft edits and save-as, never an overwrite.
+  await chmod(join(root, "02 恢复草稿.md"), 0o444);
+  await page
+    .getByRole("button", { name: "▤ 剧本大纲.md", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "▤ 02 恢复草稿.md", exact: true })
+    .click();
+  await firstCard()
+    .getByLabel("镜头标题", { exact: true })
+    .fill("只读副本标题");
+  await expect(
+    page.getByRole("button", { name: "保存", exact: true }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "另存为", exact: true }).click();
+  await page.getByLabel("文档文件名").fill("03 只读副本.md");
+  await page.getByRole("button", { name: "确认", exact: true }).click();
+  await expect
+    .poll(() => readFile(join(root, "03 只读副本.md"), "utf8").catch(() => ""))
+    .toContain("只读副本标题");
+  assert.ok(
+    !(await readFile(join(root, "02 恢复草稿.md"), "utf8")).includes(
+      "只读副本标题",
+    ),
+  );
+  await chmod(join(root, "02 恢复草稿.md"), 0o666);
+  await firstCard()
+    .getByLabel("镜头标题", { exact: true })
+    .fill("未保存的新标题");
   await page.getByRole("button", { name: "返回项目首页", exact: true }).click();
   await page.getByRole("button", { name: "放弃修改", exact: true }).click();
   await expect(page.getByText("从文字，到每一个镜头。")).toBeVisible();
@@ -151,9 +402,12 @@ try {
   await expect(
     page.getByRole("heading", { name: "选择要打开的作品" }),
   ).toBeVisible();
-  await page.getByRole('dialog')
+  await page
+    .getByRole("dialog")
     .getByRole("button", { name: "01 原创 渡口", exact: false })
     .click();
+  await expect(editor).not.toBeVisible();
+  await toSource();
   await expect(editor).toBeVisible();
   // Native close event must be canceled if the dialog is declined.
   await editor.fill("# 未保存退出保护\n");
@@ -172,7 +426,7 @@ try {
   assert.equal(overflow, false, "Layout overflows minimum window");
   assert.deepEqual(errors, [], "Unhandled frontend errors");
   console.log(
-    "PASS: native project creation, editing, Ctrl+S, shot navigation, media, conflict/save-as, refresh, parent candidates and unsaved navigation/close.",
+    "PASS: native storyboard defaults, field edits, add/move/delete, source synchronization, Ctrl+S, media, conflict/save-as, refresh, parent candidates and unsaved navigation/close.",
   );
 } catch (e) {
   if (page && !page.isClosed())

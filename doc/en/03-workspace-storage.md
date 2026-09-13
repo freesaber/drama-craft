@@ -1,12 +1,13 @@
 # 03 Workspace and Storage
 
-[简体中文](../zh-CN/03-workspace-storage.md) · [Index](../README.md)
+[简体中文](../zh-CN/03-项目目录与存储设计.md) · [Index](../README.md)
 
 ## Implemented: files first
 
 ```text
 Original work/
   .drama-craft/project.json
+  .drama-craft/generations.sqlite3  # Created on first generation submission
   剧本大纲.md
   分镜总表.md
   01 第一集.md
@@ -29,16 +30,16 @@ Replacement uses a same-directory temporary file, writes and syncs it, then atom
 
 External changes are checked on manual refresh or window focus. Clean editors reload new content; dirty editors retain text and display a conflict. P0 has no background filesystem watcher or autosave.
 
-## SQLite's role: planned
+## SQLite's role: implemented
 
 | Data | Authority | Rebuildable? |
 |---|---|---|
 | Scripts, prompts, notes | Markdown | Must preserve |
 | Assets and videos | Local files | Must preserve |
 | Project settings | Project JSON | Preserve identity |
-| Generation tasks and selected versions | Future project SQLite | Not disposable cache |
+| Generation tasks and version indexes | Project SQLite | Not disposable cache |
 | Search index | Scans, later optionally SQLite | Rebuildable from files |
 
-P0 does not include SQLite. The video phase will add a project database for submission state, remote task IDs, version relationships, download state and selections, included in backups. Historical tasks reference immutable prompt and asset snapshots, independent of later edits. A global library database will be separate from project task databases and implemented in the library phase.
+`generations.sqlite3` is created on demand and stores remote task IDs, prompts, parameters, input references, status, result URLs and local file indexes. Markdown's video filename remains the selected version; history selection uses the normal content-hash conflict check. The database stores neither document bodies nor credentials. It currently records asset references rather than immutable asset snapshots, so fully reproducible archival remains planned. A global library database remains separate and belongs to the library phase.
 
 Copying a folder only carries project-local files. External absolute-path assets are not collected automatically. Complete backups, collecting external assets during export and remote-task recovery are future capabilities.

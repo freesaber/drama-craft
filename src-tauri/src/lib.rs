@@ -1,3 +1,4 @@
+pub mod generation;
 pub mod storage;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs, path::PathBuf, sync::Mutex};
@@ -25,6 +26,8 @@ struct Preferences {
     recent: Vec<Recent>,
     #[serde(default)]
     preview_visible: Option<bool>,
+    #[serde(default)]
+    generation_base_url: String,
 }
 fn prefs_path(app: &tauri::AppHandle) -> Result<PathBuf> {
     let dir = app
@@ -54,6 +57,15 @@ fn with_root<T>(
         .get(handle)
         .ok_or_else(|| AppError::new("session", "请重新打开项目"))?;
     action(root)
+}
+fn root_for(state: &State<Sessions>, handle: &str) -> Result<PathBuf> {
+    state
+        .0
+        .lock()
+        .map_err(|_| AppError::new("session", "项目会话不可用"))?
+        .get(handle)
+        .cloned()
+        .ok_or_else(|| AppError::new("session", "请重新打开项目"))
 }
 #[tauri::command]
 fn inspect_directory(path: String) -> Result<Vec<storage::Candidate>> {
@@ -209,6 +221,109 @@ fn set_preview_visible(app: tauri::AppHandle, visible: bool) -> Result<()> {
         false,
     )
 }
+fn generation_settings(app: &tauri::AppHandle) -> Result<generation::GenerationSettings> {
+    let prefs = read_prefs(app)?;
+    let authorization = match keyring::Entry::new("DramaCraft", "video-api-authorization")
+        .map_err(|e| AppError::new("credential", e.to_string()))?
+        .get_password()
+    {
+        Ok(value) => value,
+        Err(keyring::Error::NoEntry) => String::new(),
+        Err(e) => return Err(AppError::new("credential", e.to_string())),
+    };
+    Ok(generation::GenerationSettings {
+        base_url: prefs.generation_base_url,
+        authorization,
+    })
+}
+#[tauri::command]
+fn get_generation_settings(app: tauri::AppHandle) -> Result<generation::GenerationSettings> {
+    generation_settings(&app)
+}
+#[tauri::command]
+fn set_generation_settings(
+    app: tauri::AppHandle,
+    base_url: String,
+    authorization: String,
+) -> Result<generation::GenerationSettings> {
+    let settings = generation::GenerationSettings {
+        base_url: base_url.trim().trim_end_matches('/').to_owned(),
+        authorization: authorization.trim().to_owned(),
+    };
+    if !settings.base_url.is_empty()
+        && !(settings.base_url.starts_with("https://") || settings.base_url.starts_with("http://"))
+    {
+        return Err(AppError::new(
+            "config",
+            "API 地址须以 http:// 或 https:// 开头",
+        ));
+    }
+    let mut prefs = read_prefs(&app)?;
+    prefs.generation_base_url = settings.base_url.clone();
+    let credential = keyring::Entry::new("DramaCraft", "video-api-authorization")
+        .map_err(|e| AppError::new("credential", e.to_string()))?;
+    if settings.authorization.is_empty() {
+        if let Err(e) = credential.delete_credential() {
+            if !matches!(e, keyring::Error::NoEntry) {
+                return Err(AppError::new("credential", e.to_string()));
+            }
+        }
+    } else {
+        credential
+            .set_password(&settings.authorization)
+            .map_err(|e| AppError::new("credential", e.to_string()))?;
+    }
+    storage::atomic_write(
+        &prefs_path(&app)?,
+        &serde_json::to_vec_pretty(&prefs)?,
+        false,
+    )?;
+    Ok(settings)
+}
+#[tauri::command]
+async fn submit_generation(
+    app: tauri::AppHandle,
+    state: State<'_, Sessions>,
+    handle: String,
+    input: generation::GenerationInput,
+) -> Result<generation::GenerationRecord> {
+    let root = root_for(&state, &handle)?;
+    generation::submit(&root, &generation_settings(&app)?, input).await
+}
+#[tauri::command]
+async fn poll_generation(
+    app: tauri::AppHandle,
+    state: State<'_, Sessions>,
+    handle: String,
+    task_id: String,
+) -> Result<generation::GenerationRecord> {
+    let root = root_for(&state, &handle)?;
+    generation::poll(&root, &generation_settings(&app)?, &task_id).await
+}
+#[tauri::command]
+fn generation_history(
+    state: State<Sessions>,
+    handle: String,
+    document: String,
+    shot_id: String,
+) -> Result<Vec<generation::GenerationRecord>> {
+    with_root(&state, &handle, |root| {
+        generation::history(root, &document, &shot_id)
+    })
+}
+#[tauri::command]
+fn import_generation_media(
+    state: State<Sessions>,
+    handle: String,
+    document: String,
+    source: String,
+    shot_id: String,
+    slot: String,
+) -> Result<String> {
+    with_root(&state, &handle, |root| {
+        generation::import_media(root, &document, &source, &shot_id, &slot)
+    })
+}
 
 pub fn run() {
     tauri::Builder::default()
@@ -227,7 +342,13 @@ pub fn run() {
             resolve_media,
             open_media,
             get_preferences,
-            set_preview_visible
+            set_preview_visible,
+            get_generation_settings,
+            set_generation_settings,
+            submit_generation,
+            poll_generation,
+            generation_history,
+            import_generation_media
         ])
         .run(tauri::generate_context!())
         .expect("Unable to start DramaCraft");

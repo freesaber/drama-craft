@@ -218,6 +218,15 @@ fn external_workspace_readonly_check() {
             .count(),
         12
     );
+    let first_episode = result
+        .documents
+        .iter()
+        .find(|document| document.name.starts_with("01 "))
+        .unwrap();
+    let existing_video = resolve_media(&root, &first_episode.path, "01 S001.mp4").unwrap();
+    assert!(existing_video.exists);
+    assert_eq!(existing_video.kind, "video");
+    assert!(existing_video.path.is_some());
     for document in result.documents {
         read_document(&root, &document.path).unwrap();
     }

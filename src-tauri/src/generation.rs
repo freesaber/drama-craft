@@ -1,0 +1,611 @@
+use crate::storage::{self, AppError, Result};
+use base64::{engine::general_purpose::STANDARD, Engine};
+use chrono::{Local, SecondsFormat};
+use reqwest::{header, Client};
+use rusqlite::{params, Connection};
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use std::{fs, io::Write, path::Path};
+
+const SUBMIT_PATH: &str = "/api/v1/comfyui/comfyui_workflow/minimax_h3_zm_u24";
+const RESULT_PATH: &str = "/api/v1/comfyui/comfyui_workflow/result";
+const DATABASE_NAME: &str = "generations.sqlite3";
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenerationSettings {
+    pub base_url: String,
+    pub authorization: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenerationInput {
+    pub document: String,
+    pub shot_id: String,
+    pub prompt: String,
+    pub duration: u8,
+    pub resolution: String,
+    pub seed: Option<i64>,
+    pub image_refs: Vec<String>,
+    pub audio_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenerationRecord {
+    pub task_id: String,
+    pub document: String,
+    pub shot_id: String,
+    pub status: String,
+    pub prompt: String,
+    pub duration: u8,
+    pub resolution: String,
+    pub seed: Option<i64>,
+    pub remote_url: Option<String>,
+    pub local_file: Option<String>,
+    pub error: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+fn database(root: &Path) -> Result<Connection> {
+    let dir = root.join(".drama-craft");
+    fs::create_dir_all(&dir)?;
+    let connection = Connection::open(dir.join(DATABASE_NAME))
+        .map_err(|e| AppError::new("database", e.to_string()))?;
+    connection
+        .execute_batch(
+            "PRAGMA journal_mode=WAL;
+             CREATE TABLE IF NOT EXISTS generations (
+               task_id TEXT PRIMARY KEY,
+               document TEXT NOT NULL,
+               shot_id TEXT NOT NULL,
+               status TEXT NOT NULL,
+               prompt TEXT NOT NULL,
+               duration INTEGER NOT NULL,
+               resolution TEXT NOT NULL,
+               seed INTEGER,
+               image_refs TEXT NOT NULL,
+               audio_refs TEXT NOT NULL,
+               remote_url TEXT,
+               local_file TEXT,
+               error TEXT,
+               created_at TEXT NOT NULL,
+               updated_at TEXT NOT NULL
+             );
+             CREATE INDEX IF NOT EXISTS generation_shot_history
+               ON generations(document, shot_id, created_at DESC);",
+        )
+        .map_err(|e| AppError::new("database", e.to_string()))?;
+    Ok(connection)
+}
+
+fn row(row: &rusqlite::Row<'_>) -> rusqlite::Result<GenerationRecord> {
+    Ok(GenerationRecord {
+        task_id: row.get(0)?,
+        document: row.get(1)?,
+        shot_id: row.get(2)?,
+        status: row.get(3)?,
+        prompt: row.get(4)?,
+        duration: row.get(5)?,
+        resolution: row.get(6)?,
+        seed: row.get(7)?,
+        remote_url: row.get(8)?,
+        local_file: row.get(9)?,
+        error: row.get(10)?,
+        created_at: row.get(11)?,
+        updated_at: row.get(12)?,
+    })
+}
+
+pub fn history(root: &Path, document: &str, shot_id: &str) -> Result<Vec<GenerationRecord>> {
+    if !root.join(".drama-craft").join(DATABASE_NAME).exists() {
+        return Ok(Vec::new());
+    }
+    let connection = database(root)?;
+    let mut statement = connection
+        .prepare(
+            "SELECT task_id, document, shot_id, status, prompt, duration, resolution,
+                    seed, remote_url, local_file, error, created_at, updated_at
+               FROM generations WHERE document = ?1 AND shot_id = ?2
+               ORDER BY created_at DESC LIMIT 50",
+        )
+        .map_err(|e| AppError::new("database", e.to_string()))?;
+    let records = statement
+        .query_map(params![document, shot_id], row)
+        .map_err(|e| AppError::new("database", e.to_string()))?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(|e| AppError::new("database", e.to_string()))?;
+    Ok(records)
+}
+
+fn get(root: &Path, task_id: &str) -> Result<GenerationRecord> {
+    database(root)?
+        .query_row(
+            "SELECT task_id, document, shot_id, status, prompt, duration, resolution,
+                    seed, remote_url, local_file, error, created_at, updated_at
+               FROM generations WHERE task_id = ?1",
+            [task_id],
+            row,
+        )
+        .map_err(|e| AppError::new("database", e.to_string()))
+}
+
+fn endpoint(settings: &GenerationSettings, path: &str) -> Result<String> {
+    let base = settings.base_url.trim().trim_end_matches('/');
+    if !(base.starts_with("https://") || base.starts_with("http://")) {
+        return Err(AppError::new(
+            "config",
+            "请先填写以 http:// 或 https:// 开头的 API 地址",
+        ));
+    }
+    Ok(format!("{base}{path}"))
+}
+
+fn client(settings: &GenerationSettings) -> Result<Client> {
+    let mut headers = header::HeaderMap::new();
+    if !settings.authorization.trim().is_empty() {
+        headers.insert(
+            header::AUTHORIZATION,
+            header::HeaderValue::from_str(settings.authorization.trim())
+                .map_err(|_| AppError::new("config", "Authorization 内容无效"))?,
+        );
+    }
+    Client::builder()
+        .default_headers(headers)
+        .build()
+        .map_err(|e| AppError::new("network", e.to_string()))
+}
+
+fn mime(path: &Path) -> Result<&'static str> {
+    match path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "jpg" | "jpeg" => Ok("image/jpeg"),
+        "png" => Ok("image/png"),
+        "webp" => Ok("image/webp"),
+        "mp3" => Ok("audio/mpeg"),
+        "wav" => Ok("audio/wav"),
+        "flac" => Ok("audio/flac"),
+        "mp4" => Ok("video/mp4"),
+        _ => Err(AppError::new("media", "参考素材格式不受视频接口支持")),
+    }
+}
+
+fn api_media(root: &Path, document: &str, reference: &str) -> Result<String> {
+    if reference.starts_with("https://") || reference.starts_with("http://") {
+        return Ok(reference.to_owned());
+    }
+    let media = storage::resolve_media(root, document, reference)?;
+    let path = media
+        .path
+        .ok_or_else(|| AppError::new("media", format!("参考素材不存在：{reference}")))?;
+    let path = Path::new(&path);
+    Ok(format!(
+        "data:{};base64,{}",
+        mime(path)?,
+        STANDARD.encode(fs::read(path)?)
+    ))
+}
+
+async fn envelope(response: reqwest::Response) -> Result<Value> {
+    let status = response.status();
+    let text = response
+        .text()
+        .await
+        .map_err(|e| AppError::new("network", e.to_string()))?;
+    if !status.is_success() {
+        return Err(AppError::new("api", format!("API 返回 {status}：{text}")));
+    }
+    let value: Value = serde_json::from_str(&text)
+        .map_err(|_| AppError::new("api", format!("API 返回内容不是 JSON：{text}")))?;
+    let code = value
+        .get("code")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    if !code.is_empty() && !code.eq_ignore_ascii_case("success") {
+        let message = value.get("msg").and_then(Value::as_str).unwrap_or(code);
+        return Err(AppError::new("api", message));
+    }
+    Ok(value)
+}
+
+pub async fn submit(
+    root: &Path,
+    settings: &GenerationSettings,
+    input: GenerationInput,
+) -> Result<GenerationRecord> {
+    if input.prompt.trim().is_empty() || input.prompt.chars().count() > 10_000 {
+        return Err(AppError::new("input", "视频提示词须为 1—10000 个字符"));
+    }
+    if !(1..=15).contains(&input.duration) {
+        return Err(AppError::new("input", "视频时长须为 1—15 秒"));
+    }
+    if !matches!(
+        input.resolution.as_str(),
+        "480p竖" | "768p竖" | "480p横" | "768p横" | "480p(1:1)" | "768p(1:1)"
+    ) {
+        return Err(AppError::new("input", "视频分辨率不在接口支持范围内"));
+    }
+    if input.image_refs.is_empty() || input.image_refs.len() > 9 || input.audio_refs.len() > 3 {
+        return Err(AppError::new(
+            "input",
+            "需要 1—9 张参考图，最多可带 3 个参考音频",
+        ));
+    }
+    let mut body = json!({
+        "prompt": input.prompt,
+        "duration": input.duration,
+        "resolution": input.resolution,
+    });
+    if let Some(seed) = input.seed {
+        body["seed"] = json!(seed);
+    }
+    for (index, reference) in input.image_refs.iter().enumerate() {
+        body[format!("ref_image_{index}")] = json!(api_media(root, &input.document, reference)?);
+    }
+    for (index, reference) in input.audio_refs.iter().enumerate() {
+        body[format!("ref_audio_{index}")] = json!(api_media(root, &input.document, reference)?);
+    }
+    let value = envelope(
+        client(settings)?
+            .post(endpoint(settings, SUBMIT_PATH)?)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| AppError::new("network", e.to_string()))?,
+    )
+    .await?;
+    let data = value.get("data").unwrap_or(&value);
+    let task_id = data
+        .get("task_id")
+        .or_else(|| data.get("taskId"))
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| AppError::new("api", "提交成功，但返回内容缺少 task_id"))?
+        .to_owned();
+    let status = data
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or("submitted")
+        .to_owned();
+    let remote_url = result_url(data);
+    let now = Local::now().to_rfc3339_opts(SecondsFormat::Secs, false);
+    let connection = database(root)?;
+    connection
+        .execute(
+            "INSERT OR REPLACE INTO generations
+             (task_id, document, shot_id, status, prompt, duration, resolution, seed,
+              image_refs, audio_refs, remote_url, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?12)",
+            params![
+                task_id,
+                input.document,
+                input.shot_id,
+                status,
+                input.prompt,
+                input.duration,
+                input.resolution,
+                input.seed,
+                serde_json::to_string(&input.image_refs).unwrap_or_default(),
+                serde_json::to_string(&input.audio_refs).unwrap_or_default(),
+                remote_url,
+                now,
+            ],
+        )
+        .map_err(|e| AppError::new("database", e.to_string()))?;
+    let record = get(root, &task_id)?;
+    if matches!(
+        status.to_ascii_lowercase().as_str(),
+        "completed" | "success" | "succeeded"
+    ) {
+        if let Some(url) = record.remote_url.clone() {
+            let (stored_status, local_file, error) =
+                match download(root, settings, &record, &url).await {
+                    Ok(file) => (status, Some(file), None),
+                    Err(e) => ("download_failed".into(), None, Some(e.message)),
+                };
+            database(root)?
+                .execute(
+                    "UPDATE generations SET status = ?2, local_file = ?3, error = ?4,
+                            updated_at = ?5 WHERE task_id = ?1",
+                    params![
+                        task_id,
+                        stored_status,
+                        local_file,
+                        error,
+                        Local::now().to_rfc3339_opts(SecondsFormat::Secs, false),
+                    ],
+                )
+                .map_err(|e| AppError::new("database", e.to_string()))?;
+        }
+    }
+    get(root, &task_id)
+}
+
+fn result_url(data: &Value) -> Option<String> {
+    data.get("results")?
+        .as_array()?
+        .iter()
+        .find(|item| {
+            item.get("type").and_then(Value::as_str) == Some("video")
+                || item.get("file_type").and_then(Value::as_str) == Some("mp4")
+        })?
+        .get("url")?
+        .as_str()
+        .map(ToOwned::to_owned)
+}
+
+async fn download(
+    root: &Path,
+    settings: &GenerationSettings,
+    record: &GenerationRecord,
+    url: &str,
+) -> Result<String> {
+    let document = storage::document_path(root, &record.document, true)?;
+    let parent = document
+        .parent()
+        .ok_or_else(|| AppError::new("path", "文档缺少父目录"))?;
+    let timestamp = Local::now().format("%Y%m%d-%H%M%S");
+    let mut filename = format!("{}_{}.mp4", record.shot_id, timestamp);
+    if parent.join(&filename).exists() {
+        filename = format!(
+            "{}_{}_{}.mp4",
+            record.shot_id,
+            timestamp,
+            &record.task_id[..8.min(record.task_id.len())]
+        );
+    }
+    let mut response = client(settings)?
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| AppError::new("network", e.to_string()))?;
+    if !response.status().is_success() {
+        return Err(AppError::new(
+            "download",
+            format!("视频下载失败：{}", response.status()),
+        ));
+    }
+    let mut temp = tempfile::NamedTempFile::new_in(parent)?;
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|e| AppError::new("download", e.to_string()))?
+    {
+        temp.write_all(&chunk)?;
+    }
+    temp.as_file().sync_all()?;
+    temp.persist_noclobber(parent.join(&filename))
+        .map_err(|e| AppError::from(e.error))?;
+    Ok(filename)
+}
+
+pub async fn poll(
+    root: &Path,
+    settings: &GenerationSettings,
+    task_id: &str,
+) -> Result<GenerationRecord> {
+    let existing = get(root, task_id)?;
+    if existing.status == "completed" && existing.local_file.is_some() {
+        return Ok(existing);
+    }
+    let value = envelope(
+        client(settings)?
+            .get(format!("{}/{}", endpoint(settings, RESULT_PATH)?, task_id))
+            .send()
+            .await
+            .map_err(|e| AppError::new("network", e.to_string()))?,
+    )
+    .await?;
+    let data = value.get("data").unwrap_or(&value);
+    let status = data
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or("processing");
+    let failed = matches!(
+        status.to_ascii_lowercase().as_str(),
+        "failed" | "error" | "cancelled"
+    );
+    let remote_url = result_url(data);
+    let mut local_file = existing.local_file.clone();
+    let mut error = if failed {
+        Some(
+            value
+                .get("msg")
+                .and_then(Value::as_str)
+                .unwrap_or("视频生成失败")
+                .to_owned(),
+        )
+    } else {
+        None
+    };
+    let completed = matches!(
+        status.to_ascii_lowercase().as_str(),
+        "completed" | "success" | "succeeded"
+    );
+    if completed && local_file.is_none() {
+        match remote_url.as_deref() {
+            Some(url) => match download(root, settings, &existing, url).await {
+                Ok(file) => local_file = Some(file),
+                Err(e) => error = Some(e.message),
+            },
+            None => error = Some("任务已完成，但结果中没有视频地址".into()),
+        }
+    }
+    let stored_status = if completed && local_file.is_none() {
+        "download_failed"
+    } else {
+        status
+    };
+    database(root)?
+        .execute(
+            "UPDATE generations SET status = ?2, remote_url = ?3, local_file = ?4,
+                    error = ?5, updated_at = ?6 WHERE task_id = ?1",
+            params![
+                task_id,
+                stored_status,
+                remote_url,
+                local_file,
+                error,
+                Local::now().to_rfc3339_opts(SecondsFormat::Secs, false),
+            ],
+        )
+        .map_err(|e| AppError::new("database", e.to_string()))?;
+    get(root, task_id)
+}
+
+pub fn import_media(
+    root: &Path,
+    document: &str,
+    source: &str,
+    shot_id: &str,
+    slot: &str,
+) -> Result<String> {
+    let source = fs::canonicalize(source)?;
+    if !source.is_file() {
+        return Err(AppError::new("media", "请选择图片或音频文件"));
+    }
+    mime(&source)?;
+    let extension = source
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("bin");
+    let document = storage::document_path(root, document, true)?;
+    let parent = document
+        .parent()
+        .ok_or_else(|| AppError::new("path", "文档缺少父目录"))?;
+    let safe_slot: String = slot
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
+        .collect();
+    let suffix = uuid::Uuid::new_v4().simple().to_string();
+    let filename = format!(
+        "{}_{}_{}_{}.{}",
+        shot_id,
+        safe_slot,
+        Local::now().format("%Y%m%d-%H%M%S"),
+        &suffix[..8],
+        extension
+    );
+    let destination = parent.join(&filename);
+    let bytes = fs::read(source)?;
+    storage::atomic_write(&destination, &bytes, true)?;
+    Ok(filename)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{
+        io::Read,
+        net::{TcpListener, TcpStream},
+        thread,
+    };
+
+    fn request(stream: &mut TcpStream) -> String {
+        let mut bytes = Vec::new();
+        let mut buffer = [0_u8; 4096];
+        loop {
+            let count = stream.read(&mut buffer).unwrap();
+            if count == 0 {
+                break;
+            }
+            bytes.extend_from_slice(&buffer[..count]);
+            if let Some(split) = bytes.windows(4).position(|part| part == b"\r\n\r\n") {
+                let headers = String::from_utf8_lossy(&bytes[..split + 4]);
+                let length = headers
+                    .lines()
+                    .find_map(|line| {
+                        line.to_ascii_lowercase()
+                            .strip_prefix("content-length: ")
+                            .map(str::to_owned)
+                    })
+                    .and_then(|value| value.parse::<usize>().ok())
+                    .unwrap_or(0);
+                if bytes.len() >= split + 4 + length {
+                    break;
+                }
+            }
+        }
+        String::from_utf8(bytes).unwrap()
+    }
+
+    fn respond(stream: &mut TcpStream, content_type: &str, body: &[u8]) {
+        write!(
+            stream,
+            "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            body.len()
+        )
+        .unwrap();
+        stream.write_all(body).unwrap();
+    }
+
+    #[test]
+    fn submits_polls_downloads_and_keeps_history() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            let (mut submit, _) = listener.accept().unwrap();
+            let submitted = request(&mut submit);
+            assert!(submitted.starts_with(&format!("POST {SUBMIT_PATH} ")));
+            assert!(submitted
+                .to_ascii_lowercase()
+                .contains("authorization: token fixture"));
+            assert!(submitted.contains("data:image/png;base64,"));
+            respond(
+                &mut submit,
+                "application/json",
+                br#"{"code":"Success","data":{"task_id":"task-1","status":"queued"}}"#,
+            );
+
+            let (mut poll, _) = listener.accept().unwrap();
+            assert!(request(&mut poll).starts_with(&format!("GET {RESULT_PATH}/task-1 ")));
+            let body = format!(
+                "{{\"code\":\"Success\",\"data\":{{\"status\":\"completed\",\"results\":[{{\"url\":\"http://{address}/video.mp4\",\"type\":\"video\",\"file_type\":\"mp4\"}}]}}}}"
+            );
+            respond(&mut poll, "application/json", body.as_bytes());
+
+            let (mut video, _) = listener.accept().unwrap();
+            assert!(request(&mut video).starts_with("GET /video.mp4 "));
+            respond(&mut video, "video/mp4", b"synthetic-video");
+        });
+
+        let project = tempfile::tempdir().unwrap();
+        let root = storage::canonical_directory(project.path()).unwrap();
+        storage::create_document(&root, "01 测试.md", "# S001 测试\n").unwrap();
+        fs::write(root.join("frame.png"), b"synthetic-image").unwrap();
+        let settings = GenerationSettings {
+            base_url: format!("http://{address}"),
+            authorization: "Token fixture".into(),
+        };
+        let record = tauri::async_runtime::block_on(submit(
+            &root,
+            &settings,
+            GenerationInput {
+                document: "01 测试.md".into(),
+                shot_id: "S001".into(),
+                prompt: "向前走".into(),
+                duration: 5,
+                resolution: "768p横".into(),
+                seed: Some(7),
+                image_refs: vec!["frame.png".into()],
+                audio_refs: Vec::new(),
+            },
+        ))
+        .unwrap();
+        assert_eq!(record.status, "queued");
+        let completed =
+            tauri::async_runtime::block_on(poll(&root, &settings, &record.task_id)).unwrap();
+        assert_eq!(completed.status, "completed");
+        let file = completed.local_file.unwrap();
+        assert_eq!(fs::read(root.join(&file)).unwrap(), b"synthetic-video");
+        assert_eq!(history(&root, "01 测试.md", "S001").unwrap().len(), 1);
+        server.join().unwrap();
+    }
+}

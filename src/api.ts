@@ -3,6 +3,9 @@ import { open } from "@tauri-apps/plugin-dialog";
 import type {
   Candidate,
   DocumentEntry,
+  GenerationInput,
+  GenerationRecord,
+  GenerationSettings,
   Media,
   Project,
   Recent,
@@ -34,6 +37,37 @@ export const api = {
     invoke<{ recent: Recent[]; previewVisible?: boolean }>("get_preferences"),
   setPreview: (visible: boolean) =>
     invoke<void>("set_preview_visible", { visible }),
+  generationSettings: () =>
+    invoke<GenerationSettings>("get_generation_settings"),
+  setGenerationSettings: (baseUrl: string, authorization: string) =>
+    invoke<GenerationSettings>("set_generation_settings", {
+      baseUrl,
+      authorization,
+    }),
+  submitGeneration: (handle: string, input: GenerationInput) =>
+    invoke<GenerationRecord>("submit_generation", { handle, input }),
+  pollGeneration: (handle: string, taskId: string) =>
+    invoke<GenerationRecord>("poll_generation", { handle, taskId }),
+  generationHistory: (handle: string, document: string, shotId: string) =>
+    invoke<GenerationRecord[]>("generation_history", {
+      handle,
+      document,
+      shotId,
+    }),
+  importGenerationMedia: (
+    handle: string,
+    document: string,
+    source: string,
+    shotId: string,
+    slot: string,
+  ) =>
+    invoke<string>("import_generation_media", {
+      handle,
+      document,
+      source,
+      shotId,
+      slot,
+    }),
 };
 export async function chooseDirectory(): Promise<string | null> {
   if (!desktop) return null;
@@ -41,6 +75,22 @@ export async function chooseDirectory(): Promise<string | null> {
     directory: true,
     multiple: false,
     title: ui.choose,
+  });
+  return typeof path === "string" ? path : null;
+}
+export async function chooseMedia(
+  kind: "image" | "audio",
+): Promise<string | null> {
+  if (!desktop) return null;
+  const path = await open({
+    directory: false,
+    multiple: false,
+    title: kind === "image" ? "选择参考图片" : "选择参考音频",
+    filters: [
+      kind === "image"
+        ? { name: "图片", extensions: ["jpg", "jpeg", "png", "webp"] }
+        : { name: "音频", extensions: ["mp3", "wav", "flac", "mp4"] },
+    ],
   });
   return typeof path === "string" ? path : null;
 }

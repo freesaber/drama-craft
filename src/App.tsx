@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { api, chooseDirectory, desktop, errorMessage } from "./api";
-import { analyzeMarkdown, documentTemplate, sortDocuments } from "./markdown";
+import { documentTemplate, sortDocuments } from "./markdown";
 import { ui } from "./i18n";
-import Preview, { Asset } from "./Preview";
+import Storyboard from "./BoardView";
+import { applySourcePatch, fieldPatch, parseStoryboard } from "./storyboard";
 import { useUnsavedChanges } from "./useUnsavedChanges";
 import type {
   Candidate,
   DocumentEntry,
+  GenerationSettings,
   Project,
   Recent,
   Snapshot,
+  SourcePatch,
 } from "./types";
 
 export default function App() {
@@ -26,13 +29,19 @@ export default function App() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [conflict, setConflict] = useState(false);
-  const [previewVisible, setPreviewVisible] = useState(true);
-  const [previewTab, setPreviewTab] = useState<"document" | "assets">(
-    "document",
-  );
+  const [mode, setMode] = useState<"board" | "source">("board");
+  const [activeShot, setActiveShot] = useState(0);
+  const pendingJump = useRef<number | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [generationSettings, setGenerationSettings] =
+    useState<GenerationSettings>({
+      baseUrl: "",
+      authorization: "",
+    });
+  const [apiBase, setApiBase] = useState("");
+  const [apiAuthorization, setApiAuthorization] = useState("");
   const [modal, setModal] = useState<
-    "project" | "open" | "document" | "saveAs" | null
+    "project" | "open" | "document" | "saveAs" | "api" | null
   >(null);
   const [name, setName] = useState("");
   const [parent, setParent] = useState("");
@@ -45,7 +54,10 @@ export default function App() {
   const dirty = snapshot !== null && text !== snapshot.text;
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
-  const analysis = useMemo(() => analyzeMarkdown(text), [text]);
+
+  const board = useMemo(() => parseStoryboard(text), [text]);
+  const textRef = useRef(text);
+  textRef.current = text;
   const run = useCallback(async (action: () => Promise<void>) => {
     if (busyRef.current) return;
     busyRef.current = true;
@@ -63,12 +75,21 @@ export default function App() {
   const loadPreferences = useCallback(async () => {
     const prefs = await api.preferences();
     setRecent(prefs.recent);
-    setPreviewVisible(prefs.previewVisible ?? true);
   }, []);
   useEffect(() => {
-    if (desktop) void loadPreferences().catch((e) => setError(errorMessage(e)));
+    if (desktop) {
+      void loadPreferences().catch((e) => setError(errorMessage(e)));
+      void api
+        .generationSettings()
+        .then(setGenerationSettings)
+        .catch((e) => setError(errorMessage(e)));
+    }
   }, [loadPreferences]);
   const replaceDocument = (nextPath: string, next: Snapshot) => {
+    if (nextPath !== path) {
+      setMode("board");
+      setActiveShot(0);
+    }
     setPath(nextPath);
     setSnapshot(next);
     setText(next.text);
@@ -84,6 +105,8 @@ export default function App() {
   const installProject = async (next: Project) => {
     if (project) await api.close(project.handle);
     setProject(next);
+    setMode("board");
+    setActiveShot(0);
     setPath("");
     setSnapshot(null);
     setText("");
@@ -239,7 +262,15 @@ export default function App() {
   };
   const submitModal = () =>
     run(async () => {
-      if (modal === "open") {
+      if (modal === "api") {
+        const settings = await api.setGenerationSettings(
+          apiBase,
+          apiAuthorization,
+        );
+        setGenerationSettings(settings);
+        setModal(null);
+        setNotice(ui.generation.settingsSaved);
+      } else if (modal === "open") {
         if (!parent.trim()) return;
         const list = await api.inspect(parent.trim());
         if (list.length) {
@@ -267,13 +298,93 @@ export default function App() {
         setNotice(ui.saved);
       }
     });
-  const jump = (offset: number) => {
+  const jumpEditor = (offset: number) => {
     const area = editor.current;
     if (!area) return;
     area.focus();
     area.setSelectionRange(offset, offset);
     const lines = text.slice(0, offset).split("\n").length;
     area.scrollTop = Math.max(0, (lines - 3) * 24);
+  };
+  useEffect(() => {
+    if (pendingJump.current === null) return;
+    const offset = pendingJump.current;
+    pendingJump.current = null;
+    if (mode === "source") jumpEditor(offset);
+    else
+      document
+        .getElementById(`shot-card-${activeShot}`)
+        ?.scrollIntoView({ block: "start" });
+  }, [mode, activeShot, path, text]);
+  const jump = (offset: number) => {
+    const index = board.cards.findIndex((card) => card.offset === offset);
+    if (index >= 0) setActiveShot(index);
+    if (mode === "source") jumpEditor(offset);
+    else
+      document
+        .getElementById(`shot-card-${index}`)
+        ?.scrollIntoView({ block: "start", behavior: "smooth" });
+  };
+  const showSource = (offset: number) => {
+    pendingJump.current = offset;
+    setMode("source");
+    if (mode === "source") jumpEditor(offset);
+  };
+  const apply = (patch: SourcePatch, nextIndex?: number) => {
+    try {
+      const next = applySourcePatch(textRef.current, patch);
+      textRef.current = next;
+      setText(next);
+      if (nextIndex !== undefined) {
+        setActiveShot(nextIndex);
+        pendingJump.current = 0;
+      }
+      return true;
+    } catch (e) {
+      setError(errorMessage(e));
+      return false;
+    }
+  };
+  const configureGeneration = () => {
+    setApiBase(generationSettings.baseUrl);
+    setApiAuthorization(generationSettings.authorization);
+    setModal("api");
+  };
+  const useGeneratedVideo = async (index: number, reference: string) => {
+    if (!project || !snapshot) throw new Error(ui.generation.noDocument);
+    if (snapshot.readonly) throw new Error(ui.readonly);
+    if (busyRef.current) throw new Error(ui.busy);
+    busyRef.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const current = parseStoryboard(textRef.current);
+      const card = current.cards[index];
+      if (!card) throw new Error(ui.generation.shotChanged);
+      const nextText = applySourcePatch(
+        textRef.current,
+        fieldPatch(current, card.fields.videoFile, reference),
+      );
+      textRef.current = nextText;
+      setText(nextText);
+      const saved = await api.save(
+        project.handle,
+        path,
+        nextText,
+        snapshot.hash,
+      );
+      replaceDocument(path, saved);
+      setRefreshKey((key) => key + 1);
+      setNotice(ui.generation.videoApplied);
+    } catch (e) {
+      if (e && typeof e === "object" && "code" in e && e.code === "conflict")
+        setConflict(true);
+      setError(errorMessage(e));
+      throw e;
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
   };
   return (
     <div className="app-shell">
@@ -396,17 +507,8 @@ export default function App() {
             <button disabled={busy} onClick={() => void refresh()}>
               {ui.refresh}
             </button>
-            <button
-              onClick={() => {
-                const value = !previewVisible;
-                setPreviewVisible(value);
-                void api
-                  .setPreview(value)
-                  .catch((e) => setError(errorMessage(e)));
-              }}
-              aria-pressed={previewVisible}
-            >
-              {ui.togglePreview}
+            <button disabled={busy} onClick={configureGeneration}>
+              {ui.generation.apiSettings}
             </button>
           </div>
           {conflict && (
@@ -420,9 +522,7 @@ export default function App() {
               </button>
             </div>
           )}
-          <main
-            className={`workspace ${previewVisible ? "" : "without-preview"}`}
-          >
+          <main className="workspace storyboard-workspace">
             <aside className="sidebar">
               <div className="sidebar-heading">
                 {ui.docs}
@@ -447,19 +547,24 @@ export default function App() {
               </nav>
               <div className="sidebar-heading shot-heading">
                 {ui.shots}
-                <span>{analysis.shots.length}</span>
+                <span>{board.cards.length}</span>
               </div>
               <nav className="shot-list">
-                {analysis.shots.map((shot) => (
+                {board.cards.map((shot) => (
                   <button
                     key={`${shot.id}-${shot.offset}`}
+                    className={
+                      board.cards[activeShot]?.offset === shot.offset
+                        ? "selected"
+                        : ""
+                    }
                     onClick={() => jump(shot.offset)}
                   >
                     <code>{shot.id}</code>
                     <span>{shot.title}</span>
                   </button>
                 ))}
-                {!analysis.shots.length && (
+                {!board.cards.length && (
                   <p className="muted empty-nav">{ui.noShots}</p>
                 )}
               </nav>
@@ -469,7 +574,38 @@ export default function App() {
               <div className="panel-heading">
                 <div>
                   <strong>{path.split("/").at(-1) || ui.raw}</strong>
-                  <small>{ui.raw}</small>
+                  <small>
+                    {mode === "source"
+                      ? ui.raw
+                      : board.cards.length
+                        ? ui.board.count(board.cards.length)
+                        : ui.board.read}
+                  </small>
+                </div>
+                <div className="mode-switch" aria-label={ui.board.mode}>
+                  <button
+                    aria-pressed={mode === "board"}
+                    onClick={() => {
+                      const offset = editor.current?.selectionStart ?? 0;
+                      const index = board.cards.reduce(
+                        (last, card, i) => (card.offset <= offset ? i : last),
+                        -1,
+                      );
+                      if (mode === "source" && index >= 0) setActiveShot(index);
+                      pendingJump.current = offset;
+                      setMode("board");
+                    }}
+                  >
+                    {ui.board.mode}
+                  </button>
+                  <button
+                    aria-pressed={mode === "source"}
+                    onClick={() =>
+                      showSource(board.cards[activeShot]?.offset ?? 0)
+                    }
+                  >
+                    {ui.raw}
+                  </button>
                 </div>
                 <div className="save-actions">
                   <span className={`save-status ${dirty ? "dirty" : ""}`}>
@@ -494,7 +630,7 @@ export default function App() {
                   </button>
                 </div>
               </div>
-              {snapshot ? (
+              {snapshot && mode === "source" ? (
                 <textarea
                   ref={editor}
                   className="markdown-editor"
@@ -505,6 +641,22 @@ export default function App() {
                   disabled={busy}
                   onChange={(event) => setText(event.target.value)}
                 />
+              ) : snapshot ? (
+                <Storyboard
+                  key={path}
+                  board={board}
+                  project={project}
+                  document={path}
+                  refreshKey={refreshKey}
+                  busy={busy}
+                  apply={apply}
+                  source={showSource}
+                  active={activeShot}
+                  select={setActiveShot}
+                  generationConfigured={!!generationSettings.baseUrl}
+                  configureGeneration={configureGeneration}
+                  useVideo={useGeneratedVideo}
+                />
               ) : (
                 <div className="empty-editor">
                   ▤<p>{ui.empty}</p>
@@ -513,56 +665,10 @@ export default function App() {
               <div className="editor-footer">
                 <span>{ui.statusHint}</span>
                 <span>
-                  {text.length.toLocaleString()} 字符 · {analysis.shots.length}{" "}
-                  镜
+                  {text.length.toLocaleString()} 字符 · {board.cards.length} 镜
                 </span>
               </div>
             </section>
-            {previewVisible && (
-              <section className="preview-panel">
-                <div className="preview-tabs">
-                  <button
-                    className={previewTab === "document" ? "active" : ""}
-                    onClick={() => setPreviewTab("document")}
-                  >
-                    {ui.preview}
-                  </button>
-                  <button
-                    className={previewTab === "assets" ? "active" : ""}
-                    onClick={() => setPreviewTab("assets")}
-                  >
-                    {ui.assets}
-                    <span>{analysis.references.length}</span>
-                  </button>
-                </div>
-                <div className="preview-content">
-                  {analysis.diagnostics.map((message) => (
-                    <p className="diagnostic" key={message}>
-                      {message}
-                    </p>
-                  ))}
-                  {previewTab === "document" ? (
-                    <Preview text={text} />
-                  ) : (
-                    <div className="asset-list">
-                      {analysis.references.length ? (
-                        analysis.references.map((reference) => (
-                          <Asset
-                            key={`${path}-${reference}`}
-                            project={project}
-                            document={path}
-                            reference={reference}
-                            refreshKey={refreshKey}
-                          />
-                        ))
-                      ) : (
-                        <p className="muted">{ui.noAssets}</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </section>
-            )}
           </main>
         </>
       )}
@@ -581,9 +687,11 @@ export default function App() {
                   ? ui.open
                   : modal === "project"
                     ? ui.newTitle
-                    : modal === "saveAs"
-                      ? ui.saveAs
-                      : ui.newDocument}
+                    : modal === "api"
+                      ? ui.generation.apiSettings
+                      : modal === "saveAs"
+                        ? ui.saveAs
+                        : ui.newDocument}
             </h2>
             {candidates ? (
               <>
@@ -612,7 +720,7 @@ export default function App() {
                   void submitModal();
                 }}
               >
-                {modal !== "open" && (
+                {modal !== "open" && modal !== "api" && (
                   <label>
                     {modal === "project" ? ui.name : ui.filename}
                     <input
@@ -627,7 +735,34 @@ export default function App() {
                     />
                   </label>
                 )}
-                {modal === "project" || modal === "open" ? (
+                {modal === "api" ? (
+                  <>
+                    <label>
+                      {ui.generation.baseUrl}
+                      <input
+                        autoFocus
+                        value={apiBase}
+                        onChange={(event) => setApiBase(event.target.value)}
+                        placeholder="https://api.example.com"
+                        required
+                        disabled={busy}
+                      />
+                    </label>
+                    <label>
+                      {ui.generation.authorization}
+                      <input
+                        type="password"
+                        value={apiAuthorization}
+                        onChange={(event) =>
+                          setApiAuthorization(event.target.value)
+                        }
+                        placeholder="Bearer …"
+                        disabled={busy}
+                      />
+                      <small>{ui.generation.authorizationHint}</small>
+                    </label>
+                  </>
+                ) : modal === "project" || modal === "open" ? (
                   <>
                     <label>
                       {modal === "open" ? ui.directoryPath : ui.parent}
@@ -690,7 +825,8 @@ export default function App() {
                     className="primary-button"
                     disabled={
                       busy ||
-                      (modal !== "open" && !name.trim()) ||
+                      (modal !== "open" && modal !== "api" && !name.trim()) ||
+                      (modal === "api" && !apiBase.trim()) ||
                       ((modal === "project" || modal === "open") &&
                         !parent.trim())
                     }

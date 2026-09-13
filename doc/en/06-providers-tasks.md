@@ -1,20 +1,20 @@
 # 06 Providers and Generation Tasks
 
-[简体中文](../zh-CN/06-providers-tasks.md) · [Index](../README.md)
+[简体中文](../zh-CN/06-模型接入与生成任务设计.md) · [Index](../README.md)
 
-**Everything here is future design, not a claim that P0 generates content.**
+This document separates the implemented H3 client path from provider behavior that still needs validation with a real account.
 
-## Planned: provider boundaries
+## Implemented: H3 provider boundary
 
-Text generation will first support OpenAI-compatible endpoints with name, Base URL, model and API Key. H3 has separate endpoint, workflow, Token and concurrency settings. Switching addresses works only within a compatible protocol; other protocols need adapters. Rust performs requests inside the client without a separately deployed backend.
+H3 has an independent Base URL and a complete user-supplied Authorization header value. The token is stored in Windows Credential Manager rather than the project or SQLite. Rust performs network requests inside the client without a separate backend. Text models and other video protocols still need separate adapters.
 
-Verification starts with [AutoDL API documentation](https://autodl.art/docs/comfyui_api/) and the [H3 workflow](https://autodl.art/large-model/comfyui/minimax_h3_zm_u24). The following baseline came from the requirements and must be rechecked during implementation.
+The implementation follows this requirements baseline. No billable request has been made with a valid account, so provider details still need live verification.
 
-| Item | Requirements baseline, unverified |
+| Item | Current implementation |
 |---|---|
 | Submit | `/api/v1/comfyui/comfyui_workflow/minimax_h3_zm_u24` |
 | Query | `/api/v1/comfyui/comfyui_workflow/result/{task_id}` |
-| Authentication | `Authorization: Token…`; do not assume Bearer |
+| Authentication | Complete user-entered `Authorization` value; no automatic Bearer or Token prefix |
 | Prompt | prompt, 1–10000 characters |
 | Duration | duration, integer 1–15 seconds |
 | Resolution | 480p/768p landscape, portrait and 1:1; verify actual enum |
@@ -24,18 +24,24 @@ Verification starts with [AutoDL API documentation](https://autodl.art/docs/comf
 
 `ref_image_0` maps to `<Picture 1>` and `ref_audio_0` to `<Audio 1>`. Rebuild mappings per request, numbering images and audio independently. GPT first-frame attachment numbering is separate from H3 parameters. Actual label and speaker adherence requires sample validation.
 
-## Unverified: asset transport and voice
+## Implemented: local assets, jobs and versions
 
-First verify whether Base64 is accepted directly and whether the format is raw Base64, a data URL or a web upload conversion. If only public URLs work, check for an official provider upload endpoint. Do not silently introduce self-hosted OSS. Without a workable transport, mark local-asset generation blocked.
+Local JPG/PNG/WebP images and MP3/WAV/FLAC/MP4 audio are sent as Base64 data URLs in JSON; HTTP(S) references remain URLs. The UI derives image inputs from the first frame, cast and shot assets, and derives audio from cast voices, capped at nine images and three audio inputs. Thumbnails open a larger preview. A user can import a local replacement beside the episode document for the current request.
+
+After submission returns a `task_id`, the app immediately writes it to `.drama-craft/generations.sqlite3`. It polls known jobs every three seconds and resumes when that shot is opened again. A successful result streams to a temporary file beside the episode and atomically becomes `S001_YYYYMMDD-HHMMSS.mp4`. The app then updates the Markdown video filename from the current draft with the original content-hash precondition. External conflicts preserve both the draft and downloaded result. SQLite stores parameters, status, remote URL and local version indexes; Markdown stores the selected video. Any retained local version can be selected again.
+
+## Unverified: live service and voice
+
+Verify whether the endpoint accepts data URLs rather than raw Base64 or temporary URLs produced by its web uploader. If it only accepts public URLs, use an official provider upload endpoint instead of introducing undeclared object storage. Also verify status enums, result URL authentication and expiry, and exact resolution values.
 
 Distinguish voice samples from prerecorded dialogue. Verify speaking new lines, mapping voices across multiple characters and whether off-screen voices are incorrectly assigned in single-character close-ups. Authoring experience can inform templates but cannot guarantee model behavior.
 
-## Planned: recovery
+## Planned: recovery hardening
 
-Persist a local task ID and immutable inputs before submission, including prompt, template version, provider parameters and asset copies or stable content identities. Persist the remote task_id immediately upon receipt.
+The current version records a job after receiving the remote `task_id`. A later revision must create a local request identity before the network submission and expose manual reconciliation when the server may have accepted a request whose response never reached the client.
 
 Lifecycle: queued → submitting → accepted/running → generated → downloading → saved. A submission timeout becomes “outcome unknown” and must never automatically repeat a billable request. Unknown submissions without task_id require manual reconciliation; recovery cannot be assumed. Polling and downloads can retry with backoff; download failures do not regenerate videos.
 
-Result URLs may expire, so download promptly to a temporary file and finalize it as a local version. Restart resumes known tasks. Retain old videos, prompts and asset snapshots, with explicit user version selection. Pause stops future submissions, not remote tasks. Tray operation, shutdown warnings and expired results after sleep belong to the video phase.
+Polling network errors continue retrying; download failure never regenerates the video. Exponential backoff, explicit download retry, cancellation, tray execution, shutdown warnings, serialized Markdown updates for concurrent completions, and expired results after sleep remain planned.
 
-Store keys and Tokens in OS credential storage, redact logs and exclude secrets from backups. P0 stores no credentials and sends no model requests.
+Authorization is stored in Windows Credential Manager and excluded from logs and project backups. Live H3 upload, billing and voice behavior remain unverified; compilation and a mock service test are not substitutes for that record.
