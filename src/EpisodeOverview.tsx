@@ -23,9 +23,6 @@ export default function EpisodeOverview({
     <section className="episode-overview">
       <div className="board-section-heading">
         <strong>{episode.title}</strong>
-        <span>
-          {episode.format === "v1" ? ui.episodeData.v1 : ui.episodeData.legacy}
-        </span>
         <button onClick={source}>{ui.episodeData.edit}</button>
       </div>
       <p className="episode-summary">
