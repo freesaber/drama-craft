@@ -235,6 +235,34 @@ fn get_preferences(app: tauri::AppHandle) -> Result<Preferences> {
     read_prefs(&app)
 }
 #[tauri::command]
+fn default_voice_directory(app: tauri::AppHandle) -> Result<String> {
+    let bundled = app
+        .path()
+        .resource_dir()
+        .map_err(|e| AppError::new("resource", e.to_string()))?
+        .join("voices");
+    let development = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../resources/voices");
+    let path = if bundled.is_dir() {
+        bundled
+    } else if development.is_dir() {
+        development
+    } else {
+        return Err(AppError::new(
+            "resource",
+            "内置声音资源目录缺失，请重新安装客户端",
+        ));
+    };
+    let path = fs::canonicalize(path)?.to_string_lossy().into_owned();
+    Ok(path.strip_prefix(r"\\?\").unwrap_or(&path).to_owned())
+}
+#[tauri::command]
+fn open_directory(app: tauri::AppHandle, path: String) -> Result<()> {
+    let path = storage::canonical_directory(&PathBuf::from(path))?;
+    app.opener()
+        .open_path(path.to_string_lossy().into_owned(), None::<&str>)
+        .map_err(|e| AppError::new("path", e.to_string()))
+}
+#[tauri::command]
 fn set_preview_visible(app: tauri::AppHandle, visible: bool) -> Result<()> {
     let mut prefs = read_prefs(&app)?;
     prefs.preview_visible = Some(visible);
@@ -414,6 +442,8 @@ pub fn run() {
             resolve_media,
             open_media,
             get_preferences,
+            default_voice_directory,
+            open_directory,
             set_preview_visible,
             get_generation_settings,
             set_generation_settings,

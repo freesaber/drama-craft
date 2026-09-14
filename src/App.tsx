@@ -85,6 +85,7 @@ export default function App() {
   const [parent, setParent] = useState("");
   const [characterDirectory, setCharacterDirectory] = useState("");
   const [voiceDirectory, setVoiceDirectory] = useState("");
+  const [defaultVoiceDirectory, setDefaultVoiceDirectory] = useState("");
   const [pendingProject, setPendingProject] = useState("");
   const [template, setTemplate] = useState("episode");
   const [candidates, setCandidates] = useState<{
@@ -120,6 +121,10 @@ export default function App() {
   useEffect(() => {
     if (desktop) {
       void loadPreferences().catch((e) => setError(errorMessage(e)));
+      void api
+        .defaultVoiceDirectory()
+        .then(setDefaultVoiceDirectory)
+        .catch((e) => setError(errorMessage(e)));
       void api
         .generationSettings()
         .then(setGenerationSettings)
@@ -170,9 +175,12 @@ export default function App() {
         "code" in e &&
         e.code === "project_setup"
       ) {
+        const voices =
+          defaultVoiceDirectory || (await api.defaultVoiceDirectory());
+        setDefaultVoiceDirectory(voices);
         setPendingProject(selected);
         setCharacterDirectory("");
-        setVoiceDirectory("");
+        setVoiceDirectory(voices);
         setCandidates(null);
         setModal("libraries");
         return;
@@ -540,11 +548,17 @@ export default function App() {
               className="start-card primary-card"
               disabled={!desktop || busy}
               onClick={() => {
-                setName("");
-                setParent("");
-                setCharacterDirectory("");
-                setVoiceDirectory("");
-                setModal("project");
+                void run(async () => {
+                  const voices =
+                    defaultVoiceDirectory ||
+                    (await api.defaultVoiceDirectory());
+                  setDefaultVoiceDirectory(voices);
+                  setName("");
+                  setParent("");
+                  setCharacterDirectory("");
+                  setVoiceDirectory(voices);
+                  setModal("project");
+                });
               }}
             >
               <span className="card-icon">＋</span>
@@ -1021,7 +1035,21 @@ export default function App() {
                             >
                               {ui.choose}
                             </button>
+                            <button
+                              type="button"
+                              disabled={busy || !voiceDirectory.trim()}
+                              onClick={() =>
+                                void run(async () => {
+                                  await api.openDirectory(
+                                    voiceDirectory.trim(),
+                                  );
+                                })
+                              }
+                            >
+                              {ui.openDirectory}
+                            </button>
                           </div>
+                          <small>{ui.voiceHint}</small>
                         </label>
                         <p className="muted">{ui.libraryImportHint}</p>
                       </>

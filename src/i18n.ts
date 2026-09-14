@@ -68,7 +68,11 @@ export const ui = {
   librarySetupExisting: "导入这个项目之前，请先配置项目素材库。",
   characterDirectory: "角色目录（可选）",
   voiceDirectory: "声音目录（必选）",
-  characterHint: "不选择角色目录时，角色图可在每一集中独立生成。",
+  characterHint:
+    "指定后，生成短剧剧本会读取目录内的文件名作为角色名；请用角色名命名角色文件。不选择时，角色图可在每一集中独立生成。",
+  voiceHint:
+    "已提供内置 TTS 音色样本，也可以改为自己的声音目录。文件名用于标记性别、年龄和声音特征。",
+  openDirectory: "打开目录",
   libraryImportHint:
     "这里只保存目录配置；不会复制素材，也不会修改现有剧本和提示词。",
   selectProject: "选择要打开的作品",
