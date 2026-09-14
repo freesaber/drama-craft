@@ -384,7 +384,7 @@
 }
 .generation-fields > .board-field textarea {
   flex: 1;
-  min-height: 420px;
+  min-height: 415px;
 }
 .generation-parameters {
   display: grid;
@@ -416,10 +416,14 @@
 }
 .generation-thumbs {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 6px;
 }
 .generation-thumb-wrap {
+  flex: 0 0 76px;
   width: 76px;
   min-width: 0;
 }
@@ -460,6 +464,7 @@
   padding: 0 4px;
 }
 .generation-add-asset {
+  flex: 0 0 76px;
   width: 76px;
   height: 66px;
   display: flex;
@@ -585,6 +590,74 @@
 }
 .shot-details[open] > summary {
   margin-bottom: 20px;
+}
+.shot-frame-area > h3 {
+  margin: 0 0 12px;
+  color: #45634a;
+  font-size: 13px;
+  font-weight: 600;
+}
+.frame-image-tabs > [role="tablist"] {
+  display: flex;
+  gap: 20px;
+  border-bottom: 1px solid #e7ecdf;
+}
+.frame-image-tabs [role="tab"] {
+  padding: 7px 2px 9px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #7b8b70;
+  font-size: 12px;
+}
+.frame-image-tabs [role="tab"][aria-selected="true"] {
+  border-bottom-color: #456c4f;
+  color: #34573f;
+  font-weight: 600;
+}
+.frame-image-tabs > [role="tabpanel"] {
+  padding-top: 16px;
+}
+.frame-assets {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+.frame-asset {
+  flex: 0 0 220px;
+  min-width: 0;
+}
+.frame-asset .lazy-asset {
+  min-height: 0;
+}
+.frame-asset .asset-card {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.frame-asset .asset-card > :not(img):not(.media-placeholder) {
+  display: none;
+}
+.frame-asset .asset-card img,
+.frame-asset .media-placeholder {
+  width: 100%;
+  height: 124px;
+  aspect-ratio: auto;
+  object-fit: contain;
+  border-radius: 7px;
+  background: #f1f4ed;
+}
+.frame-asset > strong {
+  display: block;
+  margin-top: 7px;
+  overflow-wrap: anywhere;
+  color: #405c45;
+  font-size: 12px;
+}
+.frame-prompt-panel .board-field > span {
+  display: none;
 }
 .prompt-grid,
 .parameter-grid,

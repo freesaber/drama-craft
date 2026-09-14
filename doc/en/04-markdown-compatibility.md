@@ -44,7 +44,9 @@ Remote URLs, UNC shares and executable files are not loaded as P0 assets. Docume
 
 ## Implemented: storyboard editing and source-range patches
 
-Each card displays its first-frame image prompt directly below the generation area, with one label and an editable text area. There is no disclosure or tab bar. Reference images and audio are shown under the video preview; this prompt area does not repeat them. Output filenames and other reference paths remain editable in Markdown source.
+Each card has a “首帧图片” area below generation with “素材” and “提示词” tabs. The material tab extracts numbered images from the `GPT附件：图片N＝名称（路径）` text in that shot's first-frame section and lays them out horizontally; each preview shows only its image number and descriptive name below the image. The prompt tab contains the editable first-frame image prompt. Generation inputs remain independently visible under the video preview. Output filenames and reference paths remain editable in Markdown source.
+
+The video prompt is sized so its controls and submit area align with the media column in the standard two-column layout. Reference-image and reference-audio thumbnails each stay on one horizontal row and scroll sideways when their count exceeds the available width.
 
 The shot overview is an independent Markdown document. P0 never rewrites it from episodes automatically; creators or external editors maintain repeated information. Card editing patches precisely located source regions in the shared draft; untouched regions remain unchanged.
 

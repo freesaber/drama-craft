@@ -314,10 +314,12 @@ try {
     page.locator(".generation-preview .asset-card img"),
   ).toBeVisible();
   await page.locator(".generation-preview .modal-close").click();
+  await expect(
+    firstCard().getByRole("heading", { name: "首帧图片" }),
+  ).toBeVisible();
+  await firstCard().getByRole("tab", { name: "提示词", exact: true }).click();
   const framePrompt = firstCard().getByLabel("首帧图片提示词", { exact: true });
   await expect(framePrompt).toBeVisible();
-  await expect(firstCard().getByRole("tablist")).toHaveCount(0);
-  await expect(firstCard().locator(".reference-grid")).toHaveCount(0);
   await framePrompt.fill("横向单幅画面。旅人站在渡口灯下，双手空着。");
   await toSource();
   await expect(editor).toHaveValue(

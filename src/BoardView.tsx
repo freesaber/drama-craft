@@ -255,8 +255,22 @@ export default function BoardView({
               useVideo={(reference) => useVideo(index, reference)}
               renderField={(key, multiline) => field(card, key, multiline)}
             />
-            <section className="shot-details shot-frame-prompt">
-              {field(card, "framePrompt", true)}
+            <section className="shot-details shot-frame-area">
+              <h3>{ui.board.frameImage}</h3>
+              <FrameImageTabs
+                key={`${document}-${index}`}
+                assets={card.frameAssets}
+                asset={(reference) => (
+                  <LazyAsset
+                    project={project}
+                    document={document}
+                    reference={reference}
+                    refreshKey={refreshKey}
+                    hero
+                  />
+                )}
+                prompt={field(card, "framePrompt", true)}
+              />
             </section>
             {card.diagnostics.map((message) => (
               <p className="diagnostic" key={message}>
@@ -324,6 +338,57 @@ export default function BoardView({
   );
 }
 const documentActive = () => window.document.activeElement;
+
+function FrameImageTabs({
+  assets,
+  asset,
+  prompt,
+}: {
+  assets: ShotCard["frameAssets"];
+  asset: (reference: string) => React.ReactNode;
+  prompt: React.ReactNode;
+}) {
+  const [active, setActive] = useState<"assets" | "prompt">("assets");
+  return (
+    <div className="frame-image-tabs">
+      <div role="tablist" aria-label={ui.board.frameImage}>
+        {(["assets", "prompt"] as const).map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            role="tab"
+            aria-selected={active === tab}
+            onClick={() => setActive(tab)}
+          >
+            {tab === "assets" ? ui.board.materials : ui.board.promptTab}
+          </button>
+        ))}
+      </div>
+      {active === "assets" ? (
+        <div role="tabpanel" className="frame-assets">
+          {assets.map((item) => (
+            <article
+              className="frame-asset"
+              key={`${item.label}-${item.reference}`}
+            >
+              {asset(item.reference)}
+              <strong>
+                {item.label} · {item.name}
+              </strong>
+            </article>
+          ))}
+          {!assets.length && (
+            <p className="muted">{ui.board.noFrameMaterials}</p>
+          )}
+        </div>
+      ) : (
+        <div role="tabpanel" className="frame-prompt-panel">
+          {prompt}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function PublicAssets({
   references,

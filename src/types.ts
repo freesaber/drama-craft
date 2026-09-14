@@ -98,6 +98,7 @@ export type BoardField =
   | "videoFile";
 export interface ShotCard extends Shot {
   fields: Record<BoardField, SourceField>;
+  frameAssets: { label: string; name: string; reference: string }[];
   references: { reference: string; field: SourceField }[];
   diagnostics: string[];
 }

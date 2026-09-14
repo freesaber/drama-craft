@@ -261,6 +261,37 @@ export function parseStoryboard(source: string): Storyboard {
       frameFile: labeledFile("出图文件名"),
       videoFile: labeledFile("视频文件名"),
     };
+    const frameAssets: ShotCard["frameAssets"] = [];
+    const frameAssetRefs = new Set<string>();
+    for (const contents of sections("首帧生成")) {
+      for (const node of contents) {
+        if (node.type !== "paragraph") continue;
+        const nodeRange = range(node);
+        const raw = source.slice(nodeRange.start, nodeRange.end);
+        const attachment = raw.search(/GPT\s*附件[：:]/i);
+        if (attachment < 0) continue;
+        visit(node, (child) => {
+          if (child.type !== "inlineCode" && child.type !== "link") return;
+          const childRange = range(child);
+          const localStart = childRange.start - nodeRange.start;
+          if (localStart <= attachment) return;
+          const reference = normalizeReference(
+            child.type === "inlineCode" ? child.value : child.url,
+          );
+          if (!reference || frameAssetRefs.has(reference)) return;
+          const prefix = raw.slice(attachment, localStart);
+          const match =
+            /图片\s*(\d+)\s*[＝=]\s*([^；;（(\r\n]*)[（(]?\s*$/.exec(prefix);
+          if (!match) return;
+          frameAssets.push({
+            label: `图片${match[1]}`,
+            name: match[2].trim() || `图片${match[1]}`,
+            reference,
+          });
+          frameAssetRefs.add(reference);
+        });
+      }
+    }
     if (Object.values(fields).some((f) => f.ambiguous))
       localDiagnostics.push(ui.board.unmapped);
     const references: ShotCard["references"] = [];
@@ -291,7 +322,13 @@ export function parseStoryboard(source: string): Storyboard {
         if (!refsSeen.has(key)) references.push({ reference: ref, field });
         refsSeen.add(key);
       });
-    return { ...shot, fields, references, diagnostics: localDiagnostics };
+    return {
+      ...shot,
+      fields,
+      frameAssets,
+      references,
+      diagnostics: localDiagnostics,
+    };
   });
   const sections: Storyboard["sections"] = [];
   let cursor = 0;
