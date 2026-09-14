@@ -138,7 +138,7 @@ export interface DialogueData {
   interval: string;
 }
 export interface EpisodeData {
-  format: "v1" | "legacy" | "document" | "unsupported";
+  format: "v1" | "document" | "unsupported";
   title: string;
   summary: string;
   characters: CharacterData[];

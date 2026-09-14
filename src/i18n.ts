@@ -9,7 +9,7 @@ export const ui = {
     noVoice: "未绑定音色",
     noImage: "无角色图",
     unverified: "音色未试听",
-    legacy: "旧格式兼容读取",
+    
     v1: "剧集格式 v1",
     noSummary: "尚未填写本集内容",
     sourceNotes: "其他原文内容已保留，可在源码模式编辑。",

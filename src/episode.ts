@@ -30,9 +30,7 @@ export function parseEpisode(
       ? marker[1] === "1"
         ? "v1"
         : "unsupported"
-      : shots.length
-        ? "legacy"
-        : "document",
+      : "document",
     title: title ? plain(title) : "",
     summary: "",
     characters: [],
@@ -119,69 +117,6 @@ export function parseEpisode(
         shots: ids(cellText(c[5])),
       });
     }
-  } else if (data.format === "legacy") {
-    // Legacy roles and voices are joined by the explicit speaker name, never by filename similarity.
-    const characterTables = tables.filter(
-      (t) => columns(t)[0] === "角色素材" || columns(t)[0] === "角色",
-    );
-    for (const table of characterTables)
-      for (const row of table.children.slice(1)) {
-        const c = row.children,
-          full = cellText(c[0]);
-        const [name, ...description] = full.split(/[；;]/);
-        data.characters.push({
-          id: `C${String(data.characters.length + 1).padStart(3, "0")}`,
-          name: name.trim(),
-          description: description.join("；"),
-          image: onlyRef(c[1], name, "image"),
-          voice: null,
-          voiceStatus: ui.episodeData.noVoice,
-          shots: ids(cellText(c[2])),
-        });
-      }
-    const voiceRows = tables
-      .filter((t) => columns(t)[0] === "发声角色")
-      .flatMap((t) => t.children.slice(1));
-    const speakerCounts = new Map<string, number>();
-    for (const row of voiceRows) {
-      const name = cellText(row.children[0]);
-      speakerCounts.set(name, (speakerCounts.get(name) ?? 0) + 1);
-    }
-    for (const row of voiceRows) {
-      const c = row.children,
-        name = cellText(c[0]);
-      if (speakerCounts.get(name) !== 1) {
-        data.diagnostics.push(ui.episodeData.multiple(name));
-        continue;
-      }
-      const matches = data.characters.filter((r) => r.name === name);
-      if (matches.length > 1) {
-        data.diagnostics.push(ui.episodeData.multiple(name));
-        continue;
-      }
-      let role = matches[0];
-      if (!role) {
-        role = {
-          id:
-            name === "旁白"
-              ? "N001"
-              : `C${String(data.characters.length + 1).padStart(3, "0")}`,
-          name,
-          description: "",
-          image: null,
-          voice: null,
-          voiceStatus: "",
-          shots: [],
-        };
-        data.characters.push(role);
-      }
-      role.voice = onlyRef(c[1], name, "audio");
-      // Retain provenance/verification notes verbatim; never imply that an audio file was auditioned.
-      role.voiceStatus =
-        cellText(c[1]).split(/[；;]/).slice(1).join("；") ||
-        ui.episodeData.unverified;
-      role.shots = [...new Set([...role.shots, ...ids(cellText(c[2]))])];
-    }
   }
   const roleIds = new Set<string>(),
     roleNames = new Set<string>();
@@ -209,13 +144,11 @@ export function parseEpisode(
   }
   for (const table of tables) {
     const headers = columns(table);
-    const canonical = exact(headers, canonicalAssets);
-    const legacy = data.format === "legacy" && headers[0] === "素材";
-    if (canonical || legacy)
+    if (exact(headers, canonicalAssets))
       for (const row of table.children.slice(1)) {
         const c = row.children;
-        const name = cellText(c[canonical ? 1 : 0]);
-        const ref = onlyRef(c[canonical ? 3 : 1], name);
+        const name = cellText(c[1]);
+        const ref = onlyRef(c[3], name);
         const headerIndex = preamble.findIndex(
           (n) => n.type === "heading" && n.depth === 3 && plain(n) === name,
         );
@@ -230,40 +163,29 @@ export function parseEpisode(
           }
         }
         data.assets.push({
-          id: canonical
-            ? cellText(c[0])
-            : `A${String(data.assets.length + 1).padStart(3, "0")}`,
+          id: cellText(c[0]),
           name,
-          kind: canonical ? cellText(c[2]) : ui.episodeData.material,
+          kind: cellText(c[2]),
           reference: ref,
-          shots: ids(cellText(c[canonical ? 4 : headers.indexOf("使用镜号")])),
-          note: canonical ? "" : cellText(c[headers.indexOf("提示词所在集")]),
+          shots: ids(cellText(c[4])),
+          note: "",
           prompt,
         });
       }
-    const canonicalSpeech = exact(headers, canonicalDialogue);
-    const legacySpeech =
-      data.format === "legacy" &&
-      headers[0] === "镜号" &&
-      headers[1] === "发声者／方式";
-    if (canonicalSpeech || legacySpeech)
+    if (exact(headers, canonicalDialogue))
       for (const row of table.children.slice(1)) {
         const c = row.children;
-        const name = cellText(c[1]).split(/[／/]/)[0];
-        const matches = data.characters.filter((r) =>
-          canonicalSpeech ? r.id === name : r.name === name,
-        );
+        const id = cellText(c[1]);
+        const matches = data.characters.filter((r) => r.id === id);
         if (matches.length !== 1) {
-          data.diagnostics.push(ui.episodeData.unknownRole(name));
+          data.diagnostics.push(ui.episodeData.unknownRole(id));
           continue;
         }
         data.dialogues.push({
           shotId: cellText(c[0]).toUpperCase(),
           characterId: matches[0].id,
-          delivery: canonicalSpeech
-            ? cellText(c[2])
-            : cellText(c[1]).split(/[／/]/).slice(1).join("／"),
-          text: cellText(c[canonicalSpeech ? 3 : 2]),
+          delivery: cellText(c[2]),
+          text: cellText(c[3]),
           interval: cellText(c[4]),
         });
       }
@@ -296,9 +218,7 @@ export function parseEpisode(
         ? empty(assignment)
           ? []
           : assignment.split(/[、,，\s]+/).filter(Boolean)
-        : data.characters
-            .filter((r) => r.shots.includes(shot.id))
-            .map((r) => r.id);
+        : [];
     for (const id of cast)
       if (!roleIds.has(id))
         data.diagnostics.push(ui.episodeData.unknownRole(id));
