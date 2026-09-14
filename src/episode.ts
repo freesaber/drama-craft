@@ -26,11 +26,7 @@ export function parseEpisode(
     .join("\n")
     .match(/<!--\s*drama-craft:episode:v(\d+)\s*-->/);
   const data: EpisodeData = {
-    format: marker
-      ? marker[1] === "1"
-        ? "v1"
-        : "unsupported"
-      : "document",
+    format: marker ? (marker[1] === "1" ? "v1" : "unsupported") : "document",
     title: title ? plain(title) : "",
     summary: "",
     characters: [],
@@ -96,6 +92,17 @@ export function parseEpisode(
   const tables = preamble.filter((n): n is Table => n.type === "table");
   const columns = (table: Table) => table.children[0].children.map(cellText);
   const exact = (a: string[], b: string[]) => a.join("|") === b.join("|");
+  const generationPrompt = (name: string) => {
+    const headerIndex = preamble.findIndex(
+      (n) => n.type === "heading" && n.depth === 3 && plain(n) === name,
+    );
+    if (headerIndex < 0) return "";
+    for (const node of preamble.slice(headerIndex + 1)) {
+      if (node.type === "heading") break;
+      if (node.type === "code") return node.value;
+    }
+    return "";
+  };
   const canonicalRoles = ROLE_COLUMNS;
   const canonicalAssets = ASSET_COLUMNS;
   const canonicalDialogue = DIALOGUE_COLUMNS;
@@ -112,6 +119,7 @@ export function parseEpisode(
         name: cellText(c[1]),
         description: "",
         image: onlyRef(c[2], cellText(c[1]), "image"),
+        imagePrompt: generationPrompt(cellText(c[1])),
         voice: onlyRef(c[3], cellText(c[1]), "audio"),
         shots: ids(cellText(c[4])),
       });
@@ -137,19 +145,6 @@ export function parseEpisode(
         const c = row.children;
         const name = cellText(c[1]);
         const ref = onlyRef(c[3], name);
-        const headerIndex = preamble.findIndex(
-          (n) => n.type === "heading" && n.depth === 3 && plain(n) === name,
-        );
-        let prompt = "";
-        if (headerIndex >= 0) {
-          for (const node of preamble.slice(headerIndex + 1)) {
-            if (node.type === "heading") break;
-            if (node.type === "code") {
-              prompt = node.value;
-              break;
-            }
-          }
-        }
         data.assets.push({
           id: cellText(c[0]),
           name,
@@ -157,7 +152,7 @@ export function parseEpisode(
           reference: ref,
           shots: ids(cellText(c[4])),
           note: "",
-          prompt,
+          prompt: generationPrompt(name),
         });
       }
     if (exact(headers, canonicalDialogue))

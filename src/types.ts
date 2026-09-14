@@ -123,6 +123,7 @@ export interface CharacterData {
   name: string;
   description: string;
   image: string | null;
+  imagePrompt: string;
   voice: string | null;
   shots: string[];
 }

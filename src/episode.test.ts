@@ -7,10 +7,10 @@ import { parseStoryboard } from "./storyboard";
 
 describe("episode domain adapters", () => {
   it("parses the published v1 sample with no diagnostics", () => {
-    const spec = readFileSync(
-      "doc/08-剧集数据格式v1.md",
-      "utf8",
-    ).replaceAll("\r\n", "\n");
+    const spec = readFileSync("doc/08-剧集数据格式v1.md", "utf8").replaceAll(
+      "\r\n",
+      "\n",
+    );
     const sample = spec.split("````markdown\n")[1].split("\n````")[0];
     const board = parseStoryboard(sample);
     expect(board.episode.format).toBe("v1");
@@ -40,6 +40,23 @@ describe("episode domain adapters", () => {
     });
     expect(board.episode.castByShot.S001).toEqual(["C007"]);
     expect(board.diagnostics).toEqual([]);
+  });
+  it("maps named generation prompts to missing roles and materials", () => {
+    const source = documentTemplate("episode", "01 夜航.md")
+      .replace(
+        "|---|---|---|---|---|",
+        "|---|---|---|---|---|\n| C007 | 旅人 | — | `声音.wav` | S001 |",
+      )
+      .replace(
+        "## 本集使用素材\n\n| 素材ID | 名称 | 类型 | 文件 | 使用镜号 |\n|---|---|---|---|---|",
+        "## 本集使用素材\n\n| 素材ID | 名称 | 类型 | 文件 | 使用镜号 |\n|---|---|---|---|---|\n| A001 | 渡口 | 场景 | — | S001 |\n\n### 旅人\n\n```text\n旅人角色图提示词\n```\n\n### 渡口\n\n```text\n渡口场景图提示词\n```",
+      )
+      .replace("角色：—", "角色：C007");
+    const episode = parseStoryboard(source).episode;
+    expect(episode.characters[0].image).toBeNull();
+    expect(episode.characters[0].imagePrompt).toBe("旅人角色图提示词");
+    expect(episode.assets[0].reference).toBeNull();
+    expect(episode.assets[0].prompt).toBe("渡口场景图提示词");
   });
   it("reports unknown IDs, missing required tables and future versions", () => {
     const source = documentTemplate("episode", "01 夜航.md").replace(

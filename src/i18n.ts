@@ -1,6 +1,8 @@
 // Keep product copy here so a later locale switch does not change business logic.
 export const ui = {
   episodeData: {
+    roleTab: "角色",
+    assetTab: "素材",
     roles: "角色与声音",
     assets: "场景与道具",
     speech: "本镜台词",
@@ -8,6 +10,10 @@ export const ui = {
     material: "素材",
     noVoice: "未绑定音色",
     noImage: "无角色图",
+    noCharacters: "本集没有角色",
+    noMaterials: "本集没有素材",
+    generationPrompt: "生成提示词",
+    noGenerationPrompt: "文档中尚未填写对应的生成提示词。",
 
     v1: "剧集格式 v1",
     noSummary: "尚未填写本集内容",

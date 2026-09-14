@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -12,16 +12,20 @@ export function Asset({
   reference,
   refreshKey,
   hero = false,
+  onAvailability,
 }: {
   project: Project;
   document: string;
   reference: string;
   refreshKey: number;
   hero?: boolean;
+  onAvailability?: (exists: boolean) => void;
 }) {
   const [media, setMedia] = useState<Media | null>(null);
   const [error, setError] = useState("");
   const [failed, setFailed] = useState(false);
+  const availabilityCallback = useRef(onAvailability);
+  availabilityCallback.current = onAvailability;
   useEffect(() => {
     let active = true;
     setMedia(null);
@@ -30,10 +34,16 @@ export function Asset({
     api
       .media(project.handle, document, reference)
       .then((value) => {
-        if (active) setMedia(value);
+        if (active) {
+          setMedia(value);
+          availabilityCallback.current?.(value.exists);
+        }
       })
       .catch((e) => {
-        if (active) setError(errorMessage(e));
+        if (active) {
+          setError(errorMessage(e));
+          availabilityCallback.current?.(false);
+        }
       });
     return () => {
       active = false;
@@ -63,7 +73,14 @@ export function Asset({
           {src &&
             !failed &&
             (media.kind === "image" ? (
-              <img src={src} alt={reference} onError={() => setFailed(true)} />
+              <img
+                src={src}
+                alt={reference}
+                onError={() => {
+                  setFailed(true);
+                  availabilityCallback.current?.(false);
+                }}
+              />
             ) : media.kind === "audio" ? (
               <audio
                 src={src}

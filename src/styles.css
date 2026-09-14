@@ -21,18 +21,127 @@
   white-space: pre-wrap;
   margin: 10px 0 22px;
 }
-.episode-overview > details {
-  border-top: 1px solid #e7ecdf;
-  padding: 14px 0;
+.episode-library-tabs > [role="tablist"] {
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid #e7ecdf;
 }
-.episode-overview summary {
-  font-size: 12px;
-  color: #58734a;
+.episode-library-tabs [role="tab"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 2px 11px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #74836c;
+  font-size: 13px;
+}
+.episode-library-tabs [role="tab"][aria-selected="true"] {
+  border-bottom-color: #456c4f;
+  color: #34573f;
+  font-weight: 600;
+}
+.episode-library-tabs [role="tab"] span {
+  color: #9aa58f;
+  font-size: 10px;
+}
+.episode-material-row {
+  display: flex;
+  gap: 12px;
+  min-height: 142px;
+  padding: 16px 1px 5px;
+  overflow-x: auto;
+}
+.episode-material-card {
+  flex: 0 0 150px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid #e0e6d9;
+  border-radius: 8px;
+  background: #fbfcf8;
   cursor: pointer;
 }
-.episode-overview summary > span {
-  margin-left: 8px;
-  color: #9aa58f;
+.episode-material-card:hover,
+.episode-material-card:focus-visible {
+  border-color: #a8b99e;
+  outline: none;
+  box-shadow: 0 2px 9px #304b3614;
+}
+.episode-material-card > strong,
+.episode-material-card > small {
+  display: block;
+  margin-top: 7px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.episode-material-card > small {
+  margin-top: 2px;
+  color: #8e9d86;
+}
+.episode-material-preview {
+  height: 92px;
+}
+.episode-material-preview .lazy-asset,
+.episode-material-preview .asset-card,
+.episode-material-preview .media-placeholder {
+  height: 100%;
+}
+.episode-material-preview .asset-card {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.episode-material-preview .asset-card > :not(img):not(.media-placeholder) {
+  display: none;
+}
+.episode-material-preview .asset-card img,
+.episode-material-preview .media-placeholder {
+  width: 100%;
+  height: 92px;
+  aspect-ratio: auto;
+  object-fit: cover;
+}
+.episode-material-card .character-voice {
+  min-height: 28px;
+  margin-top: 8px;
+  padding-top: 8px;
+  color: #829078;
+  font-size: 10px;
+}
+.episode-material-card .character-voice .asset-card {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.episode-material-card .character-voice .asset-card > :not(audio) {
+  display: none;
+}
+.episode-material-card .character-voice audio {
+  height: 28px;
+}
+.episode-source-note {
+  margin: 14px 0 0;
+}
+.generation-prompt-modal {
+  position: relative;
+  width: min(680px, 94vw);
+}
+.generation-prompt-modal pre {
+  max-height: 55vh;
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid #e0e6d9;
+  border-radius: 8px;
+  background: #f4f6f1;
+  color: #34453d;
+  font:
+    12px/1.8 Consolas,
+    monospace;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 .character-grid {
   display: grid;
@@ -1557,7 +1666,7 @@ select:focus {
     padding: 0 18px;
     gap: 15px;
   }
-  
+
   .panel-heading {
     padding: 10px 12px;
   }

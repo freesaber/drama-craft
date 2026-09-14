@@ -198,24 +198,41 @@ try {
         "|---|---|---|---|---|",
         "|---|---|---|---|---|\n| C001 | 旅人 | `角色 图.png` | `角色 声音.wav` | S001 |",
       )
+      .replace(
+        "## 本集使用素材\n\n| 素材ID | 名称 | 类型 | 文件 | 使用镜号 |\n|---|---|---|---|---|",
+        "## 本集使用素材\n\n| 素材ID | 名称 | 类型 | 文件 | 使用镜号 |\n|---|---|---|---|---|\n| A001 | 渡口 | 场景 | — | S001 |\n\n### 渡口\n\n```text\n晨雾中的古渡口，木码头延伸到水面。\n```",
+      )
       .replace("角色：—", "角色：C001"),
   );
   await toBoard();
   await expect(page.locator(".storyboard-scroll .markdown-body")).toHaveCount(
     0,
   );
-  const rolesSummary = page
-    .locator(".episode-overview > details > summary")
-    .filter({ hasText: "角色与声音" });
-  await rolesSummary.click();
-  const boundRole = page.locator('.character-card[data-character-id="C001"]');
+  await page.getByRole("tab", { name: /角色/ }).click();
+  const boundRole = page.locator(
+    '.episode-material-card[data-character-id="C001"]',
+  );
   await boundRole.scrollIntoViewIfNeeded();
   await expect(boundRole.getByAltText("角色 图.png")).toBeVisible();
   await expect(boundRole.locator("audio")).toBeVisible();
   await page.screenshot({
     path: join(output, "desktop-character-binding.png"),
   });
-  await rolesSummary.click();
+  await page
+    .locator(".episode-overview")
+    .getByRole("tab", { name: /素材/ })
+    .click();
+  await page.getByRole("button", { name: /渡口/ }).click();
+  const materialPrompt = page.getByRole("dialog", {
+    name: "渡口 · 生成提示词",
+  });
+  await expect(materialPrompt).toContainText(
+    "晨雾中的古渡口，木码头延伸到水面。",
+  );
+  await page.screenshot({
+    path: join(output, "desktop-missing-material-prompt.png"),
+  });
+  await materialPrompt.getByRole("button", { name: "确认" }).click();
   await expect(firstCard()).toBeVisible();
   await expect(
     firstCard().getByRole("button", { name: "生成视频", exact: true }),

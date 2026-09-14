@@ -7,16 +7,41 @@ export default function EpisodeOverview({
   asset,
 }: {
   episode: EpisodeData;
-  asset: (reference: string) => React.ReactNode;
+  asset: (
+    reference: string,
+    onAvailability?: (exists: boolean) => void,
+  ) => React.ReactNode;
 }) {
-  const [rolesOpen, setRolesOpen] = useState(false);
-  const [assetsOpen, setAssetsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"roles" | "assets">("roles");
+  const [availability, setAvailability] = useState<Record<string, boolean>>({});
+  const [prompt, setPrompt] = useState<{ name: string; text: string } | null>(
+    null,
+  );
   const materialAssets = episode.assets.filter(
     (item) =>
       !episode.characters.some(
         (role) => role.image && role.image === item.reference,
       ),
   );
+  const remember = (key: string, exists: boolean) =>
+    setAvailability((current) =>
+      current[key] === exists ? current : { ...current, [key]: exists },
+    );
+  const showPromptWhenMissing = (
+    key: string,
+    reference: string | null,
+    name: string,
+    text: string,
+  ) => {
+    if (!reference || availability[key] === false) setPrompt({ name, text });
+  };
+  const keyboardClick = (event: React.KeyboardEvent, click: () => void) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      click();
+    }
+  };
+
   return (
     <section className="episode-overview">
       <div className="board-section-heading">
@@ -25,68 +50,142 @@ export default function EpisodeOverview({
       <p className="episode-summary">
         {episode.summary || ui.episodeData.noSummary}
       </p>
-      <details onToggle={(event) => setRolesOpen(event.currentTarget.open)}>
-        <summary>
-          {ui.episodeData.roles} <span>{episode.characters.length}</span>
-        </summary>
-        <div className="character-grid">
-          {episode.characters.map((role, index) => (
-            <article
-              className="character-card"
-              key={`${role.id}-${index}`}
-              data-character-id={role.id}
-            >
-              <header>
-                <code>{role.id}</code>
-                <strong>{role.name}</strong>
-              </header>
-              {role.description && <p>{role.description}</p>}
-              <div className="character-portrait">
-                {rolesOpen && role.image ? (
-                  asset(role.image)
-                ) : (
-                  <span className="muted">{ui.episodeData.noImage}</span>
-                )}
-              </div>
-              <div className="character-voice">
-                <strong>{ui.episodeData.voice}</strong>
-                {rolesOpen && role.voice ? (
-                  asset(role.voice)
-                ) : (
-                  <span className="muted">{ui.episodeData.noVoice}</span>
-                )}
-              </div>
-              <p className="character-usage">{role.shots.join(" · ")}</p>
-            </article>
-          ))}
+      <div className="episode-library-tabs">
+        <div role="tablist" aria-label={ui.episodeData.material}>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "roles"}
+            onClick={() => setActiveTab("roles")}
+          >
+            {ui.episodeData.roleTab}
+            <span>{episode.characters.length}</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "assets"}
+            onClick={() => setActiveTab("assets")}
+          >
+            {ui.episodeData.assetTab}
+            <span>{materialAssets.length}</span>
+          </button>
         </div>
-      </details>
-      <details onToggle={(event) => setAssetsOpen(event.currentTarget.open)}>
-        <summary>
-          {ui.episodeData.assets} <span>{materialAssets.length}</span>
-        </summary>
-        <div className="reference-grid">
-          {materialAssets.map((item, index) => (
-            <article className="character-card" key={`${item.id}-${index}`}>
-              <header>
-                <code>{item.id}</code>
-                <strong>{item.name}</strong>
-                <span>{item.kind}</span>
-              </header>
-              {assetsOpen && item.reference && asset(item.reference)}
-              {item.note && <p>{item.note}</p>}
-              {item.prompt && (
-                <details>
-                  <summary>{ui.board.framePrompt}</summary>
-                  <p className="plain-prompt">{item.prompt}</p>
-                </details>
-              )}
-              <p className="character-usage">{item.shots.join(" · ")}</p>
-            </article>
-          ))}
-        </div>
-      </details>
+
+        {activeTab === "roles" ? (
+          <div role="tabpanel" className="episode-material-row">
+            {episode.characters.map((role, index) => {
+              const key = `role-${role.id}-${index}`;
+              const openPrompt = () =>
+                showPromptWhenMissing(
+                  key,
+                  role.image,
+                  role.name,
+                  role.imagePrompt,
+                );
+              return (
+                <article
+                  className="episode-material-card"
+                  key={key}
+                  data-character-id={role.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={openPrompt}
+                  onKeyDown={(event) => keyboardClick(event, openPrompt)}
+                >
+                  <div className="episode-material-preview">
+                    {role.image ? (
+                      asset(role.image, (exists) => remember(key, exists))
+                    ) : (
+                      <span className="media-placeholder">▧</span>
+                    )}
+                  </div>
+                  <strong>{role.name}</strong>
+                  <small>{role.id}</small>
+                  <div
+                    className="character-voice"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    {role.voice ? asset(role.voice) : ui.episodeData.noVoice}
+                  </div>
+                </article>
+              );
+            })}
+            {!episode.characters.length && (
+              <p className="muted">{ui.episodeData.noCharacters}</p>
+            )}
+          </div>
+        ) : (
+          <div role="tabpanel" className="episode-material-row">
+            {materialAssets.map((item, index) => {
+              const key = `asset-${item.id}-${index}`;
+              const openPrompt = () =>
+                showPromptWhenMissing(
+                  key,
+                  item.reference,
+                  item.name,
+                  item.prompt,
+                );
+              return (
+                <article
+                  className="episode-material-card"
+                  key={key}
+                  role="button"
+                  tabIndex={0}
+                  onClick={openPrompt}
+                  onKeyDown={(event) => keyboardClick(event, openPrompt)}
+                >
+                  <div className="episode-material-preview">
+                    {item.reference ? (
+                      asset(item.reference, (exists) => remember(key, exists))
+                    ) : (
+                      <span className="media-placeholder">▧</span>
+                    )}
+                  </div>
+                  <strong>{item.name}</strong>
+                  <small>{item.kind || item.id}</small>
+                </article>
+              );
+            })}
+            {!materialAssets.length && (
+              <p className="muted">{ui.episodeData.noMaterials}</p>
+            )}
+          </div>
+        )}
+      </div>
       <p className="episode-source-note">{ui.episodeData.sourceNotes}</p>
+
+      {prompt && (
+        <div className="modal-backdrop" onMouseDown={() => setPrompt(null)}>
+          <section
+            className="modal generation-prompt-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="generation-prompt-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="modal-close"
+              aria-label={ui.cancel}
+              onClick={() => setPrompt(null)}
+            >
+              ×
+            </button>
+            <h2 id="generation-prompt-title">
+              {prompt.name} · {ui.episodeData.generationPrompt}
+            </h2>
+            <pre className="plain-prompt">
+              {prompt.text || ui.episodeData.noGenerationPrompt}
+            </pre>
+            <div className="modal-actions">
+              <button type="button" onClick={() => setPrompt(null)}>
+                {ui.confirm}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </section>
   );
 }
@@ -111,7 +210,7 @@ export function ShotCast({
             {cast.map((role, i) => (
               <span
                 key={`${role.id}-${i}`}
-                title={role.voice ? role.voice : ui.episodeData.noVoice}
+                title={role.voice || ui.episodeData.noVoice}
               >
                 {role.name}
                 <small>{role.voice ? "♫" : "—"}</small>

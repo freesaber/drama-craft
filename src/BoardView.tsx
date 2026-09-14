@@ -15,7 +15,11 @@ import type {
   Storyboard as Board,
 } from "./types";
 
-function LazyAsset(props: Parameters<typeof Asset>[0]) {
+function LazyAsset(
+  props: Parameters<typeof Asset>[0] & {
+    onAvailability?: (exists: boolean) => void;
+  },
+) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   useEffect(() => {
@@ -71,13 +75,17 @@ export default function BoardView({
   useVideo: (index: number, reference: string) => Promise<void>;
   showSourceActions?: boolean;
 }) {
-  const asset = (reference: string) => (
+  const asset = (
+    reference: string,
+    onAvailability?: (exists: boolean) => void,
+  ) => (
     <LazyAsset
       key={reference}
       project={project}
       document={document}
       reference={reference}
       refreshKey={refreshKey}
+      onAvailability={onAvailability}
     />
   );
   function field(card: ShotCard, key: BoardField, multiline = false) {
