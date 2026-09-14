@@ -413,13 +413,17 @@ export function deletePatch(board: Storyboard, index: number): SourcePatch {
     replacement: "",
   };
 }
-export function addPatch(board: Storyboard, filename: string): SourcePatch {
+export function addPatch(
+  board: Storyboard,
+  filename: string,
+  defaultResolution = "480p横",
+): SourcePatch {
   const max = board.cards.reduce(
     (n, c) => (BigInt(c.id.slice(1)) > n ? BigInt(c.id.slice(1)) : n),
     0n,
   );
   const id = `S${String(max + 1n).padStart(3, "0")}`;
-  const template = documentTemplate("episode", filename);
+  const template = documentTemplate("episode", filename, defaultResolution);
   const shot = template
     .slice(template.indexOf("## S001"))
     .replaceAll("S001", id)

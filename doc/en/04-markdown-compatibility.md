@@ -40,9 +40,11 @@ Discovery supports Markdown images, links, reference links and inline-code filen
 
 Relative references resolve from the document's directory. Space-containing links can use `[Reference](<assets/角色 一.png>)`. Windows absolute paths remain unchanged, for example `Z:/example-assets/character.png`. Missing files are reported without fabricating files or changing references. If embedded playback fails, the user can open the file in its system application.
 
-Remote URLs, UNC shares and executable files are not loaded as P0 assets. Document links and images remain inert; cards and asset sections load actual media on demand. Each card extracts references from its own range while resolving reference links against whole-document definitions. Editing a shared definition affects all usages and is explicitly labeled in the control.
+Remote URLs, UNC shares and executable files are not loaded as P0 assets. Document links and images remain inert; cards and asset sections load actual media on demand. Each card extracts references from its own range while resolving reference links against whole-document definitions. Shared definitions can be edited in Markdown source; changing one affects all usages.
 
 ## Implemented: storyboard editing and source-range patches
+
+Each card displays its first-frame image prompt directly below the generation area, with one label and an editable text area. There is no disclosure or tab bar. Reference images and audio are shown under the video preview; this prompt area does not repeat them. Output filenames and other reference paths remain editable in Markdown source.
 
 The shot overview is an independent Markdown document. P0 never rewrites it from episodes automatically; creators or external editors maintain repeated information. Card editing patches precisely located source regions in the shared draft; untouched regions remain unchanged.
 

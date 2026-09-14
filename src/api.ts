@@ -39,10 +39,13 @@ export const api = {
     invoke<void>("set_preview_visible", { visible }),
   generationSettings: () =>
     invoke<GenerationSettings>("get_generation_settings"),
-  setGenerationSettings: (baseUrl: string, authorization: string) =>
+  setGenerationSettings: (
+    configuration: GenerationSettings,
+    authorizations: Record<string, string>,
+  ) =>
     invoke<GenerationSettings>("set_generation_settings", {
-      baseUrl,
-      authorization,
+      configuration,
+      authorizations,
     }),
   submitGeneration: (handle: string, input: GenerationInput) =>
     invoke<GenerationRecord>("submit_generation", { handle, input }),

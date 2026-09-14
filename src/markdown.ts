@@ -116,7 +116,11 @@ export function sortDocuments(documents: DocumentEntry[]): DocumentEntry[] {
       a.path.localeCompare(b.path, "zh-CN", { numeric: true }),
   );
 }
-export function documentTemplate(kind: string, filename: string): string {
+export function documentTemplate(
+  kind: string,
+  filename: string,
+  defaultResolution = "480p横",
+): string {
   const title = filename.replace(/\.md$/i, "");
   if (kind === "outline")
     return `# ${title}\n\n## 故事背景\n\n## 人物与目标\n\n## 完整故事\n\n## 分集规划\n`;
@@ -124,5 +128,5 @@ export function documentTemplate(kind: string, filename: string): string {
     return `# ${title}\n\n| 镜号 | 集 | 镜头名 | 秒数 | 备注 |\n|---|---|---|---:|---|\n`;
   if (kind === "blank") return `# ${title}\n\n`;
   const number = /^(\d+)/.exec(title)?.[1].padStart(2, "0") ?? "01";
-  return createEpisodeTemplate(title, number);
+  return createEpisodeTemplate(title, number, defaultResolution);
 }

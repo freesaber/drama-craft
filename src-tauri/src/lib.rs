@@ -1,4 +1,5 @@
 pub mod generation;
+pub mod settings;
 pub mod storage;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs, path::PathBuf, sync::Mutex};
@@ -28,6 +29,8 @@ struct Preferences {
     preview_visible: Option<bool>,
     #[serde(default)]
     generation_base_url: String,
+    #[serde(default)]
+    generation_configuration: settings::Configuration,
 }
 fn prefs_path(app: &tauri::AppHandle) -> Result<PathBuf> {
     let dir = app
@@ -221,64 +224,103 @@ fn set_preview_visible(app: tauri::AppHandle, visible: bool) -> Result<()> {
         false,
     )
 }
-fn generation_settings(app: &tauri::AppHandle) -> Result<generation::GenerationSettings> {
-    let prefs = read_prefs(app)?;
-    let authorization = match keyring::Entry::new("DramaCraft", "video-api-authorization")
-        .map_err(|e| AppError::new("credential", e.to_string()))?
-        .get_password()
-    {
-        Ok(value) => value,
-        Err(keyring::Error::NoEntry) => String::new(),
-        Err(e) => return Err(AppError::new("credential", e.to_string())),
+fn credential(id: &str) -> Result<keyring::Entry> {
+    let account = if id == "legacy" {
+        "video-api-authorization".to_owned()
+    } else {
+        format!("video-api-{id}")
     };
+    keyring::Entry::new("DramaCraft", &account)
+        .map_err(|_| AppError::new("credential", "无法访问系统凭据管理器"))
+}
+fn authorization(id: &str) -> Result<String> {
+    match credential(id)?.get_password() {
+        Ok(value) => Ok(value),
+        Err(keyring::Error::NoEntry) => Ok(String::new()),
+        Err(_) => Err(AppError::new("credential", "无法读取 API 密钥")),
+    }
+}
+fn configuration(app: &tauri::AppHandle) -> Result<settings::Configuration> {
+    let prefs = read_prefs(app)?;
+    let mut config = prefs.generation_configuration;
+    if config.default_resolution.is_empty() {
+        config.default_resolution = "480p横".into();
+    }
+    if config.profiles.is_empty() && !prefs.generation_base_url.is_empty() {
+        config.active_profile_id = "legacy".into();
+        config.profiles.push(settings::ApiProfile {
+            id: "legacy".into(),
+            name: "默认 API".into(),
+            base_url: prefs.generation_base_url,
+            has_authorization: false,
+        });
+    }
+    for profile in &mut config.profiles {
+        profile.has_authorization = !authorization(&profile.id)?.is_empty();
+    }
+    Ok(config)
+}
+fn generation_settings(
+    app: &tauri::AppHandle,
+    profile_id: Option<&str>,
+) -> Result<generation::GenerationSettings> {
+    let config = configuration(app)?;
+    let id = profile_id.unwrap_or(&config.active_profile_id);
+    let profile = config
+        .profiles
+        .iter()
+        .find(|profile| profile.id == id)
+        .ok_or_else(|| AppError::new("config", "请先在视频 API 设置中配置服务和密钥"))?;
     Ok(generation::GenerationSettings {
-        base_url: prefs.generation_base_url,
-        authorization,
+        profile_id: profile.id.clone(),
+        base_url: profile.base_url.clone(),
+        authorization: authorization(&profile.id)?,
     })
 }
 #[tauri::command]
-fn get_generation_settings(app: tauri::AppHandle) -> Result<generation::GenerationSettings> {
-    generation_settings(&app)
+fn get_generation_settings(app: tauri::AppHandle) -> Result<settings::Configuration> {
+    configuration(&app)
 }
 #[tauri::command]
 fn set_generation_settings(
     app: tauri::AppHandle,
-    base_url: String,
-    authorization: String,
-) -> Result<generation::GenerationSettings> {
-    let settings = generation::GenerationSettings {
-        base_url: base_url.trim().trim_end_matches('/').to_owned(),
-        authorization: authorization.trim().to_owned(),
-    };
-    if !settings.base_url.is_empty()
-        && !(settings.base_url.starts_with("https://") || settings.base_url.starts_with("http://"))
-    {
-        return Err(AppError::new(
-            "config",
-            "API 地址须以 http:// 或 https:// 开头",
-        ));
+    configuration: settings::Configuration,
+    authorizations: HashMap<String, String>,
+) -> Result<settings::Configuration> {
+    let mut config = configuration.normalize()?;
+    for (id, value) in &authorizations {
+        if !config.profiles.iter().any(|profile| &profile.id == id) {
+            return Err(AppError::new("config", "密钥没有对应的 API 配置"));
+        }
+        reqwest::header::HeaderValue::from_str(value.trim())
+            .map_err(|_| AppError::new("config", "Authorization 内容无效"))?;
+    }
+    for (id, value) in authorizations {
+        let entry = credential(&id)?;
+        if value.trim().is_empty() {
+            if let Err(e) = entry.delete_credential() {
+                if !matches!(e, keyring::Error::NoEntry) {
+                    return Err(AppError::new("credential", "无法清除 API 密钥"));
+                }
+            }
+        } else {
+            entry
+                .set_password(value.trim())
+                .map_err(|_| AppError::new("credential", "无法保存 API 密钥"))?;
+        }
+    }
+    for profile in &mut config.profiles {
+        profile.has_authorization = !authorization(&profile.id)?.is_empty();
     }
     let mut prefs = read_prefs(&app)?;
-    prefs.generation_base_url = settings.base_url.clone();
-    let credential = keyring::Entry::new("DramaCraft", "video-api-authorization")
-        .map_err(|e| AppError::new("credential", e.to_string()))?;
-    if settings.authorization.is_empty() {
-        if let Err(e) = credential.delete_credential() {
-            if !matches!(e, keyring::Error::NoEntry) {
-                return Err(AppError::new("credential", e.to_string()));
-            }
-        }
-    } else {
-        credential
-            .set_password(&settings.authorization)
-            .map_err(|e| AppError::new("credential", e.to_string()))?;
-    }
+    prefs.generation_configuration = config.clone();
+    prefs.generation_base_url.clear();
     storage::atomic_write(
         &prefs_path(&app)?,
         &serde_json::to_vec_pretty(&prefs)?,
         false,
     )?;
-    Ok(settings)
+    Ok(config)
 }
 #[tauri::command]
 async fn submit_generation(
@@ -288,7 +330,7 @@ async fn submit_generation(
     input: generation::GenerationInput,
 ) -> Result<generation::GenerationRecord> {
     let root = root_for(&state, &handle)?;
-    generation::submit(&root, &generation_settings(&app)?, input).await
+    generation::submit(&root, &generation_settings(&app, None)?, input).await
 }
 #[tauri::command]
 async fn poll_generation(
@@ -298,7 +340,17 @@ async fn poll_generation(
     task_id: String,
 ) -> Result<generation::GenerationRecord> {
     let root = root_for(&state, &handle)?;
-    generation::poll(&root, &generation_settings(&app)?, &task_id).await
+    let binding = generation::task_provider(&root, &task_id)?;
+    let settings = generation_settings(&app, binding.as_ref().map(|(id, _)| id.as_str()))?;
+    if let Some((_, base_url)) = binding {
+        if settings.base_url != base_url {
+            return Err(AppError::new(
+                "config",
+                "任务的 API 服务地址已变更，请恢复该配置的原服务地址后查询",
+            ));
+        }
+    }
+    generation::poll(&root, &settings, &task_id).await
 }
 #[tauri::command]
 fn generation_history(

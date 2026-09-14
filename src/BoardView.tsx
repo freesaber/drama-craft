@@ -3,7 +3,6 @@ import Preview, { Asset } from "./Preview";
 import { analyzeMarkdown, normalizeReference } from "./markdown";
 import {
   addPatch,
-  applySourcePatch,
   canMove,
   deletePatch,
   fieldPatch,
@@ -11,7 +10,7 @@ import {
 } from "./storyboard";
 import { ui } from "./i18n";
 import { errorMessage } from "./api";
-import EpisodeOverview, { ShotCast } from "./EpisodeOverview";
+import EpisodeOverview from "./EpisodeOverview";
 import GenerationPanel from "./GenerationPanel";
 import type {
   BoardField,
@@ -103,6 +102,13 @@ export default function BoardView({
         multiline={multiline}
         disabled={busy || board.episode.format === "unsupported"}
         placeholder={key === "story" ? ui.board.emptyStory : undefined}
+        options={
+          key === "resolution"
+            ? ["480p横", "480p竖", "768p横", "768p竖", "480p(1:1)", "768p(1:1)"]
+            : key === "duration"
+              ? Array.from({ length: 15 }, (_, i) => String(i + 1))
+              : undefined
+        }
         change={(value) => apply(fieldPatch(board, f, value))}
         source={() => source(f.range?.start ?? card.offset)}
       />
@@ -217,58 +223,41 @@ export default function BoardView({
                 </button>
               </div>
             </header>
-            <div className="shot-main">
-              <div className="shot-media">
-                {video ? (
-                  <LazyAsset
-                    key={video}
-                    project={project}
-                    document={document}
-                    reference={video}
-                    refreshKey={refreshKey}
-                    hero
-                  />
-                ) : (
-                  <div className="video-placeholder">▷ {ui.board.noVideo}</div>
-                )}
-              </div>
-              <div className="shot-narrative">
-                {field(card, "story", true)}
-                <ShotCast episode={board.episode} shotId={card.id} />
-                <GenerationPanel
-                  card={card}
-                  board={board}
-                  episode={board.episode}
-                  project={project}
-                  document={document}
-                  refreshKey={refreshKey}
-                  busy={busy}
-                  configured={generationConfigured}
-                  configure={configureGeneration}
-                  apply={apply}
-                  useVideo={(reference) => useVideo(index, reference)}
-                  renderField={(key, multiline) => field(card, key, multiline)}
-                />
-              </div>
-            </div>
-            <details className="shot-details">
-              <summary>{ui.board.original}</summary>
-              <div className="prompt-grid">
-                {field(card, "framePrompt", true)}
-              </div>
-              <div className="parameter-grid">
-                {field(card, "frameFile")}
-                {field(card, "videoFile")}
-              </div>
-              <ReferenceList
-                card={card}
-                board={board}
-                apply={apply}
-                busy={busy}
-                source={source}
-                asset={asset}
-              />
-            </details>
+            <GenerationPanel
+              video={
+                <div className="shot-media">
+                  {video ? (
+                    <LazyAsset
+                      key={video}
+                      project={project}
+                      document={document}
+                      reference={video}
+                      refreshKey={refreshKey}
+                      hero
+                    />
+                  ) : (
+                    <div className="video-placeholder">
+                      ▷ {ui.board.noVideo}
+                    </div>
+                  )}
+                </div>
+              }
+              card={card}
+              board={board}
+              episode={board.episode}
+              project={project}
+              document={document}
+              refreshKey={refreshKey}
+              busy={busy}
+              configured={generationConfigured}
+              configure={configureGeneration}
+              apply={apply}
+              useVideo={(reference) => useVideo(index, reference)}
+              renderField={(key, multiline) => field(card, key, multiline)}
+            />
+            <section className="shot-details shot-frame-prompt">
+              {field(card, "framePrompt", true)}
+            </section>
             {card.diagnostics.map((message) => (
               <p className="diagnostic" key={message}>
                 {message}
@@ -368,7 +357,7 @@ function Field({
   placeholder,
   change,
   source,
-  finish,
+  options,
 }: {
   label: string;
   field: SourceField;
@@ -377,7 +366,7 @@ function Field({
   placeholder?: string;
   change: (value: string) => boolean | void;
   source: () => void;
-  finish?: () => void;
+  options?: string[];
 }) {
   const [error, setError] = useState("");
   const [draft, setDraft] = useState(field.value);
@@ -402,7 +391,6 @@ function Field({
   const blur = () => {
     lastSubmitted.current = null;
     setDraft(field.value);
-    finish?.();
   };
   return (
     <label className="board-field">
@@ -411,6 +399,23 @@ function Field({
         <button type="button" onClick={source}>
           {ui.board.source}
         </button>
+      ) : options ? (
+        <select
+          aria-label={label}
+          value={draft}
+          disabled={disabled}
+          onChange={(event) => edit(event.target.value)}
+          onBlur={blur}
+        >
+          {!options.includes(draft) && (
+            <option value={draft}>{draft || "—"}</option>
+          )}
+          {options.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
       ) : multiline ? (
         <textarea
           aria-label={label}
@@ -436,87 +441,5 @@ function Field({
         </span>
       )}
     </label>
-  );
-}
-
-function ReferenceList({
-  card,
-  board,
-  apply,
-  busy,
-  source,
-  asset,
-}: {
-  card: ShotCard;
-  board: Board;
-  apply: (patch: SourcePatch) => boolean;
-  busy: boolean;
-  source: (offset: number) => void;
-  asset: (reference: string) => React.ReactNode;
-}) {
-  const [open, setOpen] = useState(false);
-  // Keep the edited source range mounted while a filename temporarily has no extension.
-  // The text is still patched immediately; this is only an editing-location bookmark.
-  const [editing, setEditing] = useState<{
-    source: string;
-    reference: string;
-    field: SourceField;
-  } | null>(null);
-  const pinned = editing?.source === board.source ? editing : null;
-  const references = pinned
-    ? [
-        ...card.references.filter(
-          (entry) => entry.field.range?.start !== pinned.field.range?.start,
-        ),
-        { reference: pinned.reference, field: pinned.field },
-      ].sort(
-        (a, b) => (a.field.range?.start ?? 0) - (b.field.range?.start ?? 0),
-      )
-    : card.references;
-  // Mount secondary media only when its enclosing details is opened.
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const details = ref.current?.closest("details");
-    const toggle = () => setOpen(details?.open ?? false);
-    details?.addEventListener("toggle", toggle);
-    toggle();
-    return () => details?.removeEventListener("toggle", toggle);
-  }, []);
-  return (
-    <div ref={ref} className="reference-grid">
-      {references.map(({ reference, field }, i) => (
-        <div key={field.range?.start ?? `unknown-${i}`}>
-          <Field
-            label={
-              field.range &&
-              (field.range.start < card.offset || field.range.end > card.end)
-                ? ui.board.sharedReference
-                : ui.board.reference
-            }
-            field={field}
-            disabled={busy}
-            change={(value) => {
-              const patch = fieldPatch(board, field, value);
-              if (!apply(patch)) return false;
-              setEditing({
-                source: applySourcePatch(board.source, patch),
-                reference: normalizeReference(value) ?? "",
-                field: {
-                  ...field,
-                  value: patch.replacement,
-                  range: {
-                    start: patch.range.start,
-                    end: patch.range.start + patch.replacement.length,
-                  },
-                },
-              });
-            }}
-            finish={() => setEditing(null)}
-            source={() => source(field.range?.start ?? card.offset)}
-          />
-          {open && reference && asset(reference)}
-        </div>
-      ))}
-    </div>
   );
 }

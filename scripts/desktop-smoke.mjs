@@ -140,21 +140,94 @@ try {
   ).toBeEnabled();
   await page.getByRole("button", { name: "视频 API", exact: true }).click();
   await expect(page.getByLabel("API 服务地址", { exact: true })).toBeVisible();
-  await expect(page.locator('.modal input[type="password"]')).toBeVisible();
+  const tokenInput = page.getByLabel("API Token（Authorization 请求头）", {
+    exact: true,
+  });
+  await expect(tokenInput).toBeVisible();
+  await tokenInput.fill("Token synthetic-smoke-test");
+  await page.getByRole("button", { name: "显示", exact: true }).click();
+  await expect(tokenInput).toHaveAttribute("type", "text");
+  await page.getByRole("button", { name: "隐藏", exact: true }).click();
+  await expect(tokenInput).toHaveAttribute("type", "password");
+  await tokenInput.fill("");
+  const initialProfiles = await page
+    .getByLabel("当前使用配置（保存后生效）")
+    .locator("option")
+    .count();
+  await page
+    .getByRole("button", { name: "添加 API 配置", exact: true })
+    .click();
+  await expect(
+    page.getByLabel("当前使用配置（保存后生效）").locator("option"),
+  ).toHaveCount(initialProfiles + 1);
+  await page.getByLabel("配置名称", { exact: true }).fill("备用测试配置");
+  await page
+    .getByLabel("API 服务地址", { exact: true })
+    .fill("https://secondary.example.test");
+  await page
+    .getByLabel("当前使用配置（保存后生效）")
+    .selectOption({ index: 0 });
+  await page
+    .getByLabel("当前使用配置（保存后生效）")
+    .selectOption({ index: initialProfiles });
+  await expect(page.getByLabel("API 服务地址", { exact: true })).toHaveValue(
+    "https://secondary.example.test",
+  );
+  // Save only synthetic metadata; leave every existing credential untouched.
+  await page.getByRole("button", { name: "确认", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: "视频 API", exact: true }).click();
+  await expect(page.getByLabel("配置名称", { exact: true })).toHaveValue(
+    "备用测试配置",
+  );
+  await expect(page.getByLabel("API 服务地址", { exact: true })).toHaveValue(
+    "https://secondary.example.test",
+  );
+  await expect(
+    page.getByLabel("当前使用配置（保存后生效）").locator("option"),
+  ).toHaveCount(initialProfiles + 1);
+  await page.screenshot({ path: join(output, "desktop-api-settings.png") });
   await page.getByRole("button", { name: "取消", exact: true }).click();
+  await expect(firstCard().getByLabel("故事走向", { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(firstCard().locator(".shot-cast")).toHaveCount(0);
+  await expect(firstCard().getByLabel("随机种子", { exact: true })).toHaveValue(
+    "683072603085674",
+  );
+  const promptHeight = await firstCard()
+    .getByLabel("视频提示词", { exact: true })
+    .evaluate((element) => element.getBoundingClientRect().height);
+  assert.ok(
+    promptHeight >= 420,
+    "Video prompt starts at the expanded desktop height",
+  );
+  await expect(
+    firstCard().getByLabel("分辨率", { exact: true }).locator("option"),
+  ).toHaveCount(6);
+  await firstCard()
+    .getByLabel("分辨率", { exact: true })
+    .selectOption("480p(1:1)");
+  await firstCard().getByLabel("时长（秒）", { exact: true }).selectOption("6");
+  const mediaBox = await firstCard().locator(".shot-media").boundingBox();
+  const assetBox = await firstCard()
+    .locator(".generation-assets")
+    .boundingBox();
+  assert.ok(assetBox.y >= mediaBox.y + mediaBox.height);
+  assert.ok(Math.abs(assetBox.x - mediaBox.x) < 2);
   await firstCard().getByLabel("镜头标题", { exact: true }).fill("灯下相逢");
   await firstCard()
-    .getByLabel("故事走向", { exact: true })
+    .getByLabel("视频提示词", { exact: true })
     .fill("旅人点灯。\n\n船夫循光靠岸。");
   // Exercise real keystrokes, including a trailing newline, across reparsing.
-  await firstCard().getByLabel("故事走向", { exact: true }).press("End");
-  await firstCard().getByLabel("故事走向", { exact: true }).press("Enter");
+  await firstCard().getByLabel("视频提示词", { exact: true }).press("End");
+  await firstCard().getByLabel("视频提示词", { exact: true }).press("Enter");
   await firstCard()
-    .getByLabel("故事走向", { exact: true })
+    .getByLabel("视频提示词", { exact: true })
     .pressSequentially("灯火未熄。", { delay: 15 });
-  await expect(firstCard().getByLabel("故事走向", { exact: true })).toHaveValue(
-    "旅人点灯。\n\n船夫循光靠岸。\n灯火未熄。",
-  );
+  await expect(
+    firstCard().getByLabel("视频提示词", { exact: true }),
+  ).toHaveValue("旅人点灯。\n\n船夫循光靠岸。\n灯火未熄。");
   await page.keyboard.press("Control+s");
   await expect
     .poll(() => readFile(join(root, "01 灯火.md"), "utf8"))
@@ -241,39 +314,22 @@ try {
     page.locator(".generation-preview .asset-card img"),
   ).toBeVisible();
   await page.locator(".generation-preview .modal-close").click();
-  await firstCard()
-    .locator("summary")
-    .filter({ hasText: "原文与补充内容" })
-    .click();
-  await firstCard()
-    .locator('input[value="参考 图.png"]')
-    .scrollIntoViewIfNeeded();
-  const referenceInput = firstCard()
-    .getByLabel("引用路径", { exact: true })
-    .nth(3);
-  await referenceInput.fill("");
-  await referenceInput.pressSequentially("参考 图.png", { delay: 20 });
-  await expect(referenceInput).toHaveValue("参考 图.png");
-  await referenceInput.press("Tab");
-  await expect(page.getByAltText("参考 图.png")).toBeVisible();
-  await expect
-    .poll(() =>
-      page.getByAltText("参考 图.png").evaluate((image) => image.naturalWidth),
-    )
-    .toBeGreaterThan(0);
-  await expect(
-    firstCard().locator(".shot-details .asset-state.missing").first(),
-  ).toBeVisible();
-  await firstCard()
-    .getByLabel("首帧文件", { exact: true })
-    .fill("损坏 图片.png");
-  await expect(firstCard().locator(".generation-thumb").first()).toBeVisible();
-  await firstCard()
-    .getByLabel("首帧文件", { exact: true })
-    .fill("01 首帧_S001.png");
-  await firstCard()
-    .getByLabel("视频文件", { exact: true })
-    .fill("本地样片.webm");
+  const framePrompt = firstCard().getByLabel("首帧图片提示词", { exact: true });
+  await expect(framePrompt).toBeVisible();
+  await expect(firstCard().getByRole("tablist")).toHaveCount(0);
+  await expect(firstCard().locator(".reference-grid")).toHaveCount(0);
+  await framePrompt.fill("横向单幅画面。旅人站在渡口灯下，双手空着。");
+  await toSource();
+  await expect(editor).toHaveValue(
+    /横向单幅画面。旅人站在渡口灯下，双手空着。/,
+  );
+  await editor.fill(
+    (await editor.inputValue()).replace("01 S001.mp4", "本地样片.webm"),
+  );
+  await toBoard();
+  await expect(framePrompt).toHaveValue(
+    "横向单幅画面。旅人站在渡口灯下，双手空着。",
+  );
   await firstCard().locator(".shot-media").scrollIntoViewIfNeeded();
   const video = firstCard().locator(".shot-media video");
   await video.scrollIntoViewIfNeeded();
@@ -286,7 +342,7 @@ try {
     .toBeGreaterThan(0);
   await video.evaluate((element) => element.pause());
   await page.screenshot({ path: join(output, "desktop-assets.png") });
-  await firstCard().getByLabel("时长（秒）", { exact: true }).fill("8");
+  await firstCard().getByLabel("时长（秒）", { exact: true }).selectOption("8");
   await firstCard()
     .getByLabel("视频提示词", { exact: true })
     .fill("<Picture 1>：灯光映亮面孔。\n旅人转身，看向船夫。");

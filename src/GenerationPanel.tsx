@@ -103,6 +103,7 @@ export default function GenerationPanel({
   apply,
   useVideo,
   renderField,
+  video,
 }: {
   card: ShotCard;
   board: Storyboard;
@@ -116,8 +117,9 @@ export default function GenerationPanel({
   apply: (patch: SourcePatch) => boolean;
   useVideo: (reference: string) => Promise<void>;
   renderField: (key: BoardField, multiline?: boolean) => React.ReactNode;
+  video: React.ReactNode;
 }) {
-  const [seed, setSeed] = useState("");
+  const [seed, setSeed] = useState("683072603085674");
   const [history, setHistory] = useState<GenerationRecord[]>([]);
   const [task, setTask] = useState<GenerationRecord | null>(null);
   const [error, setError] = useState("");
@@ -270,8 +272,8 @@ export default function GenerationPanel({
     setSubmitting(true);
     setError("");
     try {
-      const duration = Number.parseInt(card.fields.duration.value || "5", 10);
-      const parsedSeed = seed.trim() ? Number.parseInt(seed, 10) : null;
+      const duration = Number(card.fields.duration.value || "5");
+      const parsedSeed = seed.trim() ? Number(seed) : null;
       if (!Number.isInteger(duration) || duration < 1 || duration > 15)
         throw new Error(ui.generation.invalidDuration);
       if (seed.trim() && !Number.isSafeInteger(parsedSeed))
@@ -303,194 +305,201 @@ export default function GenerationPanel({
   };
 
   return (
-    <section className="generation-panel">
-      <div className="generation-fields">
-        {renderField("videoPrompt", true)}
-        <div className="generation-parameters">
-          {renderField("duration")}
-          {renderField("resolution")}
-          <label className="board-field">
-            <span>{ui.generation.seed}</span>
-            <input
-              inputMode="numeric"
-              value={seed}
-              placeholder={ui.generation.randomSeed}
-              onChange={(event) =>
-                setSeed(event.target.value.replace(/[^0-9]/g, ""))
-              }
-            />
-          </label>
+    <section className="shot-main generation-panel">
+      <div className="shot-narrative">
+        <div className="generation-fields">
+          {renderField("videoPrompt", true)}
+          <div className="generation-parameters">
+            {renderField("duration")}
+            {renderField("resolution")}
+            <label className="board-field">
+              <span>{ui.generation.seed}</span>
+              <input
+                inputMode="numeric"
+                value={seed}
+                placeholder={ui.generation.randomSeed}
+                onChange={(event) =>
+                  setSeed(event.target.value.replace(/[^0-9]/g, ""))
+                }
+              />
+            </label>
+          </div>
         </div>
       </div>
-      <div className="generation-assets">
-        <div className="generation-section-title">
-          <span>{ui.generation.referenceImages}</span>
-          <small>{effectiveImages.length}/9</small>
-        </div>
-        <div className="generation-thumbs">
-          {imageInputs.map((item, index) => {
-            const current = {
-              ...item,
-              reference: imageOverrides[index] ?? item.reference,
-            };
-            return (
-              <div
-                className="generation-thumb-wrap"
-                key={`${index}-${current.reference}`}
-              >
+      <div className="generation-media">
+        {video}
+        <div className="generation-assets">
+          <div className="generation-section-title">
+            <span>{ui.generation.referenceImages}</span>
+            <small>{effectiveImages.length}/9</small>
+          </div>
+          <div className="generation-thumbs">
+            {imageInputs.map((item, index) => {
+              const current = {
+                ...item,
+                reference: imageOverrides[index] ?? item.reference,
+              };
+              return (
+                <div
+                  className="generation-thumb-wrap"
+                  key={`${index}-${current.reference}`}
+                >
+                  <Thumbnail
+                    project={project}
+                    document={document}
+                    item={{ ...current, label: `图 ${index + 1}` }}
+                    refreshKey={refreshKey}
+                    onOpen={() => setPreview(current)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void replace("image", index, item)}
+                  >
+                    {ui.generation.replace}
+                  </button>
+                </div>
+              );
+            })}
+            {extraImages.map((reference, extraIndex) => (
+              <div className="generation-thumb-wrap" key={reference}>
                 <Thumbnail
                   project={project}
                   document={document}
-                  item={{ ...current, label: `图 ${index + 1}` }}
+                  item={{
+                    reference,
+                    label: `图 ${imageInputs.length + extraIndex + 1}`,
+                  }}
                   refreshKey={refreshKey}
-                  onOpen={() => setPreview(current)}
+                  onOpen={() => setPreview({ reference, label: "本次添加" })}
                 />
-                <button
-                  type="button"
-                  onClick={() => void replace("image", index, item)}
-                >
-                  {ui.generation.replace}
-                </button>
               </div>
-            );
-          })}
-          {extraImages.map((reference, extraIndex) => (
-            <div className="generation-thumb-wrap" key={reference}>
-              <Thumbnail
-                project={project}
-                document={document}
-                item={{
-                  reference,
-                  label: `图 ${imageInputs.length + extraIndex + 1}`,
-                }}
-                refreshKey={refreshKey}
-                onOpen={() => setPreview({ reference, label: "本次添加" })}
-              />
-            </div>
-          ))}
-          {effectiveImages.length < 9 && (
-            <button
-              className="generation-add-asset"
-              type="button"
-              onClick={() => void replace("image", effectiveImages.length)}
-            >
-              ＋<small>{ui.generation.addImage}</small>
-            </button>
+            ))}
+            {effectiveImages.length < 9 && (
+              <button
+                className="generation-add-asset"
+                type="button"
+                onClick={() => void replace("image", effectiveImages.length)}
+              >
+                ＋<small>{ui.generation.addImage}</small>
+              </button>
+            )}
+          </div>
+          {!!audioInputs.length && (
+            <>
+              <div className="generation-section-title audio-title">
+                <span>{ui.generation.referenceAudios}</span>
+                <small>{effectiveAudios.length}/3</small>
+              </div>
+              <div className="generation-thumbs">
+                {audioInputs.map((item, index) => {
+                  const current = {
+                    ...item,
+                    reference: audioOverrides[index] ?? item.reference,
+                  };
+                  return (
+                    <div
+                      className="generation-thumb-wrap"
+                      key={`${index}-${current.reference}`}
+                    >
+                      <Thumbnail
+                        project={project}
+                        document={document}
+                        item={current}
+                        refreshKey={refreshKey}
+                        onOpen={() => setPreview(current)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void replace("audio", index, item)}
+                      >
+                        {ui.generation.replace}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
-        {!!audioInputs.length && (
-          <>
-            <div className="generation-section-title audio-title">
-              <span>{ui.generation.referenceAudios}</span>
-              <small>{effectiveAudios.length}/3</small>
-            </div>
-            <div className="generation-thumbs">
-              {audioInputs.map((item, index) => {
-                const current = {
-                  ...item,
-                  reference: audioOverrides[index] ?? item.reference,
-                };
-                return (
-                  <div
-                    className="generation-thumb-wrap"
-                    key={`${index}-${current.reference}`}
-                  >
-                    <Thumbnail
-                      project={project}
-                      document={document}
-                      item={current}
-                      refreshKey={refreshKey}
-                      onOpen={() => setPreview(current)}
-                    />
+      </div>
+      <div className="generation-actions">
+        <div className="generation-submit">
+          <div>
+            <strong>
+              {task && running(task.status)
+                ? ui.generation.generating
+                : ui.board.generate}
+            </strong>
+            <small>
+              {task ? ui.generation.status(task.status) : ui.generation.ready}
+            </small>
+          </div>
+          <button
+            type="button"
+            className="primary-button"
+            disabled={
+              busy ||
+              submitting ||
+              !!(task && running(task.status)) ||
+              !card.fields.videoPrompt.value.trim() ||
+              !effectiveImages.length
+            }
+            onClick={() => void submit()}
+          >
+            {submitting ? ui.generation.submitting : ui.board.generate}
+          </button>
+        </div>
+        {error && (
+          <p className="generation-error" role="alert">
+            {error}
+          </p>
+        )}
+        {!!history.length && (
+          <details className="generation-history">
+            <summary>
+              {ui.generation.history} <span>{history.length}</span>
+            </summary>
+            <div>
+              {history.map((record) => (
+                <article
+                  key={record.taskId}
+                  className={
+                    record.localFile === card.fields.videoFile.value
+                      ? "current"
+                      : ""
+                  }
+                >
+                  <div>
+                    <strong>
+                      {new Date(record.createdAt).toLocaleString("zh-CN")}
+                    </strong>
+                    <small>
+                      {record.duration} 秒 · {record.resolution} ·{" "}
+                      {ui.generation.status(record.status)}
+                    </small>
+                    {record.error && (
+                      <small className="generation-error">{record.error}</small>
+                    )}
+                  </div>
+                  {record.localFile && (
                     <button
                       type="button"
-                      onClick={() => void replace("audio", index, item)}
+                      disabled={
+                        busy || record.localFile === card.fields.videoFile.value
+                      }
+                      onClick={() => void useVideo(record.localFile!)}
                     >
-                      {ui.generation.replace}
+                      {record.localFile === card.fields.videoFile.value
+                        ? ui.generation.inUse
+                        : ui.generation.useVersion}
                     </button>
-                  </div>
-                );
-              })}
+                  )}
+                </article>
+              ))}
             </div>
-          </>
+          </details>
         )}
       </div>
-      <div className="generation-submit">
-        <div>
-          <strong>
-            {task && running(task.status)
-              ? ui.generation.generating
-              : ui.board.generate}
-          </strong>
-          <small>
-            {task ? ui.generation.status(task.status) : ui.generation.ready}
-          </small>
-        </div>
-        <button
-          type="button"
-          className="primary-button"
-          disabled={
-            busy ||
-            submitting ||
-            !!(task && running(task.status)) ||
-            !card.fields.videoPrompt.value.trim() ||
-            !effectiveImages.length
-          }
-          onClick={() => void submit()}
-        >
-          {submitting ? ui.generation.submitting : ui.board.generate}
-        </button>
-      </div>
-      {error && (
-        <p className="generation-error" role="alert">
-          {error}
-        </p>
-      )}
-      {!!history.length && (
-        <details className="generation-history">
-          <summary>
-            {ui.generation.history} <span>{history.length}</span>
-          </summary>
-          <div>
-            {history.map((record) => (
-              <article
-                key={record.taskId}
-                className={
-                  record.localFile === card.fields.videoFile.value
-                    ? "current"
-                    : ""
-                }
-              >
-                <div>
-                  <strong>
-                    {new Date(record.createdAt).toLocaleString("zh-CN")}
-                  </strong>
-                  <small>
-                    {record.duration} 秒 · {record.resolution} ·{" "}
-                    {ui.generation.status(record.status)}
-                  </small>
-                  {record.error && (
-                    <small className="generation-error">{record.error}</small>
-                  )}
-                </div>
-                {record.localFile && (
-                  <button
-                    type="button"
-                    disabled={
-                      busy || record.localFile === card.fields.videoFile.value
-                    }
-                    onClick={() => void useVideo(record.localFile!)}
-                  >
-                    {record.localFile === card.fields.videoFile.value
-                      ? ui.generation.inUse
-                      : ui.generation.useVersion}
-                  </button>
-                )}
-              </article>
-            ))}
-          </div>
-        </details>
-      )}
       {preview && (
         <div
           className="modal-backdrop generation-preview"

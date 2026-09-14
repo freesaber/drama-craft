@@ -27,9 +27,16 @@ export interface Media {
   exists: boolean;
   kind: "image" | "audio" | "video";
 }
-export interface GenerationSettings {
+export interface ApiProfile {
+  id: string;
+  name: string;
   baseUrl: string;
-  authorization: string;
+  hasAuthorization: boolean;
+}
+export interface GenerationSettings {
+  profiles: ApiProfile[];
+  activeProfileId: string;
+  defaultResolution: string;
 }
 export interface GenerationInput {
   document: string;

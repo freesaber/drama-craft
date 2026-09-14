@@ -27,7 +27,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
 Markdown tests cover actual headings versus code fences, duplicate shot IDs, table/inline-code/reference assets, Chinese absolute paths, remote exclusion and natural sorting. Rust temporary-directory tests cover BOM/CRLF saves, external conflicts, deleted-file saves, path escapes, Windows names, read-only flags, relocated identity, corrupt metadata, missing media and non-UTF-8.
 
-Generation tests use a temporary local HTTP service and make no billable requests. They verify submit/query paths, the Authorization header, local-image data URLs, streamed result download and SQLite history. This proves client protocol behavior only; it does not show that the live provider accepts Base64 or that voice conditioning works.
+Generation tests use a temporary local HTTP service and make no billable requests. They verify submit/query paths, the Authorization header, image/audio data URLs, transmission of the default seed, audio/video MIME encoding, task-profile binding, streamed result download and SQLite history. This proves client protocol behavior only; it does not show that the live provider accepts Base64 or that voice conditioning works.
 
 Storyboard regressions additionally cover standalone/titleless IDs, non-shot ranges, duplicate/missing/unrecognized fields, whole-document reference definitions, local patches, stale drafts, CRLF, fence growth, successive story edits, ID allocation, complete-block movement and deletion boundaries.
 

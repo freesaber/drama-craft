@@ -9,11 +9,11 @@ A local Tauri workbench for short-drama production. Scripts, prompts and media s
 - Choose a working directory when creating a project, or open an existing folder without renaming or reorganizing files.
 - Episodes open as vertical storyboards, split at Markdown headings or standalone `S001 Shot title` lines. Switch to Markdown source explicitly when needed.
 - New episodes follow [Episode Data Format v1](doc/en/08-episode-format.md), parsed into episode, character, asset and dialogue data. Character images and voices share one bound card; legacy documents use a compatibility adapter.
-- Edit story progression, first-frame/video prompts, parameters and asset paths in cards; add, delete and move cards without renumbering existing IDs.
+- Edit first-frame/video prompts, parameters and asset paths in cards; story progression and dialogue remain in Markdown and episode information; add, delete and move cards without renumbering existing IDs.
 - Discover local media links and inline-code filenames, check file availability, and preview images, audio and video.
 - Detect external changes, protect against conflicting saves, save copies and guard unsaved exit.
-- The left side shows only the current video; prompts, parameters and clickable asset thumbnails are grouped on the right. Local images can replace request inputs.
-- After configuring the H3 service URL and Authorization value, the app submits, polls and downloads results. Markdown selects the current video while SQLite retains task and version history.
+- The left side shows the current video with reference images and audio below it; prompts, parameters and generation controls are on the right. Local images can replace request inputs.
+- Use Video API settings to manage multiple named service URL and Authorization profiles and select the active profile. Then the app submits, polls and downloads results. Markdown selects the current video while SQLite retains task and version history.
 - Markdown remains the content source of truth. JSON stores project identity; `.drama-craft/generations.sqlite3` stores only generation jobs and version indexes.
 
 **Not implemented yet:** text-model generation, global character/voice libraries, FFmpeg concatenation, automatic backups or project packaging. H3 request code is connected, but Base64 transport, billable requests, voice behavior and provider responses still require validation with a real account. See [provider design](doc/en/06-providers-tasks.md) and the [roadmap](doc/en/05-roadmap.md).

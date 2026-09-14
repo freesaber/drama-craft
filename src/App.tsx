@@ -35,11 +35,48 @@ export default function App() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [generationSettings, setGenerationSettings] =
     useState<GenerationSettings>({
-      baseUrl: "",
-      authorization: "",
+      profiles: [],
+      activeProfileId: "",
+      defaultResolution: "480p横",
     });
-  const [apiBase, setApiBase] = useState("");
-  const [apiAuthorization, setApiAuthorization] = useState("");
+  const [apiDraft, setApiDraft] = useState<GenerationSettings>({
+    profiles: [],
+    activeProfileId: "",
+    defaultResolution: "480p横",
+  });
+  const [apiAuthorizations, setApiAuthorizations] = useState<
+    Record<string, string>
+  >({});
+  const [showApiToken, setShowApiToken] = useState(false);
+  const activeApi = apiDraft.profiles.find(
+    (profile) => profile.id === apiDraft.activeProfileId,
+  );
+  const updateApi = (
+    values: Partial<Pick<import("./types").ApiProfile, "name" | "baseUrl">>,
+  ) =>
+    setApiDraft((draft) => ({
+      ...draft,
+      profiles: draft.profiles.map((profile) =>
+        profile.id === draft.activeProfileId
+          ? { ...profile, ...values }
+          : profile,
+      ),
+    }));
+  const addApi = () => {
+    const id = crypto.randomUUID();
+    setApiDraft((draft) => ({
+      activeProfileId: id,
+      profiles: [
+        ...draft.profiles,
+        {
+          id,
+          name: `${ui.generation.profileName} ${draft.profiles.length + 1}`,
+          baseUrl: "https://autodl.art",
+          hasAuthorization: false,
+        },
+      ],
+    }));
+  };
   const [modal, setModal] = useState<
     "project" | "open" | "document" | "saveAs" | "api" | null
   >(null);
@@ -264,10 +301,11 @@ export default function App() {
     run(async () => {
       if (modal === "api") {
         const settings = await api.setGenerationSettings(
-          apiBase,
-          apiAuthorization,
+          apiDraft,
+          apiAuthorizations,
         );
         setGenerationSettings(settings);
+        setApiAuthorizations({});
         setModal(null);
         setNotice(ui.generation.settingsSaved);
       } else if (modal === "open") {
@@ -290,7 +328,13 @@ export default function App() {
         const next = await api.newDoc(
           project.handle,
           filename,
-          modal === "saveAs" ? text : documentTemplate(template, filename),
+          modal === "saveAs"
+            ? text
+            : documentTemplate(
+                template,
+                filename,
+                generationSettings.defaultResolution,
+              ),
         );
         replaceDocument(filename, next);
         await scan(project);
@@ -346,8 +390,24 @@ export default function App() {
     }
   };
   const configureGeneration = () => {
-    setApiBase(generationSettings.baseUrl);
-    setApiAuthorization(generationSettings.authorization);
+    setApiDraft(generationSettings);
+    setApiAuthorizations({});
+    setShowApiToken(false);
+    if (!generationSettings.profiles.length) {
+      const id = crypto.randomUUID();
+      setApiDraft({
+        activeProfileId: id,
+        defaultResolution: generationSettings.defaultResolution,
+        profiles: [
+          {
+            id,
+            name: ui.generation.defaultProfile,
+            baseUrl: "https://autodl.art",
+            hasAuthorization: false,
+          },
+        ],
+      });
+    }
     setModal("api");
   };
   const useGeneratedVideo = async (index: number, reference: string) => {
@@ -653,7 +713,14 @@ export default function App() {
                   source={showSource}
                   active={activeShot}
                   select={setActiveShot}
-                  generationConfigured={!!generationSettings.baseUrl}
+                  generationConfigured={generationSettings.profiles.some(
+                    (profile) =>
+                      profile.id === generationSettings.activeProfileId &&
+                      profile.hasAuthorization,
+                  )}
+                  generationDefaultResolution={
+                    generationSettings.defaultResolution
+                  }
                   configureGeneration={configureGeneration}
                   useVideo={useGeneratedVideo}
                 />
@@ -738,11 +805,46 @@ export default function App() {
                 {modal === "api" ? (
                   <>
                     <label>
+                      {ui.generation.activeProfile}
+                      <select
+                        value={apiDraft.activeProfileId}
+                        disabled={busy}
+                        onChange={(event) =>
+                          setApiDraft((draft) => ({
+                            ...draft,
+                            activeProfileId: event.target.value,
+                          }))
+                        }
+                      >
+                        {apiDraft.profiles.map((profile) => (
+                          <option key={profile.id} value={profile.id}>
+                            {profile.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button type="button" disabled={busy} onClick={addApi}>
+                      {ui.generation.addProfile}
+                    </button>
+                    <label>
+                      {ui.generation.profileName}
+                      <input
+                        value={activeApi?.name ?? ""}
+                        required
+                        disabled={busy}
+                        onChange={(event) =>
+                          updateApi({ name: event.target.value })
+                        }
+                      />
+                    </label>
+                    <label>
                       {ui.generation.baseUrl}
                       <input
                         autoFocus
-                        value={apiBase}
-                        onChange={(event) => setApiBase(event.target.value)}
+                        value={activeApi?.baseUrl ?? ""}
+                        onChange={(event) =>
+                          updateApi({ baseUrl: event.target.value })
+                        }
                         placeholder="https://api.example.com"
                         required
                         disabled={busy}
@@ -750,15 +852,41 @@ export default function App() {
                     </label>
                     <label>
                       {ui.generation.authorization}
-                      <input
-                        type="password"
-                        value={apiAuthorization}
-                        onChange={(event) =>
-                          setApiAuthorization(event.target.value)
-                        }
-                        placeholder="Bearer …"
-                        disabled={busy}
-                      />
+                      <span className="secret-input">
+                        <input
+                          type={showApiToken ? "text" : "password"}
+                          value={
+                            apiAuthorizations[apiDraft.activeProfileId] ?? ""
+                          }
+                          onChange={(event) =>
+                            setApiAuthorizations((values) => ({
+                              ...values,
+                              [apiDraft.activeProfileId]: event.target.value,
+                            }))
+                          }
+                          placeholder={
+                            activeApi?.hasAuthorization
+                              ? ui.generation.savedAuthorization
+                              : ui.generation.authorizationPlaceholder
+                          }
+                          autoComplete="new-password"
+                          disabled={busy}
+                        />
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => setShowApiToken((visible) => !visible)}
+                        >
+                          {showApiToken
+                            ? ui.generation.hideToken
+                            : ui.generation.showToken}
+                        </button>
+                      </span>
+                      {activeApi?.hasAuthorization && (
+                        <small className="credential-status">
+                          {ui.generation.tokenSaved}
+                        </small>
+                      )}
                       <small>{ui.generation.authorizationHint}</small>
                     </label>
                   </>
@@ -826,7 +954,11 @@ export default function App() {
                     disabled={
                       busy ||
                       (modal !== "open" && modal !== "api" && !name.trim()) ||
-                      (modal === "api" && !apiBase.trim()) ||
+                      (modal === "api" &&
+                        apiDraft.profiles.some(
+                          (profile) =>
+                            !profile.baseUrl.trim() || !profile.name.trim(),
+                        )) ||
                       ((modal === "project" || modal === "open") &&
                         !parent.trim())
                     }

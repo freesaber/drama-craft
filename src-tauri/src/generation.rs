@@ -14,6 +14,7 @@ const DATABASE_NAME: &str = "generations.sqlite3";
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GenerationSettings {
+    pub profile_id: String,
     pub base_url: String,
     pub authorization: String,
 }
@@ -75,7 +76,10 @@ fn database(root: &Path) -> Result<Connection> {
                updated_at TEXT NOT NULL
              );
              CREATE INDEX IF NOT EXISTS generation_shot_history
-               ON generations(document, shot_id, created_at DESC);",
+               ON generations(document, shot_id, created_at DESC);
+             CREATE TABLE IF NOT EXISTS generation_providers (
+               task_id TEXT PRIMARY KEY, profile_id TEXT NOT NULL, base_url TEXT NOT NULL
+             );",
         )
         .map_err(|e| AppError::new("database", e.to_string()))?;
     Ok(connection)
@@ -97,6 +101,18 @@ fn row(row: &rusqlite::Row<'_>) -> rusqlite::Result<GenerationRecord> {
         created_at: row.get(11)?,
         updated_at: row.get(12)?,
     })
+}
+
+pub fn task_provider(root: &Path, task_id: &str) -> Result<Option<(String, String)>> {
+    use rusqlite::OptionalExtension;
+    database(root)?
+        .query_row(
+            "SELECT profile_id, base_url FROM generation_providers WHERE task_id = ?1",
+            [task_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()
+        .map_err(|e| AppError::new("database", e.to_string()))
 }
 
 pub fn history(root: &Path, document: &str, shot_id: &str) -> Result<Vec<GenerationRecord>> {
@@ -276,29 +292,41 @@ pub async fn submit(
         .to_owned();
     let remote_url = result_url(data);
     let now = Local::now().to_rfc3339_opts(SecondsFormat::Secs, false);
-    let connection = database(root)?;
-    connection
-        .execute(
-            "INSERT OR REPLACE INTO generations
+    {
+        let mut connection = database(root)?;
+        let transaction = connection
+            .transaction()
+            .map_err(|e| AppError::new("database", e.to_string()))?;
+        transaction
+            .execute(
+                "INSERT OR REPLACE INTO generations
              (task_id, document, shot_id, status, prompt, duration, resolution, seed,
               image_refs, audio_refs, remote_url, created_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?12)",
-            params![
-                task_id,
-                input.document,
-                input.shot_id,
-                status,
-                input.prompt,
-                input.duration,
-                input.resolution,
-                input.seed,
-                serde_json::to_string(&input.image_refs).unwrap_or_default(),
-                serde_json::to_string(&input.audio_refs).unwrap_or_default(),
-                remote_url,
-                now,
-            ],
-        )
-        .map_err(|e| AppError::new("database", e.to_string()))?;
+                params![
+                    task_id,
+                    input.document,
+                    input.shot_id,
+                    status,
+                    input.prompt,
+                    input.duration,
+                    input.resolution,
+                    input.seed,
+                    serde_json::to_string(&input.image_refs).unwrap_or_default(),
+                    serde_json::to_string(&input.audio_refs).unwrap_or_default(),
+                    remote_url,
+                    now,
+                ],
+            )
+            .map_err(|e| AppError::new("database", e.to_string()))?;
+        transaction.execute(
+        "INSERT OR REPLACE INTO generation_providers (task_id, profile_id, base_url) VALUES (?1, ?2, ?3)",
+        params![task_id, settings.profile_id, settings.base_url],
+    ).map_err(|e| AppError::new("database", e.to_string()))?;
+        transaction
+            .commit()
+            .map_err(|e| AppError::new("database", e.to_string()))?;
+    }
     let record = get(root, &task_id)?;
     if matches!(
         status.to_ascii_lowercase().as_str(),
@@ -341,6 +369,23 @@ fn result_url(data: &Value) -> Option<String> {
         .map(ToOwned::to_owned)
 }
 
+fn video_stem(document: &Path, shot_id: &str, timestamp: &str) -> String {
+    let name = document
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    let number: String = name
+        .trim_start()
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect();
+    if number.is_empty() {
+        format!("{shot_id}_{timestamp}")
+    } else {
+        format!("{number:0>2} {shot_id}_{timestamp}")
+    }
+}
+
 async fn download(
     root: &Path,
     settings: &GenerationSettings,
@@ -351,13 +396,13 @@ async fn download(
     let parent = document
         .parent()
         .ok_or_else(|| AppError::new("path", "文档缺少父目录"))?;
-    let timestamp = Local::now().format("%Y%m%d-%H%M%S");
-    let mut filename = format!("{}_{}.mp4", record.shot_id, timestamp);
+    let timestamp = Local::now().format("%Y%m%d-%H%M%S").to_string();
+    let stem = video_stem(&document, &record.shot_id, &timestamp);
+    let mut filename = format!("{stem}.mp4");
     if parent.join(&filename).exists() {
         filename = format!(
-            "{}_{}_{}.mp4",
-            record.shot_id,
-            timestamp,
+            "{}_{}.mp4",
+            stem,
             &record.task_id[..8.min(record.task_id.len())]
         );
     }
@@ -547,6 +592,21 @@ mod tests {
     }
 
     #[test]
+    fn video_names_use_the_episode_document_number() {
+        for (document, expected) in [
+            ("01 测试.md", "01 S007_20260913-222911"),
+            ("episodes/2 测试.md", "02 S007_20260913-222911"),
+            ("episodes/123 测试.md", "123 S007_20260913-222911"),
+            ("01 目录/episode.md", "S007_20260913-222911"),
+        ] {
+            assert_eq!(
+                video_stem(Path::new(document), "S007", "20260913-222911"),
+                expected
+            );
+        }
+    }
+
+    #[test]
     fn submits_polls_downloads_and_keeps_history() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let address = listener.local_addr().unwrap();
@@ -558,6 +618,17 @@ mod tests {
                 .to_ascii_lowercase()
                 .contains("authorization: token fixture"));
             assert!(submitted.contains("data:image/png;base64,"));
+            let body: Value =
+                serde_json::from_str(submitted.split_once("\r\n\r\n").unwrap().1).unwrap();
+            assert_eq!(body["seed"], 683072603085674_i64);
+            assert_eq!(
+                body["ref_audio_0"],
+                format!(
+                    "data:audio/mpeg;base64,{}",
+                    STANDARD.encode(b"synthetic-audio")
+                )
+            );
+            assert!(body.get("authorization").is_none());
             respond(
                 &mut submit,
                 "application/json",
@@ -580,7 +651,9 @@ mod tests {
         let root = storage::canonical_directory(project.path()).unwrap();
         storage::create_document(&root, "01 测试.md", "# S001 测试\n").unwrap();
         fs::write(root.join("frame.png"), b"synthetic-image").unwrap();
+        fs::write(root.join("voice.mp3"), b"synthetic-audio").unwrap();
         let settings = GenerationSettings {
+            profile_id: "fixture".into(),
             base_url: format!("http://{address}"),
             authorization: "Token fixture".into(),
         };
@@ -593,19 +666,46 @@ mod tests {
                 prompt: "向前走".into(),
                 duration: 5,
                 resolution: "768p横".into(),
-                seed: Some(7),
+                seed: Some(683072603085674),
                 image_refs: vec!["frame.png".into()],
-                audio_refs: Vec::new(),
+                audio_refs: vec!["voice.mp3".into()],
             },
         ))
         .unwrap();
         assert_eq!(record.status, "queued");
+        assert_eq!(
+            task_provider(&root, "task-1").unwrap(),
+            Some(("fixture".into(), settings.base_url.clone()))
+        );
+        assert_eq!(task_provider(&root, "legacy-task").unwrap(), None);
         let completed =
             tauri::async_runtime::block_on(poll(&root, &settings, &record.task_id)).unwrap();
         assert_eq!(completed.status, "completed");
         let file = completed.local_file.unwrap();
+        assert!(file.starts_with("01 S001_"), "{file}");
+        assert!(file.ends_with(".mp4"), "{file}");
         assert_eq!(fs::read(root.join(&file)).unwrap(), b"synthetic-video");
         assert_eq!(history(&root, "01 测试.md", "S001").unwrap().len(), 1);
         server.join().unwrap();
+    }
+
+    #[test]
+    fn media_body_encodes_audio_video_bytes_and_rejects_escape() {
+        let project = tempfile::tempdir().unwrap();
+        let root = storage::canonical_directory(project.path()).unwrap();
+        storage::create_document(&root, "episode.md", "# S001\n").unwrap();
+        for (file, mime) in [
+            ("sample.mp3", "audio/mpeg"),
+            ("sample.wav", "audio/wav"),
+            ("sample.flac", "audio/flac"),
+            ("sample.mp4", "video/mp4"),
+        ] {
+            fs::write(root.join(file), [0, 1, 2, 254, 255]).unwrap();
+            assert_eq!(
+                api_media(&root, "episode.md", file).unwrap(),
+                format!("data:{mime};base64,AAEC/v8=")
+            );
+        }
+        assert!(api_media(&root, "episode.md", "../outside.mp3").is_err());
     }
 }
