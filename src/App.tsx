@@ -471,11 +471,6 @@ export default function App() {
             <span>{ui.workbench}</span>
           )}
         </div>
-        <span className="local-badge">
-          <i />
-          {ui.local}
-        </span>
-        <span className="version">{ui.p0}</span>
       </header>
       {!desktop && <div className="banner neutral">{ui.browser}</div>}
       {error && (

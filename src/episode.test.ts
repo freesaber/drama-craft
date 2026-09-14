@@ -37,21 +37,16 @@ const legacy = `# 第01集 点灯
 `;
 
 describe("episode domain adapters", () => {
-  it("parses the published bilingual v1 sample with no diagnostics", () => {
-    for (const path of [
-      "doc/zh-CN/08-剧集数据格式v1.md",
-      "doc/en/08-episode-format.md",
-    ]) {
-      const spec = readFileSync(
-        path,
-        "utf8",
-      ).replaceAll("\r\n", "\n");
-      const sample = spec.split("````markdown\n")[1].split("\n````")[0];
-      const board = parseStoryboard(sample);
-      expect(board.episode.format).toBe("v1");
-      expect(board.diagnostics).toEqual([]);
-      expect(board.episode.castByShot.S001).toEqual(["C001"]);
-    }
+  it("parses the published v1 sample with no diagnostics", () => {
+    const spec = readFileSync(
+      "doc/08-剧集数据格式v1.md",
+      "utf8",
+    ).replaceAll("\r\n", "\n");
+    const sample = spec.split("````markdown\n")[1].split("\n````")[0];
+    const board = parseStoryboard(sample);
+    expect(board.episode.format).toBe("v1");
+    expect(board.diagnostics).toEqual([]);
+    expect(board.episode.castByShot.S001).toEqual(["C001"]);
   });
   it("joins legacy character images and voices by explicit names, including narrator", () => {
     const episode = parseStoryboard(legacy).episode;

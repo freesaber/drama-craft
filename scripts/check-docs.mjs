@@ -4,23 +4,16 @@ import assert from "node:assert/strict";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 import { visit } from "unist-util-visit";
-const zh = readdirSync("doc/zh-CN").sort();
-const en = readdirSync("doc/en").sort();
+
+const docs = readdirSync("doc").sort();
 assert.deepEqual(
-  zh.map((name) => name.slice(0, 2)),
-  en.map((name) => name.slice(0, 2)),
-  "Document languages must use matching document numbers",
-);
-assert.deepEqual(
-  zh.map((name) => name.slice(0, 2)),
+  docs.map((name) => name.slice(0, 2)),
   ["01", "02", "03", "04", "05", "06", "07", "08"],
 );
+
 const files = [
   "README.md",
-  "README.en.md",
-  "doc/README.md",
-  ...zh.map((file) => `doc/zh-CN/${file}`),
-  ...en.map((file) => `doc/en/${file}`),
+  ...docs.map((file) => `doc/${file}`),
 ];
 for (const file of files) {
   const text = readFileSync(file, "utf8");
@@ -37,4 +30,4 @@ for (const file of files) {
     );
   }
 }
-console.log("Paired documents 01–08 and README links verified.");
+console.log("Document files 01–08 and README links verified.");

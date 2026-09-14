@@ -862,27 +862,7 @@ select:focus {
   font-weight: 400;
   color: #bec9bd;
 }
-.local-badge {
-  font-size: 11px;
-  border: 1px solid #dce5d8;
-  border-radius: 20px;
-  padding: 5px 9px;
-  color: #527452;
-  white-space: nowrap;
-}
-.local-badge i {
-  display: inline-block;
-  width: 5px;
-  height: 5px;
-  background: #67835c;
-  border-radius: 50%;
-  margin-right: 6px;
-}
-.version {
-  color: #929d92;
-  font-size: 11px;
-  white-space: nowrap;
-}
+
 .home-page {
   max-width: 1000px;
   width: 100%;
@@ -1577,9 +1557,7 @@ select:focus {
     padding: 0 18px;
     gap: 15px;
   }
-  .version {
-    display: none;
-  }
+  
   .panel-heading {
     padding: 10px 12px;
   }
