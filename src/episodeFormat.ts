@@ -5,7 +5,6 @@ export const ROLE_COLUMNS = [
   "名称",
   "角色图",
   "音色文件",
-  "音色状态",
   "使用镜号",
 ];
 export const ASSET_COLUMNS = ["素材ID", "名称", "类型", "文件", "使用镜号"];

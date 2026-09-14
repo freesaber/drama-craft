@@ -27,8 +27,8 @@ describe("episode domain adapters", () => {
   it("parses explicit v1 bindings into the same domain objects", () => {
     const source = documentTemplate("episode", "01 夜航.md")
       .replace(
-        "|---|---|---|---|---|---|",
-        "|---|---|---|---|---|---|\n| C007 | 旅人 | `旅人.png` | `声音.wav` | 候选未试听 | S001 |",
+        "|---|---|---|---|---|",
+        "|---|---|---|---|---|\n| C007 | 旅人 | `旅人.png` | `声音.wav` | S001 |",
       )
       .replace("角色：—", "角色：C007");
     const board = parseStoryboard(source);

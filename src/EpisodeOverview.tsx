@@ -53,7 +53,6 @@ export default function EpisodeOverview({
               </div>
               <div className="character-voice">
                 <strong>{ui.episodeData.voice}</strong>
-                <p>{role.voiceStatus || ui.episodeData.unverified}</p>
                 {rolesOpen && role.voice ? (
                   asset(role.voice)
                 ) : (
@@ -117,7 +116,7 @@ export function ShotCast({
                 key={`${role.id}-${i}`}
                 title={
                   role.voice
-                    ? `${role.voice} · ${role.voiceStatus}`
+                    ? role.voice
                     : ui.episodeData.noVoice
                 }
               >

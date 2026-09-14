@@ -113,8 +113,7 @@ export function parseEpisode(
         description: "",
         image: onlyRef(c[2], cellText(c[1]), "image"),
         voice: onlyRef(c[3], cellText(c[1]), "audio"),
-        voiceStatus: cellText(c[4]),
-        shots: ids(cellText(c[5])),
+        shots: ids(cellText(c[4])),
       });
     }
   }
@@ -130,17 +129,6 @@ export function parseEpisode(
       data.diagnostics.push(ui.episodeData.invalidRole(role.id || role.name));
     roleIds.add(role.id);
     roleNames.add(role.name);
-    if (
-      data.format === "v1" &&
-      ![
-        "候选未试听",
-        "用户指定未试听",
-        "已试听确认",
-        "待补",
-        "无需音色",
-      ].includes(role.voiceStatus)
-    )
-      data.diagnostics.push(ui.episodeData.invalidField(`${role.id} 音色状态`));
   }
   for (const table of tables) {
     const headers = columns(table);

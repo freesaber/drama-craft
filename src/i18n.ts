@@ -8,7 +8,6 @@ export const ui = {
     material: "素材",
     noVoice: "未绑定音色",
     noImage: "无角色图",
-    unverified: "音色未试听",
     
     v1: "剧集格式 v1",
     noSummary: "尚未填写本集内容",

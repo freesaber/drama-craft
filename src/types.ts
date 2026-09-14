@@ -118,7 +118,6 @@ export interface CharacterData {
   description: string;
   image: string | null;
   voice: string | null;
-  voiceStatus: string;
   shots: string[];
 }
 export interface EpisodeAsset {
