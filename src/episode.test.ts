@@ -58,6 +58,20 @@ describe("episode domain adapters", () => {
     expect(episode.assets[0].reference).toBeNull();
     expect(episode.assets[0].prompt).toBe("渡口场景图提示词");
   });
+  it("links a local role image to its material reference prompt", () => {
+    const source = documentTemplate("episode", "02 当众立约.md")
+      .replace(
+        "|---|---|---|---|---|",
+        "|---|---|---|---|---|\n| C005 | 山羊师爷 | `02 素材_山羊师爷.png` | `声音.wav` | S001 |",
+      )
+      .replace(
+        "## 本集使用素材\n\n| 素材ID | 名称 | 类型 | 文件 | 使用镜号 |\n|---|---|---|---|---|",
+        "## 本集使用素材\n\n| 素材ID | 名称 | 类型 | 文件 | 使用镜号 |\n|---|---|---|---|---|\n| A003 | 山羊师爷参考图 | 角色 | `02 素材_山羊师爷.png` | S001 |\n\n### 山羊师爷参考图\n\n```text\n山羊师爷完整角色图提示词\n```",
+      )
+      .replace("角色：—", "角色：C005");
+    const episode = parseStoryboard(source).episode;
+    expect(episode.characters[0].imagePrompt).toBe("山羊师爷完整角色图提示词");
+  });
   it("reports unknown IDs, missing required tables and future versions", () => {
     const source = documentTemplate("episode", "01 夜航.md").replace(
       "角色：—",

@@ -173,6 +173,16 @@ export function parseEpisode(
         });
       }
   }
+  for (const role of data.characters) {
+    if (role.imagePrompt) continue;
+    const linkedAsset = data.assets.find(
+      (item) =>
+        (role.image && item.reference === role.image) ||
+        item.name === role.name ||
+        item.name === `${role.name}参考图`,
+    );
+    if (linkedAsset?.prompt) role.imagePrompt = linkedAsset.prompt;
+  }
   const shotIds = new Set(shots.map((s) => s.id));
   for (const role of data.characters)
     for (const id of role.shots)
