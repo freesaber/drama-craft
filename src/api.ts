@@ -15,10 +15,25 @@ import { ui } from "./i18n";
 export const desktop = isTauri();
 export const api = {
   inspect: (path: string) => invoke<Candidate[]>("inspect_directory", { path }),
-  open: (path: string) => invoke<Project>("open_project", { path }),
+  open: (path: string, characterDirectory?: string, voiceDirectory?: string) =>
+    invoke<Project>("open_project", {
+      path,
+      characterDirectory,
+      voiceDirectory,
+    }),
   close: (handle: string) => invoke<void>("close_project", { handle }),
-  create: (parent: string, name: string) =>
-    invoke<Project>("create_project", { parent, name }),
+  create: (
+    parent: string,
+    name: string,
+    characterDirectory: string | undefined,
+    voiceDirectory: string,
+  ) =>
+    invoke<Project>("create_project", {
+      parent,
+      name,
+      characterDirectory,
+      voiceDirectory,
+    }),
   scan: (handle: string) =>
     invoke<{ documents: DocumentEntry[]; warnings: string[] }>("scan_project", {
       handle,

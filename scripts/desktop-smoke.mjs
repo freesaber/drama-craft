@@ -21,6 +21,12 @@ const executable = resolve(
 );
 await access(executable);
 const testRoot = await mkdtemp(join(tmpdir(), "dramacraft-smoke-"));
+const voiceLibrary = join(testRoot, "测试声音库");
+await mkdir(voiceLibrary);
+await writeFile(join(voiceLibrary, "旁白.wav"), "synthetic-audio");
+const legacyRoot = join(testRoot, "02 旧项目");
+await mkdir(legacyRoot);
+await writeFile(join(legacyRoot, "01 旧剧本.md"), "# 旧剧本\n");
 const profile = join(testRoot, "webview");
 const output = resolve("test-results");
 await mkdir(output, { recursive: true });
@@ -64,17 +70,39 @@ try {
   page.on("pageerror", (e) => errors.push(e.message));
   await expect(page.getByText("从文字，到每一个镜头。")).toBeVisible();
   await page.screenshot({ path: join(output, "desktop-home.png") });
+  await page
+    .getByRole("button", { name: "打开项目目录", exact: false })
+    .click();
+  await page.getByLabel("目录路径", { exact: false }).fill(legacyRoot);
+  await page.getByRole("button", { name: "确认", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "配置角色与声音" }),
+  ).toBeVisible();
+  await page
+    .getByLabel("声音目录（必选）", { exact: false })
+    .fill(voiceLibrary);
+  await page.getByRole("button", { name: "确认", exact: true }).click();
+  await access(join(legacyRoot, ".drama-craft", "project.json"));
+  await page.getByRole("button", { name: "返回项目首页", exact: true }).click();
   await page.getByRole("button", { name: "创建项目", exact: false }).click();
   await page.getByLabel("项目名称", { exact: true }).fill("01 原创 渡口");
   await page.getByLabel("父目录", { exact: false }).fill(testRoot);
   await expect(page.getByLabel("父目录", { exact: false })).toHaveValue(
     testRoot,
   );
+  await page
+    .getByLabel("声音目录（必选）", { exact: false })
+    .fill(voiceLibrary);
   await page.getByRole("button", { name: "确认", exact: true }).click();
   await expect(page.locator(".board-document").first()).toBeVisible();
   await expect(page.getByLabel("Markdown 文档编辑器")).not.toBeVisible();
   const root = join(testRoot, "01 原创 渡口");
   await access(join(root, ".drama-craft", "project.json"));
+  assert.ok(
+    (
+      await readFile(join(root, ".drama-craft", "project.json"), "utf8")
+    ).includes(voiceLibrary.replaceAll("\\", "\\\\")),
+  );
   await page.getByRole("button", { name: "新建文档", exact: false }).click();
   await page.getByLabel("文档文件名").fill("01 灯火.md");
   await page.getByRole("button", { name: "确认", exact: true }).click();

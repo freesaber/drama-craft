@@ -34,13 +34,23 @@ impl From<serde_json::Error> for AppError {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectMeta {
     pub id: String,
     pub name: String,
     pub format_version: u32,
     pub layout: String,
+    #[serde(default)]
+    pub libraries: ProjectLibraries,
+}
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectLibraries {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub characters: Option<String>,
+    #[serde(default)]
+    pub voices: String,
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -284,7 +294,7 @@ pub fn create_document(root: &Path, relative: &str, text: &str) -> Result<Snapsh
     atomic_write(&path, text.replace("\r\n", "\n").as_bytes(), true)?;
     read_document(root, relative)
 }
-pub fn load_project(root: &Path) -> Result<(ProjectMeta, Option<String>)> {
+fn metadata_paths(root: &Path) -> Result<(PathBuf, PathBuf)> {
     let dir = root.join(".drama-craft");
     if fs::symlink_metadata(&dir).is_ok_and(|m| m.file_type().is_symlink()) {
         return Err(AppError::new("path", "项目元数据目录不能是链接"));
@@ -293,6 +303,33 @@ pub fn load_project(root: &Path) -> Result<(ProjectMeta, Option<String>)> {
     if fs::symlink_metadata(&file).is_ok_and(|m| m.file_type().is_symlink()) {
         return Err(AppError::new("path", "项目元数据文件不能是链接"));
     }
+    Ok((dir, file))
+}
+fn has_extension(path: &Path, allowed: &[&str]) -> bool {
+    path.extension()
+        .and_then(|value| value.to_str())
+        .is_some_and(|value| allowed.iter().any(|item| value.eq_ignore_ascii_case(item)))
+}
+fn validate_library(path: &Path, allowed: &[&str], label: &str) -> Result<PathBuf> {
+    if path.as_os_str().is_empty() {
+        return Err(AppError::new("library", format!("{label}目录不能为空")));
+    }
+    let path = canonical_directory(path)?;
+    let matched = WalkDir::new(&path)
+        .follow_links(false)
+        .into_iter()
+        .filter_map(std::result::Result::ok)
+        .any(|entry| entry.file_type().is_file() && has_extension(entry.path(), allowed));
+    if !matched {
+        return Err(AppError::new(
+            "library",
+            format!("{label}目录中没有支持的素材文件"),
+        ));
+    }
+    Ok(path)
+}
+pub fn load_project(root: &Path) -> Result<(ProjectMeta, Option<String>)> {
+    let (_, file) = metadata_paths(root)?;
     if file.exists() {
         let metadata: ProjectMeta = serde_json::from_slice(&fs::read(file)?)?;
         if metadata.format_version != 1 {
@@ -301,9 +338,33 @@ pub fn load_project(root: &Path) -> Result<(ProjectMeta, Option<String>)> {
                 "项目格式版本不受支持，请使用兼容版本的客户端",
             ));
         }
+        if metadata.libraries.voices.is_empty() {
+            return Err(AppError::new(
+                "project_setup",
+                "此项目尚未配置声音目录，请先选择后再导入",
+            ));
+        }
+        validate_library(
+            Path::new(&metadata.libraries.voices),
+            &["mp3", "wav", "flac", "ogg", "m4a", "mp4"],
+            "声音",
+        )?;
+        if let Some(characters) = &metadata.libraries.characters {
+            validate_library(
+                Path::new(characters),
+                &["png", "jpg", "jpeg", "webp", "gif", "bmp", "txt", "md"],
+                "角色",
+            )?;
+        }
         return Ok((metadata, None));
     }
-    let metadata = ProjectMeta {
+    Err(AppError::new(
+        "project_setup",
+        "此项目尚未配置声音目录，请先选择后再导入",
+    ))
+}
+fn fresh_metadata(root: &Path, libraries: ProjectLibraries) -> ProjectMeta {
+    ProjectMeta {
         id: Uuid::new_v4().to_string(),
         name: root
             .file_name()
@@ -312,20 +373,63 @@ pub fn load_project(root: &Path) -> Result<(ProjectMeta, Option<String>)> {
             .into_owned(),
         format_version: 1,
         layout: "preserve".into(),
-    };
-    let initialize = || -> Result<()> {
-        fs::create_dir_all(&dir)?;
-        atomic_write(&file, &serde_json::to_vec_pretty(&metadata)?, true)
-    };
-    let warning = initialize().err().map(|e| {
-        format!(
-            "无法保存项目标识，本次仍可浏览；项目可能只读：{}",
-            e.message
-        )
-    });
-    Ok((metadata, warning))
+        libraries,
+    }
 }
-pub fn create_project(parent: &Path, name: &str) -> Result<PathBuf> {
+pub fn configure_project(
+    root: &Path,
+    character_source: Option<&Path>,
+    voice_source: &Path,
+) -> Result<ProjectMeta> {
+    let (dir, file) = metadata_paths(root)?;
+    let root = fs::canonicalize(root)?;
+    let voices = validate_library(
+        voice_source,
+        &["mp3", "wav", "flac", "ogg", "m4a", "mp4"],
+        "声音",
+    )?;
+    let characters = character_source
+        .map(|source| {
+            validate_library(
+                source,
+                &["png", "jpg", "jpeg", "webp", "gif", "bmp", "txt", "md"],
+                "角色",
+            )
+        })
+        .transpose()?;
+    let libraries = ProjectLibraries {
+        characters: characters.map(|path| path.to_string_lossy().into_owned()),
+        voices: voices.to_string_lossy().into_owned(),
+    };
+    let existing = if file.exists() {
+        let metadata: ProjectMeta = serde_json::from_slice(&fs::read(&file)?)?;
+        if !metadata.libraries.voices.is_empty() {
+            return Err(AppError::new("library", "项目素材库已经配置"));
+        }
+        Some(metadata)
+    } else {
+        None
+    };
+    fs::create_dir_all(&dir)?;
+    let metadata = existing
+        .map(|mut value| {
+            value.libraries = libraries.clone();
+            value
+        })
+        .unwrap_or_else(|| fresh_metadata(&root, libraries));
+    atomic_write(
+        &file,
+        &serde_json::to_vec_pretty(&metadata)?,
+        !file.exists(),
+    )?;
+    Ok(metadata)
+}
+pub fn create_project(
+    parent: &Path,
+    name: &str,
+    character_source: Option<&Path>,
+    voice_source: &Path,
+) -> Result<PathBuf> {
     validate_name(name)?;
     if ignored(name) {
         return Err(AppError::new("name", "请选择非隐藏项目名称"));
@@ -333,10 +437,7 @@ pub fn create_project(parent: &Path, name: &str) -> Result<PathBuf> {
     let root = canonical_directory(parent)?.join(name);
     fs::create_dir(&root)?; // Deliberately fails if the directory already exists.
     let root = fs::canonicalize(root)?;
-    let (_, warning) = load_project(&root)?;
-    if let Some(warning) = warning {
-        return Err(AppError::new("io", warning));
-    }
+    configure_project(&root, character_source, voice_source)?;
     create_document(
         &root,
         "剧本大纲.md",

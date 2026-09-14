@@ -1,7 +1,13 @@
 export interface Project {
   handle: string;
   root: string;
-  metadata: { id: string; name: string; formatVersion: number; layout: string };
+  metadata: {
+    id: string;
+    name: string;
+    formatVersion: number;
+    layout: string;
+    libraries: { characters?: string; voices: string };
+  };
   warning: string | null;
 }
 export interface DocumentEntry {

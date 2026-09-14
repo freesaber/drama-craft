@@ -7,6 +7,12 @@ fn workspace() -> TempDir {
 fn root(temp: &TempDir) -> std::path::PathBuf {
     fs::canonicalize(temp.path()).unwrap()
 }
+fn voice_library(parent: &Path) -> std::path::PathBuf {
+    let path = parent.join("测试声音库");
+    fs::create_dir_all(&path).unwrap();
+    fs::write(path.join("旁白.wav"), b"synthetic-audio").unwrap();
+    path
+}
 
 #[test]
 fn preserves_custom_content_bom_crlf_and_rejects_conflicts() {
@@ -73,20 +79,23 @@ fn rejects_traversal_reserved_names_and_overwrites() {
         fs::read_to_string(root.join("existing.md")).unwrap(),
         "keep"
     );
-    let project = create_project(&root, "中文 项目").unwrap();
-    assert!(create_project(&root, "中文 项目").is_err());
+    let voices = voice_library(&root);
+    let project = create_project(&root, "中文 项目", None, &voices).unwrap();
+    assert!(create_project(&root, "中文 项目", None, &voices).is_err());
     assert!(project.join("剧本大纲.md").exists());
 }
 #[test]
-fn project_is_portable_and_scan_is_read_only() {
+fn project_identity_moves_while_external_library_configuration_is_preserved() {
     let temp = workspace();
     let root = root(&temp);
-    let project = create_project(&root, "原创示例").unwrap();
+    let library_temp = workspace();
+    let voices = voice_library(library_temp.path());
+    let project = create_project(&root, "原创示例", None, &voices).unwrap();
     let (before, _) = load_project(&project).unwrap();
     fs::create_dir(project.join("assets")).unwrap();
     create_document(&project, "assets/补充.md", "unknown sections\n").unwrap();
     let metadata = fs::read(project.join(".drama-craft/project.json")).unwrap();
-    assert!(!String::from_utf8_lossy(&metadata).contains(&root.to_string_lossy().to_string()));
+    assert!(String::from_utf8_lossy(&metadata).contains("测试声音库"));
     assert_eq!(scan(&project).unwrap().documents.len(), 3);
     assert_eq!(
         metadata,
@@ -148,7 +157,8 @@ fn metadata_validation_and_parent_candidates() {
     let root = root(&temp);
     fs::write(root.join("AGENTS.md"), "data only").unwrap();
     assert!(!direct_markdown(&root).unwrap());
-    let child = create_project(&root, "01 示例").unwrap();
+    let voices = voice_library(&root);
+    let child = create_project(&root, "01 示例", None, &voices).unwrap();
     assert_eq!(candidates(&root).unwrap().len(), 1);
     fs::write(child.join(".drama-craft/project.json"), "invalid").unwrap();
     assert!(load_project(&child).is_err());
@@ -156,6 +166,47 @@ fn metadata_validation_and_parent_candidates() {
         fs::read_to_string(child.join(".drama-craft/project.json")).unwrap(),
         "invalid"
     );
+}
+#[test]
+fn legacy_project_requires_voice_setup_without_copying_or_editing_documents() {
+    let temp = workspace();
+    let root = root(&temp);
+    let project = root.join("旧项目");
+    fs::create_dir(&project).unwrap();
+    let voices = voice_library(&root);
+    let characters = root.join("测试角色库");
+    fs::create_dir(&characters).unwrap();
+    fs::write(characters.join("角色表.txt"), "原创角色").unwrap();
+    let voice_ref = voices.to_string_lossy().replace('\\', "/");
+    let character_ref = characters.to_string_lossy().replace('\\', "/");
+    fs::write(
+        project.join("01 独立角色.md"),
+        format!("# 第一集\n\n`{voice_ref}/旁白.wav`\n`{character_ref}/角色表.txt`\n"),
+    )
+    .unwrap();
+    assert_eq!(load_project(&project).unwrap_err().code, "project_setup");
+    assert_eq!(
+        configure_project(&project, None, Path::new(""))
+            .unwrap_err()
+            .code,
+        "library"
+    );
+    assert!(!project.join(".drama-craft/project.json").exists());
+
+    let metadata = configure_project(&project, Some(&characters), &voices).unwrap();
+    assert_eq!(
+        metadata.libraries.characters.as_deref(),
+        Some(characters.to_string_lossy().as_ref())
+    );
+    assert_eq!(metadata.libraries.voices, voices.to_string_lossy());
+    assert!(!project.join(".drama-craft/libraries").exists());
+    let json = fs::read_to_string(project.join(".drama-craft/project.json")).unwrap();
+    assert!(json.contains("测试角色库"));
+    assert!(json.contains("测试声音库"));
+    let document = fs::read_to_string(project.join("01 独立角色.md")).unwrap();
+    assert!(document.contains(&voice_ref));
+    assert!(document.contains(&character_ref));
+    assert_eq!(load_project(&project).unwrap().0.id, metadata.id);
 }
 #[test]
 fn non_utf8_is_reported_without_changes() {
@@ -209,6 +260,9 @@ fn external_workspace_readonly_check() {
             )
         })
         .collect();
+    let (metadata, warning) = load_project(&root).unwrap();
+    assert!(warning.is_none());
+    assert!(!metadata.libraries.voices.is_empty());
     let result = scan(&root).unwrap();
     assert_eq!(
         result

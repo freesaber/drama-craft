@@ -8,7 +8,7 @@ export const ui = {
     material: "素材",
     noVoice: "未绑定音色",
     noImage: "无角色图",
-    
+
     v1: "剧集格式 v1",
     noSummary: "尚未填写本集内容",
     sourceNotes: "其他原文内容已保留，可在源码模式编辑。",
@@ -64,6 +64,13 @@ export const ui = {
   confirm: "确认",
   newTitle: "开始一个新故事",
   createFolder: "在父目录下创建同名项目文件夹，不覆盖已有目录。",
+  librarySetup: "配置角色与声音",
+  librarySetupExisting: "导入这个项目之前，请先配置项目素材库。",
+  characterDirectory: "角色目录（可选）",
+  voiceDirectory: "声音目录（必选）",
+  characterHint: "不选择角色目录时，角色图可在每一集中独立生成。",
+  libraryImportHint:
+    "这里只保存目录配置；不会复制素材，也不会修改现有剧本和提示词。",
   selectProject: "选择要打开的作品",
   openThis: "将此目录作为项目打开",
   filename: "文档文件名",

@@ -79,8 +79,21 @@ fn inspect_directory(path: String) -> Result<Vec<storage::Candidate>> {
     storage::candidates(&root)
 }
 #[tauri::command]
-fn open_project(app: tauri::AppHandle, state: State<Sessions>, path: String) -> Result<Opened> {
+fn open_project(
+    app: tauri::AppHandle,
+    state: State<Sessions>,
+    path: String,
+    character_directory: Option<String>,
+    voice_directory: Option<String>,
+) -> Result<Opened> {
     let root = storage::canonical_directory(&PathBuf::from(path))?;
+    if let Some(voices) = voice_directory.as_deref() {
+        storage::configure_project(
+            &root,
+            character_directory.as_deref().map(std::path::Path::new),
+            std::path::Path::new(voices),
+        )?;
+    }
     let (metadata, mut warning) = storage::load_project(&root)?;
     let handle = uuid::Uuid::new_v4().to_string();
     state
@@ -135,9 +148,16 @@ fn create_project(
     state: State<Sessions>,
     parent: String,
     name: String,
+    character_directory: Option<String>,
+    voice_directory: String,
 ) -> Result<Opened> {
-    let root = storage::create_project(&PathBuf::from(parent), &name)?;
-    open_project(app, state, root.to_string_lossy().into_owned())
+    let root = storage::create_project(
+        &PathBuf::from(parent),
+        &name,
+        character_directory.as_deref().map(std::path::Path::new),
+        std::path::Path::new(&voice_directory),
+    )?;
+    open_project(app, state, root.to_string_lossy().into_owned(), None, None)
 }
 #[tauri::command]
 fn scan_project(state: State<Sessions>, handle: String) -> Result<storage::Scan> {

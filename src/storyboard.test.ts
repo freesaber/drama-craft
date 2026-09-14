@@ -91,7 +91,7 @@ describe("storyboard structure", () => {
     expect(fields.framePrompt.value).toContain("静态画面");
     expect(fields.videoPrompt.value).toContain("摄影机");
     expect(fields.duration.value).toBe("5");
-    expect(fields.resolution.value).toBe("768p横");
+    expect(fields.resolution.value).toBe("480p横");
     expect(fields.frameFile.value).toBe("01 首帧_S001.png");
     expect(fields.videoFile.value).toBe("01 S001.mp4");
     expect(fields.story.range).toBeDefined();
@@ -181,7 +181,7 @@ describe("source patches", () => {
     expect(next).toBe(
       template
         .replace("duration=5", "duration=12")
-        .replace("resolution=768p横", "resolution=480p竖"),
+        .replace("resolution=480p横", "resolution=480p竖"),
     );
   });
   it("clears and re-enters a filename without losing its editable location", () => {

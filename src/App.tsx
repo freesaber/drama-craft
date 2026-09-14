@@ -65,6 +65,7 @@ export default function App() {
   const addApi = () => {
     const id = crypto.randomUUID();
     setApiDraft((draft) => ({
+      ...draft,
       activeProfileId: id,
       profiles: [
         ...draft.profiles,
@@ -78,10 +79,13 @@ export default function App() {
     }));
   };
   const [modal, setModal] = useState<
-    "project" | "open" | "document" | "saveAs" | "api" | null
+    "project" | "open" | "libraries" | "document" | "saveAs" | "api" | null
   >(null);
   const [name, setName] = useState("");
   const [parent, setParent] = useState("");
+  const [characterDirectory, setCharacterDirectory] = useState("");
+  const [voiceDirectory, setVoiceDirectory] = useState("");
+  const [pendingProject, setPendingProject] = useState("");
   const [template, setTemplate] = useState("episode");
   const [candidates, setCandidates] = useState<{
     root: string;
@@ -156,6 +160,26 @@ export default function App() {
       replaceDocument(docs[0].path, await api.read(next.handle, docs[0].path));
     await loadPreferences();
   };
+  const openReadyProject = async (selected: string) => {
+    try {
+      await installProject(await api.open(selected));
+    } catch (e) {
+      if (
+        e &&
+        typeof e === "object" &&
+        "code" in e &&
+        e.code === "project_setup"
+      ) {
+        setPendingProject(selected);
+        setCharacterDirectory("");
+        setVoiceDirectory("");
+        setCandidates(null);
+        setModal("libraries");
+        return;
+      }
+      throw e;
+    }
+  };
   const openPath = (selected: string, inspect = true) =>
     run(async () => {
       if (dirty && !(await discardChanges())) return;
@@ -166,7 +190,7 @@ export default function App() {
           return;
         }
       }
-      await installProject(await api.open(selected));
+      await openReadyProject(selected);
     });
   const openDirectory = () =>
     run(async () => {
@@ -316,10 +340,27 @@ export default function App() {
           setCandidates({ root: parent.trim(), list });
           return;
         }
-        await installProject(await api.open(parent.trim()));
+        await openReadyProject(parent.trim());
       } else if (modal === "project") {
-        if (!parent || !name.trim()) return;
-        await installProject(await api.create(parent, name.trim()));
+        if (!parent || !name.trim() || !voiceDirectory.trim()) return;
+        await installProject(
+          await api.create(
+            parent,
+            name.trim(),
+            characterDirectory.trim() || undefined,
+            voiceDirectory.trim(),
+          ),
+        );
+      } else if (modal === "libraries") {
+        if (!pendingProject || !voiceDirectory.trim()) return;
+        await installProject(
+          await api.open(
+            pendingProject,
+            characterDirectory.trim() || undefined,
+            voiceDirectory.trim(),
+          ),
+        );
+        setPendingProject("");
       } else if (project) {
         if (modal !== "saveAs" && dirty && !(await discardChanges())) return;
         const filename = /\.md$/i.test(name.trim())
@@ -501,6 +542,8 @@ export default function App() {
               onClick={() => {
                 setName("");
                 setParent("");
+                setCharacterDirectory("");
+                setVoiceDirectory("");
                 setModal("project");
               }}
             >
@@ -713,9 +756,6 @@ export default function App() {
                       profile.id === generationSettings.activeProfileId &&
                       profile.hasAuthorization,
                   )}
-                  generationDefaultResolution={
-                    generationSettings.defaultResolution
-                  }
                   configureGeneration={configureGeneration}
                   useVideo={useGeneratedVideo}
                 />
@@ -749,11 +789,13 @@ export default function App() {
                   ? ui.open
                   : modal === "project"
                     ? ui.newTitle
-                    : modal === "api"
-                      ? ui.generation.apiSettings
-                      : modal === "saveAs"
-                        ? ui.saveAs
-                        : ui.newDocument}
+                    : modal === "libraries"
+                      ? ui.librarySetup
+                      : modal === "api"
+                        ? ui.generation.apiSettings
+                        : modal === "saveAs"
+                          ? ui.saveAs
+                          : ui.newDocument}
             </h2>
             {candidates ? (
               <>
@@ -782,7 +824,9 @@ export default function App() {
                   void submitModal();
                 }}
               >
-                {modal !== "open" && modal !== "api" && (
+                {(modal === "project" ||
+                  modal === "document" ||
+                  modal === "saveAs") && (
                   <label>
                     {modal === "project" ? ui.name : ui.filename}
                     <input
@@ -885,35 +929,103 @@ export default function App() {
                       <small>{ui.generation.authorizationHint}</small>
                     </label>
                   </>
-                ) : modal === "project" || modal === "open" ? (
+                ) : modal === "project" ||
+                  modal === "open" ||
+                  modal === "libraries" ? (
                   <>
-                    <label>
-                      {modal === "open" ? ui.directoryPath : ui.parent}
-                      <div className="directory-input">
-                        <input
-                          value={parent}
-                          onChange={(event) => setParent(event.target.value)}
-                          disabled={busy}
-                          required
-                          placeholder={ui.choose}
-                        />
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() =>
-                            void run(async () => {
-                              const chosen = await chooseDirectory();
-                              if (chosen) setParent(chosen);
-                            })
-                          }
-                        >
-                          {ui.choose}
-                        </button>
-                      </div>
-                    </label>
-                    <p className="muted">
-                      {modal === "open" ? ui.pathHint : ui.createFolder}
-                    </p>
+                    {modal !== "libraries" && (
+                      <>
+                        <label>
+                          {modal === "open" ? ui.directoryPath : ui.parent}
+                          <div className="directory-input">
+                            <input
+                              value={parent}
+                              onChange={(event) =>
+                                setParent(event.target.value)
+                              }
+                              disabled={busy}
+                              required
+                              placeholder={ui.choose}
+                            />
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() =>
+                                void run(async () => {
+                                  const chosen = await chooseDirectory();
+                                  if (chosen) setParent(chosen);
+                                })
+                              }
+                            >
+                              {ui.choose}
+                            </button>
+                          </div>
+                        </label>
+                        <p className="muted">
+                          {modal === "open" ? ui.pathHint : ui.createFolder}
+                        </p>
+                      </>
+                    )}
+                    {modal !== "open" && (
+                      <>
+                        {modal === "libraries" && (
+                          <p className="muted">{ui.librarySetupExisting}</p>
+                        )}
+                        <label>
+                          {ui.characterDirectory}
+                          <div className="directory-input">
+                            <input
+                              value={characterDirectory}
+                              onChange={(event) =>
+                                setCharacterDirectory(event.target.value)
+                              }
+                              disabled={busy}
+                              placeholder={ui.choose}
+                            />
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() =>
+                                void run(async () => {
+                                  const chosen = await chooseDirectory();
+                                  if (chosen) setCharacterDirectory(chosen);
+                                })
+                              }
+                            >
+                              {ui.choose}
+                            </button>
+                          </div>
+                          <small>{ui.characterHint}</small>
+                        </label>
+                        <label>
+                          {ui.voiceDirectory}
+                          <div className="directory-input">
+                            <input
+                              value={voiceDirectory}
+                              onChange={(event) =>
+                                setVoiceDirectory(event.target.value)
+                              }
+                              disabled={busy}
+                              required
+                              placeholder={ui.choose}
+                            />
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() =>
+                                void run(async () => {
+                                  const chosen = await chooseDirectory();
+                                  if (chosen) setVoiceDirectory(chosen);
+                                })
+                              }
+                            >
+                              {ui.choose}
+                            </button>
+                          </div>
+                        </label>
+                        <p className="muted">{ui.libraryImportHint}</p>
+                      </>
+                    )}
                   </>
                 ) : (
                   modal !== "saveAs" && (
@@ -940,7 +1052,10 @@ export default function App() {
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => setModal(null)}
+                    onClick={() => {
+                      setModal(null);
+                      setPendingProject("");
+                    }}
                   >
                     {ui.cancel}
                   </button>
@@ -955,7 +1070,9 @@ export default function App() {
                             !profile.baseUrl.trim() || !profile.name.trim(),
                         )) ||
                       ((modal === "project" || modal === "open") &&
-                        !parent.trim())
+                        !parent.trim()) ||
+                      ((modal === "project" || modal === "libraries") &&
+                        !voiceDirectory.trim())
                     }
                   >
                     {busy ? ui.busy : ui.confirm}
