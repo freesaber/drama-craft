@@ -5,11 +5,9 @@ import { ui } from "./i18n";
 export default function EpisodeOverview({
   episode,
   asset,
-  source,
 }: {
   episode: EpisodeData;
   asset: (reference: string) => React.ReactNode;
-  source: () => void;
 }) {
   const [rolesOpen, setRolesOpen] = useState(false);
   const [assetsOpen, setAssetsOpen] = useState(false);
@@ -23,7 +21,6 @@ export default function EpisodeOverview({
     <section className="episode-overview">
       <div className="board-section-heading">
         <strong>{episode.title}</strong>
-        <button onClick={source}>{ui.episodeData.edit}</button>
       </div>
       <p className="episode-summary">
         {episode.summary || ui.episodeData.noSummary}
@@ -114,11 +111,7 @@ export function ShotCast({
             {cast.map((role, i) => (
               <span
                 key={`${role.id}-${i}`}
-                title={
-                  role.voice
-                    ? role.voice
-                    : ui.episodeData.noVoice
-                }
+                title={role.voice ? role.voice : ui.episodeData.noVoice}
               >
                 {role.name}
                 <small>{role.voice ? "♫" : "—"}</small>

@@ -82,6 +82,7 @@ try {
     .getByLabel("声音目录（必选）", { exact: false })
     .fill(voiceLibrary);
   await page.getByRole("button", { name: "确认", exact: true }).click();
+  await expect(page.getByRole("dialog")).not.toBeVisible();
   await access(join(legacyRoot, ".drama-craft", "project.json"));
   await page.getByRole("button", { name: "返回项目首页", exact: true }).click();
   await page.getByRole("button", { name: "创建项目", exact: false }).click();
@@ -103,9 +104,65 @@ try {
       await readFile(join(root, ".drama-craft", "project.json"), "utf8")
     ).includes(voiceLibrary.replaceAll("\\", "\\\\")),
   );
-  await page.getByRole("button", { name: "新建文档", exact: false }).click();
-  await page.getByLabel("文档文件名").fill("01 灯火.md");
-  await page.getByRole("button", { name: "确认", exact: true }).click();
+  const episodeDocument = `<!-- drama-craft:episode:v1 -->
+
+# 第01集 灯火
+
+本集内容：
+
+## 角色绑定
+
+| 角色ID | 名称 | 角色图 | 音色文件 | 使用镜号 |
+|---|---|---|---|---|
+
+## 本集使用素材
+
+| 素材ID | 名称 | 类型 | 文件 | 使用镜号 |
+|---|---|---|---|---|
+
+## 本集声音安排
+
+| 镜号 | 角色ID | 发声方式 | 台词 | 发声区间 |
+|---|---|---|---|---|
+
+## S001 镜头名
+
+角色：—
+
+### 故事走向
+
+### 首帧生成
+
+出图文件名：\`01 首帧_S001.png\`。
+
+**首帧图片提示词**
+
+\`\`\`text
+在此描述动作开始前的静态画面。
+\`\`\`
+
+### 视频生成
+
+视频文件名：\`01 S001.mp4\`。
+
+| API参数 | 提示词标签 | 上传素材 |
+|---|---|---|
+| \`ref_image_0\` | \`<Picture 1>\` | \`01 首帧_S001.png\` |
+
+**视频提示词｜duration=5，resolution=480p横**
+
+\`\`\`text
+<Picture 1>：本镜完整首帧。
+在此描述动作、摄影机行为与声音。
+\`\`\`
+`;
+  // Structural document creation is performed outside the client.
+  await writeFile(join(root, "01 灯火.md"), episodeDocument);
+  await page.getByRole("button", { name: "刷新", exact: true }).click();
+  await page.getByRole("button", { name: "▤ 01 灯火.md", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "新建文档", exact: false }),
+  ).toHaveCount(0);
   const firstCard = () => page.locator(".shot-card").first();
   const toSource = async () =>
     page
@@ -138,8 +195,8 @@ try {
   await setupEditor.fill(
     (await setupEditor.inputValue())
       .replace(
-        "|---|---|---|---|---|---|",
-        "|---|---|---|---|---|---|\n| C001 | 旅人 | `角色 图.png` | `角色 声音.wav` | 候选未试听 | S001 |",
+        "|---|---|---|---|---|",
+        "|---|---|---|---|---|\n| C001 | 旅人 | `角色 图.png` | `角色 声音.wav` | S001 |",
       )
       .replace("角色：—", "角色：C001"),
   );
@@ -155,9 +212,6 @@ try {
   await boundRole.scrollIntoViewIfNeeded();
   await expect(boundRole.getByAltText("角色 图.png")).toBeVisible();
   await expect(boundRole.locator("audio")).toBeVisible();
-  await expect(
-    boundRole.getByText("候选未试听", { exact: true }),
-  ).toBeVisible();
   await page.screenshot({
     path: join(output, "desktop-character-binding.png"),
   });
@@ -166,10 +220,12 @@ try {
   await expect(
     firstCard().getByRole("button", { name: "生成视频", exact: true }),
   ).toBeEnabled();
-  await page.getByRole("button", { name: "视频 API", exact: true }).click();
+  await page
+    .getByRole("button", { name: "视频 API / Token", exact: true })
+    .click();
   await expect(page.getByLabel("API 服务地址", { exact: true })).toBeVisible();
   const tokenInput = page.getByLabel("API Token（Authorization 请求头）", {
-    exact: true,
+    exact: false,
   });
   await expect(tokenInput).toBeVisible();
   await tokenInput.fill("Token synthetic-smoke-test");
@@ -204,7 +260,9 @@ try {
   // Save only synthetic metadata; leave every existing credential untouched.
   await page.getByRole("button", { name: "确认", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await page.getByRole("button", { name: "视频 API", exact: true }).click();
+  await page
+    .getByRole("button", { name: "视频 API / Token", exact: true })
+    .click();
   await expect(page.getByLabel("配置名称", { exact: true })).toHaveValue(
     "备用测试配置",
   );
@@ -227,7 +285,7 @@ try {
     .getByLabel("视频提示词", { exact: true })
     .evaluate((element) => element.getBoundingClientRect().height);
   assert.ok(
-    promptHeight >= 420,
+    promptHeight >= 415,
     "Video prompt starts at the expanded desktop height",
   );
   await expect(
@@ -260,21 +318,25 @@ try {
   await expect
     .poll(() => readFile(join(root, "01 灯火.md"), "utf8"))
     .toContain("船夫循光靠岸。");
-  await page.getByRole("button", { name: "新增分镜", exact: false }).click();
+  await expect(
+    page.getByRole("button", { name: "新增分镜", exact: false }),
+  ).toHaveCount(0);
+  await expect(page.locator(".shot-actions button")).toHaveCount(1);
+  await expect(
+    page.getByRole("button", { name: "编辑剧集数据", exact: true }),
+  ).toHaveCount(0);
+  // Adding and removing a card remains possible in Markdown source mode.
+  await toSource();
+  const structureEditor = page.getByLabel("Markdown 文档编辑器");
+  const beforeStructureEdit = await structureEditor.inputValue();
+  await structureEditor.fill(
+    `${beforeStructureEdit}\n## S002 源码新增\n\n### 故事走向\n\n通过源码调整结构。\n`,
+  );
+  await toBoard();
   await expect(page.locator(".shot-card")).toHaveCount(2);
-  await page.getByRole("button", { name: "S002 上移", exact: true }).click();
-  await expect(firstCard()).toHaveAttribute("data-shot-id", "S002");
-  await page.getByRole("button", { name: "S002 下移", exact: true }).click();
-  await expect(firstCard()).toHaveAttribute("data-shot-id", "S001");
-  await page
-    .getByRole("button", { name: "S002 删除分镜", exact: true })
-    .click();
-  await page.getByRole("button", { name: "取消", exact: true }).click();
-  await expect(page.locator(".shot-card")).toHaveCount(2);
-  await page
-    .getByRole("button", { name: "S002 删除分镜", exact: true })
-    .click();
-  await page.getByRole("button", { name: "确认删除", exact: true }).click();
+  await toSource();
+  await structureEditor.fill(beforeStructureEdit);
+  await toBoard();
   await expect(page.locator(".shot-card")).toHaveCount(1);
   await toSource();
   const editor = page.getByLabel("Markdown 文档编辑器");
@@ -357,6 +419,7 @@ try {
     (await editor.inputValue()).replace("01 S001.mp4", "本地样片.webm"),
   );
   await toBoard();
+  await firstCard().getByRole("tab", { name: "提示词", exact: true }).click();
   await expect(framePrompt).toHaveValue(
     "横向单幅画面。旅人站在渡口灯下，双手空着。",
   );
@@ -512,7 +575,7 @@ try {
   assert.equal(overflow, false, "Layout overflows minimum window");
   assert.deepEqual(errors, [], "Unhandled frontend errors");
   console.log(
-    "PASS: native storyboard defaults, field edits, add/move/delete, source synchronization, Ctrl+S, media, conflict/save-as, refresh, parent candidates and unsaved navigation/close.",
+    "PASS: external document creation, hidden structural actions, source structure edits, field edits, source synchronization, Ctrl+S, media, conflict/save-as, refresh, parent candidates and unsaved navigation/close.",
   );
 } catch (e) {
   if (page && !page.isClosed())

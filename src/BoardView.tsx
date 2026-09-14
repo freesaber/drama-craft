@@ -1,13 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Preview, { Asset } from "./Preview";
 import { analyzeMarkdown, normalizeReference } from "./markdown";
-import {
-  addPatch,
-  canMove,
-  deletePatch,
-  fieldPatch,
-  movePatch,
-} from "./storyboard";
+import { fieldPatch } from "./storyboard";
 import { ui } from "./i18n";
 import { errorMessage } from "./api";
 import EpisodeOverview from "./EpisodeOverview";
@@ -75,14 +69,6 @@ export default function BoardView({
   configureGeneration: () => void;
   useVideo: (index: number, reference: string) => Promise<void>;
 }) {
-  const [deletion, setDeletion] = useState<{
-    index: number;
-    patch: SourcePatch;
-  } | null>(null);
-  const cancel = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (deletion) cancel.current?.focus();
-  }, [deletion]);
   const asset = (reference: string) => (
     <LazyAsset
       key={reference}
@@ -122,12 +108,6 @@ export default function BoardView({
           <h1>{document.split("/").at(-1)?.replace(/\.md$/i, "")}</h1>
           <p>{ui.board.count(board.cards.length)}</p>
         </div>
-        <button
-          disabled={busy || board.episode.format === "unsupported"}
-          onClick={() => apply(addPatch(board, document), board.cards.length)}
-        >
-          ＋ {ui.board.add}
-        </button>
       </div>
       {board.diagnostics.map((message) => (
         <p className="diagnostic" key={message}>
@@ -135,11 +115,7 @@ export default function BoardView({
         </p>
       ))}
       {board.episode.format !== "document" && (
-        <EpisodeOverview
-          episode={board.episode}
-          asset={asset}
-          source={() => source(0)}
-        />
+        <EpisodeOverview episode={board.episode} asset={asset} />
       )}
       {board.sections.map((section, sectionIndex) => {
         if (board.episode.format === "unsupported") return null;
@@ -193,33 +169,8 @@ export default function BoardView({
                 className="shot-actions"
                 onClick={(event) => event.stopPropagation()}
               >
-                <button
-                  aria-label={`${card.id} ${ui.board.up}`}
-                  title={ui.board.up}
-                  disabled={busy || !canMove(board, index, -1)}
-                  onClick={() => apply(movePatch(board, index, -1), index - 1)}
-                >
-                  ↑
-                </button>
-                <button
-                  aria-label={`${card.id} ${ui.board.down}`}
-                  title={ui.board.down}
-                  disabled={busy || !canMove(board, index, 1)}
-                  onClick={() => apply(movePatch(board, index, 1), index + 1)}
-                >
-                  ↓
-                </button>
                 <button disabled={busy} onClick={() => source(card.offset)}>
                   {ui.board.source}
-                </button>
-                <button
-                  aria-label={`${card.id} ${ui.board.remove}`}
-                  disabled={busy}
-                  onClick={() =>
-                    setDeletion({ index, patch: deletePatch(board, index) })
-                  }
-                >
-                  ×
                 </button>
               </div>
             </header>
@@ -288,56 +239,9 @@ export default function BoardView({
           </article>
         );
       })}
-      {deletion && (
-        <div
-          className="modal-backdrop"
-          onKeyDown={(event) => {
-            if (event.key === "Escape") setDeletion(null);
-            if (event.key === "Tab") {
-              const buttons =
-                event.currentTarget.querySelectorAll<HTMLButtonElement>(
-                  "button",
-                );
-              if (event.shiftKey && documentActive() === buttons[0]) {
-                event.preventDefault();
-                buttons[1].focus();
-              } else if (!event.shiftKey && documentActive() === buttons[1]) {
-                event.preventDefault();
-                buttons[0].focus();
-              }
-            }
-          }}
-        >
-          <section
-            className="modal"
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="delete-title"
-            aria-describedby="delete-hint"
-          >
-            <h2 id="delete-title">{ui.board.removeTitle}</h2>
-            <p id="delete-hint">{ui.board.removeHint}</p>
-            <div className="modal-actions">
-              <button ref={cancel} onClick={() => setDeletion(null)}>
-                {ui.cancel}
-              </button>
-              <button
-                disabled={busy}
-                onClick={() => {
-                  apply(deletion.patch, Math.max(0, deletion.index - 1));
-                  setDeletion(null);
-                }}
-              >
-                {ui.board.confirmRemove}
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
     </div>
   );
 }
-const documentActive = () => window.document.activeElement;
 
 function FrameImageTabs({
   assets,

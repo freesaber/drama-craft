@@ -1,14 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { documentTemplate } from "./markdown";
-import {
-  addPatch,
-  applySourcePatch,
-  canMove,
-  deletePatch,
-  fieldPatch,
-  movePatch,
-  parseStoryboard,
-} from "./storyboard";
+import { applySourcePatch, fieldPatch, parseStoryboard } from "./storyboard";
 import type { BoardField } from "./types";
 
 function edit(source: string, key: BoardField, value: string) {
@@ -73,8 +65,6 @@ describe("storyboard structure", () => {
         )
         .join(""),
     ).toBe(source);
-    expect(canMove(board, 0, 1)).toBe(false);
-    expect(() => movePatch(board, 0, 1)).toThrow();
   });
   it("retains duplicate cards separately", () => {
     const board = parseStoryboard("## S001 一\n\n## s001 二\n");
@@ -201,37 +191,6 @@ describe("source patches", () => {
     const next = edit(source, "title", "第一镜");
     expect(next).toBe("S001 第一镜\n\n未知段落。\n");
     expect(edit(next, "frameFile", "首帧.png").startsWith(next)).toBe(true);
-  });
-  it("moves complete blocks and separates a final block without newline", () => {
-    const source = "# 说明\n\n## S001 一\n\n未知内容\n\n## S002 二\n最后正文";
-    const board = parseStoryboard(source);
-    const next = applySourcePatch(source, movePatch(board, 1, -1));
-    expect(next.startsWith("# 说明\n\n## S002 二\n最后正文\n\n## S001")).toBe(
-      true,
-    );
-    expect(parseStoryboard(next).cards.map((c) => c.id)).toEqual([
-      "S002",
-      "S001",
-    ]);
-  });
-  it("deletes only a card, retaining independent appendix and shared definitions", () => {
-    const source = "# 前言\n\n## S001 一\n\n正文\n\n## 附录\n\n[图]: 图.png\n";
-    const board = parseStoryboard(source);
-    expect(applySourcePatch(source, deletePatch(board, 0))).toBe(
-      "# 前言\n\n## 附录\n\n[图]: 图.png\n",
-    );
-  });
-  it("allocates max+1 without renumbering or creating metadata", () => {
-    const source = "S099 先\n\nS002 后\n";
-    const board = parseStoryboard(source);
-    const next = applySourcePatch(source, addPatch(board, "03 渡口.md"));
-    expect(next.startsWith(source)).toBe(true);
-    expect(parseStoryboard(next).cards.map((c) => c.id)).toEqual([
-      "S099",
-      "S002",
-      "S100",
-    ]);
-    expect(next).toContain("03 首帧_S100.png");
   });
   it("does not interpret remote media or executable references", () => {
     const board = parseStoryboard(

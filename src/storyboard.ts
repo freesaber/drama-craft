@@ -1,12 +1,6 @@
 import type { Root, RootContent, Node } from "mdast";
 import { visit } from "unist-util-visit";
-import {
-  documentTemplate,
-  findShots,
-  normalizeReference,
-  parser,
-  plain,
-} from "./markdown";
+import { findShots, normalizeReference, parser, plain } from "./markdown";
 import type {
   BoardField,
   ShotCard,
@@ -407,67 +401,4 @@ export function applySourcePatch(current: string, patch: SourcePatch): string {
     patch.replacement +
     current.slice(patch.range.end)
   );
-}
-
-export function canMove(
-  board: Storyboard,
-  index: number,
-  direction: -1 | 1,
-): boolean {
-  const a = board.cards[index];
-  const b = board.cards[index + direction];
-  return (
-    !!a && !!b && (direction === 1 ? a.end === b.offset : b.end === a.offset)
-  );
-}
-export function movePatch(
-  board: Storyboard,
-  index: number,
-  direction: -1 | 1,
-): SourcePatch {
-  if (!canMove(board, index, direction)) throw new Error(ui.board.moveBoundary);
-  const a = board.cards[Math.min(index, index + direction)];
-  const b = board.cards[Math.max(index, index + direction)];
-  const left = board.source.slice(a.offset, a.end),
-    right = board.source.slice(b.offset, b.end);
-  // The last block may have no final newline; add only the separator needed for a new marker.
-  const separator = /\r?\n\r?\n$/.test(right)
-    ? ""
-    : /\r?\n$/.test(right)
-      ? eolOf(board.source)
-      : eolOf(board.source).repeat(2);
-  return {
-    source: board.source,
-    range: { start: a.offset, end: b.end },
-    replacement: right + separator + left,
-  };
-}
-export function deletePatch(board: Storyboard, index: number): SourcePatch {
-  const card = board.cards[index];
-  return {
-    source: board.source,
-    range: { start: card.offset, end: card.end },
-    replacement: "",
-  };
-}
-export function addPatch(
-  board: Storyboard,
-  filename: string,
-  defaultResolution = "480p横",
-): SourcePatch {
-  const max = board.cards.reduce(
-    (n, c) => (BigInt(c.id.slice(1)) > n ? BigInt(c.id.slice(1)) : n),
-    0n,
-  );
-  const id = `S${String(max + 1n).padStart(3, "0")}`;
-  const template = documentTemplate("episode", filename, defaultResolution);
-  const shot = template
-    .slice(template.indexOf("## S001"))
-    .replaceAll("S001", id)
-    .replaceAll("\n", eolOf(board.source));
-  return {
-    source: board.source,
-    range: { start: board.source.length, end: board.source.length },
-    replacement: eolOf(board.source).repeat(2) + shot,
-  };
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { api, chooseDirectory, desktop, errorMessage } from "./api";
-import { documentTemplate, sortDocuments } from "./markdown";
+import { sortDocuments } from "./markdown";
 import { ui } from "./i18n";
 import Storyboard from "./BoardView";
 import { applySourcePatch, fieldPatch, parseStoryboard } from "./storyboard";
@@ -79,7 +79,7 @@ export default function App() {
     }));
   };
   const [modal, setModal] = useState<
-    "project" | "open" | "libraries" | "document" | "saveAs" | "api" | null
+    "project" | "open" | "libraries" | "saveAs" | "api" | null
   >(null);
   const [name, setName] = useState("");
   const [parent, setParent] = useState("");
@@ -87,7 +87,6 @@ export default function App() {
   const [voiceDirectory, setVoiceDirectory] = useState("");
   const [defaultVoiceDirectory, setDefaultVoiceDirectory] = useState("");
   const [pendingProject, setPendingProject] = useState("");
-  const [template, setTemplate] = useState("episode");
   const [candidates, setCandidates] = useState<{
     root: string;
     list: Candidate[];
@@ -320,14 +319,9 @@ export default function App() {
       if (!project || (dirty && !(await discardChanges()))) return;
       replaceDocument(path, await api.read(project.handle, path));
     });
-  const showNewDocument = (saveAs = false) => {
-    setName(
-      saveAs
-        ? path.replace(/\.md$/i, " 副本.md")
-        : `${String(documents.filter((d) => /^\d+/.test(d.name)).length + 1).padStart(2, "0")} 新的一集.md`,
-    );
-    setTemplate("episode");
-    setModal(saveAs ? "saveAs" : "document");
+  const showSaveAs = () => {
+    setName(path.replace(/\.md$/i, " 副本.md"));
+    setModal("saveAs");
   };
   const submitModal = () =>
     run(async () => {
@@ -369,22 +363,11 @@ export default function App() {
           ),
         );
         setPendingProject("");
-      } else if (project) {
-        if (modal !== "saveAs" && dirty && !(await discardChanges())) return;
+      } else if (project && modal === "saveAs") {
         const filename = /\.md$/i.test(name.trim())
           ? name.trim()
           : `${name.trim()}.md`;
-        const next = await api.newDoc(
-          project.handle,
-          filename,
-          modal === "saveAs"
-            ? text
-            : documentTemplate(
-                template,
-                filename,
-                generationSettings.defaultResolution,
-              ),
-        );
+        const next = await api.newDoc(project.handle, filename, text);
         replaceDocument(filename, next);
         await scan(project);
         setModal(null);
@@ -613,9 +596,6 @@ export default function App() {
             <div className="project-location" title={project.root}>
               ▱ {project.root.replace(/^\\\\\?\\/, "")}
             </div>
-            <button disabled={busy} onClick={() => showNewDocument()}>
-              ＋ {ui.newDocument}
-            </button>
             <button disabled={busy} onClick={() => void refresh()}>
               {ui.refresh}
             </button>
@@ -626,7 +606,7 @@ export default function App() {
           {conflict && (
             <div className="banner conflict" role="alert">
               <span>{ui.conflict}</span>
-              <button disabled={busy} onClick={() => showNewDocument(true)}>
+              <button disabled={busy} onClick={showSaveAs}>
                 {ui.saveAs}
               </button>
               <button disabled={busy} onClick={() => void reload()}>
@@ -727,10 +707,7 @@ export default function App() {
                         ? ui.unsaved
                         : ui.saved}
                   </span>
-                  <button
-                    disabled={busy || !snapshot}
-                    onClick={() => showNewDocument(true)}
-                  >
+                  <button disabled={busy || !snapshot} onClick={showSaveAs}>
                     {ui.saveAs}
                   </button>
                   <button
@@ -807,9 +784,7 @@ export default function App() {
                       ? ui.librarySetup
                       : modal === "api"
                         ? ui.generation.apiSettings
-                        : modal === "saveAs"
-                          ? ui.saveAs
-                          : ui.newDocument}
+                        : ui.saveAs}
             </h2>
             {candidates ? (
               <>
@@ -838,9 +813,7 @@ export default function App() {
                   void submitModal();
                 }}
               >
-                {(modal === "project" ||
-                  modal === "document" ||
-                  modal === "saveAs") && (
+                {(modal === "project" || modal === "saveAs") && (
                   <label>
                     {modal === "project" ? ui.name : ui.filename}
                     <input
@@ -1055,27 +1028,7 @@ export default function App() {
                       </>
                     )}
                   </>
-                ) : (
-                  modal !== "saveAs" && (
-                    <label>
-                      {ui.template}
-                      <select
-                        value={template}
-                        onChange={(event) => {
-                          const kind = event.target.value;
-                          setTemplate(kind);
-                          if (kind === "outline") setName("剧本大纲.md");
-                          if (kind === "table") setName("分镜总表.md");
-                        }}
-                      >
-                        <option value="episode">{ui.episode}</option>
-                        <option value="outline">{ui.outline}</option>
-                        <option value="table">{ui.table}</option>
-                        <option value="blank">{ui.blank}</option>
-                      </select>
-                    </label>
-                  )
-                )}
+                ) : null}
                 <div className="modal-actions">
                   <button
                     type="button"
@@ -1091,7 +1044,8 @@ export default function App() {
                     className="primary-button"
                     disabled={
                       busy ||
-                      (modal !== "open" && modal !== "api" && !name.trim()) ||
+                      ((modal === "project" || modal === "saveAs") &&
+                        !name.trim()) ||
                       (modal === "api" &&
                         apiDraft.profiles.some(
                           (profile) =>
