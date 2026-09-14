@@ -42,16 +42,13 @@ export const api = {
     invoke<Snapshot>("read_document", { handle, path }),
   save: (handle: string, path: string, text: string, expectedHash: string) =>
     invoke<Snapshot>("save_document", { handle, path, text, expectedHash }),
-  newDoc: (handle: string, path: string, text: string) =>
-    invoke<Snapshot>("create_document", { handle, path, text }),
   media: (handle: string, document: string, reference: string) =>
     invoke<Media>("resolve_media", { handle, document, reference }),
   openMedia: (handle: string, document: string, reference: string) =>
     invoke<void>("open_media", { handle, document, reference }),
   preferences: () =>
     invoke<{ recent: Recent[]; previewVisible?: boolean }>("get_preferences"),
-  defaultVoiceDirectory: () =>
-    invoke<string>("default_voice_directory"),
+  defaultVoiceDirectory: () => invoke<string>("default_voice_directory"),
   openDirectory: (path: string) => invoke<void>("open_directory", { path }),
   setPreview: (visible: boolean) =>
     invoke<void>("set_preview_visible", { visible }),

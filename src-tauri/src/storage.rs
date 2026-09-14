@@ -231,8 +231,12 @@ pub fn validate_name(name: &str) -> Result<()> {
 pub fn read_document(root: &Path, relative: &str) -> Result<Snapshot> {
     let path = document_path(root, relative, true)?;
     let bytes = fs::read(&path)?;
-    let text = std::str::from_utf8(&bytes)
-        .map_err(|_| AppError::new("encoding", "文件不是 UTF-8，未做任何修改；请先另存为 UTF-8"))?;
+    let text = std::str::from_utf8(&bytes).map_err(|_| {
+        AppError::new(
+            "encoding",
+            "文件不是 UTF-8，未做任何修改；请先转换为 UTF-8 编码",
+        )
+    })?;
     Ok(Snapshot {
         text: text.trim_start_matches('\u{feff}').replace("\r\n", "\n"),
         hash: hash(&bytes),
@@ -271,7 +275,7 @@ pub fn save_document(
     if hash(&original) != expected_hash {
         return Err(AppError::new(
             "conflict",
-            "磁盘文件已改变，请重新读取或将编辑内容另存为新文档",
+            "磁盘文件已改变，请先复制编辑内容备份，再重新读取磁盘版本",
         ));
     }
     if fs::metadata(&path)?.permissions().readonly() {

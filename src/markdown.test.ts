@@ -21,6 +21,7 @@ it.skipIf(!process.env.DRAMACRAFT_COMPAT_DIR)(
 import {
   analyzeMarkdown,
   documentTemplate,
+  isOverviewDocument,
   normalizeReference,
   sortDocuments,
 } from "./markdown";
@@ -76,6 +77,12 @@ describe("existing Markdown compatibility", () => {
       "10 十.md",
       "AGENTS.md",
     ]);
+  });
+  it("recognizes overview documents by basename", () => {
+    expect(isOverviewDocument("剧本大纲.md")).toBe(true);
+    expect(isOverviewDocument("资料/分镜总表.md")).toBe(true);
+    expect(isOverviewDocument("01 分镜总表.md")).toBe(false);
+    expect(isOverviewDocument("01 共仓无根.md")).toBe(false);
   });
   it("creates a standalone episode with separate first-frame and video sections", () => {
     const template = documentTemplate("episode", "03 渡口.md");

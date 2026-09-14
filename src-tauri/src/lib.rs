@@ -184,17 +184,6 @@ fn save_document(
     })
 }
 #[tauri::command]
-fn create_document(
-    state: State<Sessions>,
-    handle: String,
-    path: String,
-    text: String,
-) -> Result<storage::Snapshot> {
-    with_root(&state, &handle, |root| {
-        storage::create_document(root, &path, &text)
-    })
-}
-#[tauri::command]
 fn resolve_media(
     app: tauri::AppHandle,
     state: State<Sessions>,
@@ -438,7 +427,6 @@ pub fn run() {
             scan_project,
             read_document,
             save_document,
-            create_document,
             resolve_media,
             open_media,
             get_preferences,

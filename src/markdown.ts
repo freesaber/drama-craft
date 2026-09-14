@@ -116,6 +116,10 @@ export function sortDocuments(documents: DocumentEntry[]): DocumentEntry[] {
       a.path.localeCompare(b.path, "zh-CN", { numeric: true }),
   );
 }
+export function isOverviewDocument(path: string): boolean {
+  const filename = path.split(/[\\/]/).at(-1);
+  return filename === "剧本大纲.md" || filename === "分镜总表.md";
+}
 export function documentTemplate(
   kind: string,
   filename: string,

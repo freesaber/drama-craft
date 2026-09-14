@@ -55,6 +55,7 @@ export default function BoardView({
   generationConfigured,
   configureGeneration,
   useVideo,
+  showSourceActions = true,
 }: {
   board: Board;
   project: Project;
@@ -68,6 +69,7 @@ export default function BoardView({
   generationConfigured: boolean;
   configureGeneration: () => void;
   useVideo: (index: number, reference: string) => Promise<void>;
+  showSourceActions?: boolean;
 }) {
   const asset = (reference: string) => (
     <LazyAsset
@@ -96,7 +98,11 @@ export default function BoardView({
               : undefined
         }
         change={(value) => apply(fieldPatch(board, f, value))}
-        source={() => source(f.range?.start ?? card.offset)}
+        source={
+          showSourceActions
+            ? () => source(f.range?.start ?? card.offset)
+            : undefined
+        }
       />
     );
   }
@@ -135,9 +141,11 @@ export default function BoardView({
                 <strong>
                   {sectionIndex === 0 ? ui.board.episodeInfo : ui.board.extra}
                 </strong>
-                <button onClick={() => source(section.range.start)}>
-                  {ui.board.source}
-                </button>
+                {showSourceActions && (
+                  <button onClick={() => source(section.range.start)}>
+                    {ui.board.source}
+                  </button>
+                )}
               </div>
               <Preview text={raw} />
               <details className="shot-details">
@@ -165,14 +173,16 @@ export default function BoardView({
             <header className="shot-card-heading">
               <span className="shot-number">{card.id}</span>
               <div className="shot-title">{field(card, "title")}</div>
-              <div
-                className="shot-actions"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <button disabled={busy} onClick={() => source(card.offset)}>
-                  {ui.board.source}
-                </button>
-              </div>
+              {showSourceActions && (
+                <div
+                  className="shot-actions"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <button disabled={busy} onClick={() => source(card.offset)}>
+                    {ui.board.source}
+                  </button>
+                </div>
+              )}
             </header>
             <GenerationPanel
               video={
@@ -228,14 +238,16 @@ export default function BoardView({
                 {message}
               </p>
             ))}
-            <div className="shot-details source-details">
-              <button
-                className="text-button"
-                onClick={() => source(card.offset)}
-              >
-                {ui.board.source}
-              </button>
-            </div>
+            {showSourceActions && (
+              <div className="shot-details source-details">
+                <button
+                  className="text-button"
+                  onClick={() => source(card.offset)}
+                >
+                  {ui.board.source}
+                </button>
+              </div>
+            )}
           </article>
         );
       })}
@@ -334,7 +346,7 @@ function Field({
   disabled: boolean;
   placeholder?: string;
   change: (value: string) => boolean | void;
-  source: () => void;
+  source?: () => void;
   options?: string[];
 }) {
   const [error, setError] = useState("");
@@ -365,9 +377,13 @@ function Field({
     <label className="board-field">
       <span>{label}</span>
       {field.ambiguous ? (
-        <button type="button" onClick={source}>
-          {ui.board.source}
-        </button>
+        source ? (
+          <button type="button" onClick={source}>
+            {ui.board.source}
+          </button>
+        ) : (
+          <span>{draft || "—"}</span>
+        )
       ) : options ? (
         <select
           aria-label={label}
