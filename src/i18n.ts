@@ -14,6 +14,8 @@ export const ui = {
     noMaterials: "本集没有素材",
     generationPrompt: "生成提示词",
     noGenerationPrompt: "文档中尚未填写对应的生成提示词。",
+    copyPrompt: "复制",
+    promptCopied: "已复制",
 
     v1: "剧集格式 v1",
     noSummary: "尚未填写本集内容",

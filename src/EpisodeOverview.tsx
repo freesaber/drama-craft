@@ -17,6 +17,7 @@ export default function EpisodeOverview({
   const [prompt, setPrompt] = useState<{ name: string; text: string } | null>(
     null,
   );
+  const [promptCopied, setPromptCopied] = useState(false);
   const materialAssets = episode.assets.filter(
     (item) =>
       !episode.characters.some(
@@ -33,7 +34,10 @@ export default function EpisodeOverview({
     name: string,
     text: string,
   ) => {
-    if (!reference || availability[key] === false) setPrompt({ name, text });
+    if (!reference || availability[key] === false) {
+      setPromptCopied(false);
+      setPrompt({ name, text });
+    }
   };
   const keyboardClick = (event: React.KeyboardEvent, click: () => void) => {
     if (event.key === "Enter" || event.key === " ") {
@@ -154,7 +158,13 @@ export default function EpisodeOverview({
         )}
       </div>
       {prompt && (
-        <div className="modal-backdrop" onMouseDown={() => setPrompt(null)}>
+        <div
+          className="modal-backdrop"
+          onMouseDown={() => {
+            setPromptCopied(false);
+            setPrompt(null);
+          }}
+        >
           <section
             className="modal generation-prompt-modal"
             role="dialog"
@@ -166,7 +176,10 @@ export default function EpisodeOverview({
               type="button"
               className="modal-close"
               aria-label={ui.cancel}
-              onClick={() => setPrompt(null)}
+              onClick={() => {
+                setPromptCopied(false);
+                setPrompt(null);
+              }}
             >
               ×
             </button>
@@ -177,7 +190,27 @@ export default function EpisodeOverview({
               {prompt.text || ui.episodeData.noGenerationPrompt}
             </pre>
             <div className="modal-actions">
-              <button type="button" onClick={() => setPrompt(null)}>
+              <button
+                type="button"
+                disabled={!prompt.text}
+                onClick={() => {
+                  void navigator.clipboard.writeText(prompt.text).then(() => {
+                    setPromptCopied(true);
+                    window.setTimeout(() => setPromptCopied(false), 1500);
+                  });
+                }}
+              >
+                {promptCopied
+                  ? ui.episodeData.promptCopied
+                  : ui.episodeData.copyPrompt}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPromptCopied(false);
+                  setPrompt(null);
+                }}
+              >
                 {ui.confirm}
               </button>
             </div>
