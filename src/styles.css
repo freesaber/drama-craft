@@ -510,7 +510,7 @@
 }
 .generation-fields > .board-field textarea {
   flex: 1;
-  min-height: 415px;
+  min-height: 350px;
 }
 .generation-parameters {
   display: grid;
