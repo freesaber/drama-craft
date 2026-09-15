@@ -120,14 +120,15 @@ export default function GenerationPanel({
   const applied = useRef(new Set<string>());
 
   const imageInputs = useMemo(() => {
-    const mapped = card.videoInputs.filter((item) => item.kind === "image");
-    if (mapped.length)
-      return mapped.map((item) => ({
-        reference: item.reference,
-        label:
-          /Picture\s*\d+/i.exec(item.tag)?.[0]?.replace(/\s+/g, " ") ??
-          item.param,
-      }));
+    if (card.videoInputs.length)
+      return card.videoInputs
+        .filter((item) => item.kind === "image")
+        .map((item) => ({
+          reference: item.reference,
+          label:
+            /Picture\s*\d+/i.exec(item.tag)?.[0]?.replace(/\s+/g, " ") ??
+            item.param,
+        }));
     const cast = new Set(episode.castByShot[card.id] ?? []);
     const items: InputAsset[] = [];
     const frame = card.fields.frameFile.value.trim();
@@ -151,13 +152,15 @@ export default function GenerationPanel({
     return unique(items).slice(0, 9);
   }, [card, episode]);
   const audioInputs = useMemo(() => {
-    const mapped = card.videoInputs.filter((item) => item.kind === "audio");
-    if (mapped.length)
-      return mapped.map((item) => ({
-        reference: item.reference,
-        label:
-          /Audio\s*\d+/i.exec(item.tag)?.[0]?.replace(/\s+/g, " ") ?? item.param,
-      }));
+    if (card.videoInputs.length)
+      return card.videoInputs
+        .filter((item) => item.kind === "audio")
+        .map((item) => ({
+          reference: item.reference,
+          label:
+            /Audio\s*\d+/i.exec(item.tag)?.[0]?.replace(/\s+/g, " ") ??
+            item.param,
+        }));
     const cast = new Set(episode.castByShot[card.id] ?? []);
     const items: InputAsset[] = [];
     for (const role of episode.characters)

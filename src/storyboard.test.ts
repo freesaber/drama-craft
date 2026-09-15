@@ -52,6 +52,24 @@ describe("storyboard structure", () => {
       },
     ]);
   });
+  it("keeps image-only mapping tables without inventing audio slots", () => {
+    const source = documentTemplate("episode", "01 灯火.md")
+      .replace(
+        "|---|---|---|---|---|",
+        "|---|---|---|---|---|\n| C001 | 苏铭 | `01 素材_苏铭.png` | `F:/voices/苏铭.mp3` | S001 |",
+      )
+      .replace("角色：—", "角色：C001")
+      .replace(
+        "| `ref_image_0` | `<Picture 1>` | `01 首帧_S001.png` |",
+        "| `ref_image_0` | `<Picture 1>` | `01 首帧_S001.png` |\n| `ref_image_1` | `<Picture 2>` | `01 素材_苏铭.png` |",
+      );
+    const card = parseStoryboard(source).cards[0];
+    expect(card.videoInputs.map((item) => item.kind)).toEqual([
+      "image",
+      "image",
+    ]);
+    expect(card.videoInputs.some((item) => item.kind === "audio")).toBe(false);
+  });
   it("extracts named GPT attachments only from the first-frame section", () => {
     const source =
       "## S007 私粮\n\n### 首帧生成\n\n出图文件名：`01 首帧_S007.png`。保存位置：同目录。GPT附件：**图片1＝白石村寨空粮仓（`01 素材_空粮仓.png`）；图片2＝大猩猩拳师参考图（[0071 大猩猩拳师.png](<F:/角色/0071 大猩猩拳师.png>)）**。\n\n**首帧图片提示词**\n\n```text\n静态画面\n```\n\n### 视频生成\n\n`不应出现.png`\n";
