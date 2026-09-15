@@ -92,9 +92,17 @@ export function parseEpisode(
   const tables = preamble.filter((n): n is Table => n.type === "table");
   const columns = (table: Table) => table.children[0].children.map(cellText);
   const exact = (a: string[], b: string[]) => a.join("|") === b.join("|");
+  const matchPromptHeading = (heading: string, name: string) => {
+    if (heading === name || heading === `${name}参考图`) return true;
+    const after = heading.match(/[：:]\s*(.+)$/);
+    return after ? after[1] === name : false;
+  };
   const generationPrompt = (name: string) => {
     const headerIndex = preamble.findIndex(
-      (n) => n.type === "heading" && n.depth === 3 && plain(n) === name,
+      (n) =>
+        n.type === "heading" &&
+        n.depth === 3 &&
+        matchPromptHeading(plain(n), name),
     );
     if (headerIndex < 0) return "";
     for (const node of preamble.slice(headerIndex + 1)) {
@@ -159,6 +167,7 @@ export function parseEpisode(
       for (const row of table.children.slice(1)) {
         const c = row.children;
         const id = cellText(c[1]);
+        if (empty(id)) continue;
         const matches = data.characters.filter((r) => r.id === id);
         if (matches.length !== 1) {
           data.diagnostics.push(ui.episodeData.unknownRole(id));

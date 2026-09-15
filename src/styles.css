@@ -969,9 +969,9 @@ select:focus {
 }
 
 .home-page {
-  max-width: 1000px;
+  flex: 1;
+  min-height: 0;
   width: 100%;
-  margin: 0 auto;
   padding: 70px 40px 32px;
   overflow: auto;
 }
@@ -1122,7 +1122,7 @@ select:focus {
   color: #909a89;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 580px;
+  max-width: 100%;
   white-space: nowrap;
 }
 .project-icon {
@@ -1144,6 +1144,10 @@ select:focus {
   padding: 0;
   cursor: pointer;
   color: inherit;
+}
+.recent-project-main > span:last-child {
+  min-width: 0;
+  overflow: hidden;
 }
 .recent-project-main:hover strong {
   color: #3a6b42;
