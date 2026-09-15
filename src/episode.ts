@@ -65,6 +65,11 @@ export function parseEpisode(
         const ref = value ? normalizeReference(value) : null;
         if (ref) found.add(ref);
       });
+    // External agents often omit backticks; accept a bare media path as the whole cell.
+    if (found.size === 0 && node) {
+      const ref = normalizeReference(plain(node));
+      if (ref) found.add(ref);
+    }
     return [...found];
   }
   const onlyRef = (

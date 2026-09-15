@@ -41,6 +41,26 @@ describe("episode domain adapters", () => {
     expect(board.episode.castByShot.S001).toEqual(["C007"]);
     expect(board.diagnostics).toEqual([]);
   });
+  it("accepts bare media paths without backticks in role and asset tables", () => {
+    const source = documentTemplate("episode", "01 夜航.md")
+      .replace(
+        "|---|---|---|---|---|",
+        "|---|---|---|---|---|\n| C007 | 旅人 | 旅人.png | F:/voices/旅人.wav | S001 |",
+      )
+      .replace(
+        "## 本集使用素材\n\n| 素材ID | 名称 | 类型 | 文件 | 使用镜号 |\n|---|---|---|---|---|",
+        "## 本集使用素材\n\n| 素材ID | 名称 | 类型 | 文件 | 使用镜号 |\n|---|---|---|---|---|\n| A001 | 渡口 | 场景 | 01 素材_渡口.png | S001 |",
+      )
+      .replace("角色：—", "角色：C007");
+    const episode = parseStoryboard(source).episode;
+    expect(episode.characters[0]).toMatchObject({
+      id: "C007",
+      image: "旅人.png",
+      voice: "F:/voices/旅人.wav",
+    });
+    expect(episode.assets[0].reference).toBe("01 素材_渡口.png");
+    expect(episode.diagnostics).toEqual([]);
+  });
   it("maps named generation prompts to missing roles and materials", () => {
     const source = documentTemplate("episode", "01 夜航.md")
       .replace(
