@@ -467,21 +467,71 @@ pub fn create_project(
         "分镜总表.md",
         "# 分镜总表\n\n> 全剧分镜索引。按集展开，汇总每镜的时间线和剧情动作。\n> 在完成各集分镜剧本后统一填写，或由 AI 根据各集内容自动汇总。\n\n## 每集入口与时间线\n\n| 集 | 名称与提示词文件 | 镜号范围 | 镜数 | 秒数 | 剧情任务 |\n|---|---|---|---:|---:|---|\n\n## 分镜明细\n\n| 镜号 | 集 | 镜头名 | 秒数 | 集内起止 | 全片起止 | 本镜动作 | 声音／发声区间 |\n|---|---|---|---:|---|---|---|---|\n",
     )?;
+    let voice_catalog = scan_voice_catalog(voice_source);
     let agents_content = agents_md(
         name,
         character_source.map(|p| p.to_string_lossy().into_owned()),
         &voice_source.to_string_lossy(),
+        &voice_catalog,
     );
     create_document(&root, "AGENTS.md", &agents_content)?;
     Ok(root)
+}
+
+fn scan_voice_catalog(voice_dir: &Path) -> Vec<String> {
+    let Ok(dir) = fs::canonicalize(voice_dir) else {
+        return Vec::new();
+    };
+    let mut files: Vec<String> = WalkDir::new(&dir)
+        .follow_links(false)
+        .max_depth(2)
+        .into_iter()
+        .filter_map(std::result::Result::ok)
+        .filter(|e| {
+            e.file_type().is_file()
+                && has_extension(
+                    e.path(),
+                    &["mp3", "wav", "flac", "ogg", "m4a"],
+                )
+        })
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    files.sort();
+    files
 }
 
 fn agents_md(
     project_name: &str,
     character_directory: Option<String>,
     voice_directory: &str,
+    voice_catalog: &[String],
 ) -> String {
     let char_dir = character_directory.as_deref().unwrap_or("未配置");
+    let voice_table = if voice_catalog.is_empty() {
+        "（创建项目时未扫描到音色文件，请手动读取声音目录）".to_string()
+    } else {
+        let mut table = String::from(
+            "| 文件名 | 性别 | 年龄段 | 角色名 | 声音特征 |\n|---|---|---|---|---|\n",
+        );
+        for file in voice_catalog {
+            let stem = file.rsplit('.').last().unwrap_or(file);
+            let parts: Vec<&str> = file
+                .rsplit('.')
+                .nth(1)
+                .unwrap_or(stem)
+                .split('_')
+                .collect();
+            if parts.len() >= 4 {
+                table.push_str(&format!(
+                    "| `{}` | {} | {} | {} | {} |\n",
+                    file, parts[0], parts[1], parts[2], parts[3]
+                ));
+            } else {
+                table.push_str(&format!("| `{}` | — | — | — | — |\n", file));
+            }
+        }
+        table
+    };
     format!(
         r#"# {project_name}
 
@@ -517,6 +567,21 @@ fn agents_md(
 | 13 | 修仙修真 | 修炼体系、宗门争斗 |
 | 14 | 校园青春 | 校园恋爱、友情、成长 |
 | 15 | 悬疑推理 | 案件、密室、层层反转 |
+| 16 | 甜宠日常 | 高糖恋爱、花式撒糖 |
+| 17 | 豪门恩怨 | 家族争产、权力暗斗 |
+| 18 | 娱乐圈 | 练习生出道、明星背后 |
+| 19 | 医疗职场 | 手术室内外的生死抉择 |
+| 20 | 刑侦破案 | 刑警办案、连环线索 |
+| 21 | 古风宫斗 | 后宫争宠、朝堂博弈 |
+| 22 | 丧尸末日 | 病毒爆发、小队求生 |
+| 23 | 盗墓探险 | 古墓机关、地下世界 |
+| 24 | 电竞热血 | 战队组建、赛场逆袭 |
+| 25 | 美食治愈 | 深夜食堂、料理与人情 |
+| 26 | 萌宠日记 | 宠物视角、人宠温情 |
+| 27 | 科幻太空 | 星际航行、外星接触 |
+| 28 | 谍战风云 | 地下工作、双重身份 |
+| 29 | 武侠江湖 | 江湖恩怨、快意行侠 |
+| 30 | 乡村喜剧 | 村里趣事、朴实欢乐 |
 | … | 自定义 | 用户自行描述题材和方向 |
 
 ### 第二步：确认集数与节奏
@@ -594,8 +659,26 @@ fn agents_md(
 - 角色图目录：`{char_dir}`
 - 声音样本目录：`{voice_directory}`
 
-已提供内置 TTS 音色样本，也可以改为自己的声音目录。文件名用于标记性别、年龄和声音特征。
-这里只保存目录配置；不会复制素材，也不会修改现有剧本和提示词。
+### 音色绑定规则（极其重要）
+
+> **禁止编造不存在的音色文件名。** 角色的音色文件必须从声音目录中选择已有文件。
+
+音色文件的命名规则为 `性别_年龄段_角色名_声音特征.mp3`，例如：
+- `男声_青年_旁白_清亮通透.MP3` → 适合男性青年旁白
+- `女声_青年_夏知秋_清冷轻熟.mp3` → 适合冷静的年轻女性角色
+- `男声_老年_村长_沙哑沧桑.mp3` → 适合年长男性角色
+
+为角色选择音色时：
+1. **优先读取声音目录**：如果你有文件系统访问权限，直接读取 `{voice_directory}` 目录获取最新文件列表
+2. **无法访问时用下方快照**：以下是创建项目时扫描到的音色文件（可能不是最新的）
+3. **按性别和年龄匹配**：根据角色的性别、年龄段选择最贴合的音色
+4. **音色文件路径格式**：在角色绑定表中，把声音目录和文件名拼成完整路径，用正斜杠 `/` 连接。例如：若声音目录为 `F:/声音库`，文件为 `男声_青年_旁白_清亮通透.MP3`，则写 `F:/声音库/男声_青年_旁白_清亮通透.MP3`
+
+#### 可用音色列表（创建时快照）
+
+{voice_table}
+
+> 如果用户后续添加了新的音色文件，请优先扫描声音目录获取最新列表。
 
 ---
 
@@ -630,7 +713,8 @@ fn agents_md(
 - 角色 ID 用 `C001`、`C002`……旁白用 `N001`
 - 同一作品**跨集保持 ID、名称及已确定的声音一致**
 - 角色图写相对路径（`01 素材_角色名.png`）或角色库绝对路径；旁白可以没有角色图，写 `—`
-- 音色文件写声音库中的完整路径
+- **音色文件必须从声音目录已有文件中选择**（参见上方「可用音色列表」），写完整路径 `声音目录/文件名`；禁止编造不存在的文件名
+- 按角色的性别、年龄段匹配最合适的音色文件
 - 使用镜号**逐项列出**：`S001、S002、S003`，**不用范围缩写**
 
 #### 素材表（必须）
