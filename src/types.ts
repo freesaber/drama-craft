@@ -106,6 +106,13 @@ export type BoardField =
 export interface ShotCard extends Shot {
   fields: Record<BoardField, SourceField>;
   frameAssets: { label: string; name: string; reference: string }[];
+  /** Upload slots from the video-generation mapping table, in document order. */
+  videoInputs: {
+    param: string;
+    tag: string;
+    reference: string;
+    kind: "image" | "audio";
+  }[];
   references: { reference: string; field: SourceField }[];
   diagnostics: string[];
 }

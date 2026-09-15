@@ -15,6 +15,7 @@ export const DIALOGUE_COLUMNS = [
   "台词",
   "发声区间",
 ];
+export const VIDEO_REF_COLUMNS = ["API参数", "提示词标签", "上传素材"];
 const table = (columns: string[]) =>
   `| ${columns.join(" | ")} |\n|${columns.map(() => "---").join("|")}|`;
 

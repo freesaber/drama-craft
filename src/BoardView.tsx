@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import Preview, { Asset } from "./Preview";
-import { analyzeMarkdown, normalizeReference } from "./markdown";
+import { analyzeMarkdown, isProjectRelativeImage, normalizeReference } from "./markdown";
 import { fieldPatch } from "./storyboard";
 import { ui } from "./i18n";
-import { errorMessage } from "./api";
+import { api, chooseMedia, desktop, errorMessage } from "./api";
 import EpisodeOverview from "./EpisodeOverview";
 import GenerationPanel from "./GenerationPanel";
 import type {
@@ -221,7 +221,6 @@ export default function BoardView({
                 </div>
               }
               card={card}
-              board={board}
               episode={board.episode}
               project={project}
               document={document}
@@ -229,15 +228,25 @@ export default function BoardView({
               busy={busy}
               configured={generationConfigured}
               configure={configureGeneration}
-              apply={apply}
               useVideo={(reference) => useVideo(index, reference)}
               renderField={(key, multiline) => field(card, key, multiline)}
             />
             <section className="shot-details shot-frame-area">
-              <h3>{ui.board.frameImage}</h3>
+              <div className="shot-frame-heading">
+                <h3>{ui.board.frameImage}</h3>
+                <FrameFilePlace
+                  project={project}
+                  document={document}
+                  frameFile={card.fields.frameFile.value.trim()}
+                  refreshKey={refreshKey}
+                  busy={busy}
+                  onPlaced={onMediaPlaced}
+                />
+              </div>
               <FrameImageTabs
                 key={`${document}-${index}`}
                 assets={card.frameAssets}
+                frameFile={card.fields.frameFile.value.trim()}
                 asset={(reference) => (
                   <LazyAsset
                     project={project}
@@ -255,16 +264,6 @@ export default function BoardView({
                 {message}
               </p>
             ))}
-            {showSourceActions && (
-              <div className="shot-details source-details">
-                <button
-                  className="text-button"
-                  onClick={() => source(card.offset)}
-                >
-                  {ui.board.source}
-                </button>
-              </div>
-            )}
           </article>
         );
       })}
@@ -272,16 +271,99 @@ export default function BoardView({
   );
 }
 
+function FrameFilePlace({
+  project,
+  document,
+  frameFile,
+  refreshKey,
+  busy,
+  onPlaced,
+}: {
+  project: Project;
+  document: string;
+  frameFile: string;
+  refreshKey: number;
+  busy: boolean;
+  onPlaced?: () => void;
+}) {
+  const [exists, setExists] = useState(false);
+  const [placing, setPlacing] = useState(false);
+  const [error, setError] = useState("");
+  const canPlace = desktop && isProjectRelativeImage(frameFile);
+  useEffect(() => {
+    if (!canPlace) {
+      setExists(false);
+      return;
+    }
+    let alive = true;
+    void api
+      .media(project.handle, document, frameFile)
+      .then((media) => {
+        if (alive) setExists(media.exists);
+      })
+      .catch(() => {
+        if (alive) setExists(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [canPlace, project.handle, document, frameFile, refreshKey]);
+  if (!canPlace) return null;
+  return (
+    <div className="shot-frame-place">
+      <button
+        type="button"
+        className="episode-material-place shot-frame-place-button"
+        title={`${ui.episodeData.mediaPlaceHint}：${frameFile}`}
+        disabled={busy || placing}
+        onClick={() => {
+          void (async () => {
+            setError("");
+            setPlacing(true);
+            try {
+              const selected = await chooseMedia("image");
+              if (!selected) return;
+              await api.placeDocumentMedia(
+                project.handle,
+                document,
+                frameFile,
+                selected,
+              );
+              setExists(true);
+              onPlaced?.();
+            } catch (e) {
+              setError(errorMessage(e));
+            } finally {
+              setPlacing(false);
+            }
+          })();
+        }}
+      >
+        {placing
+          ? ui.busy
+          : exists
+            ? ui.episodeData.replaceImage
+            : ui.episodeData.uploadImage}
+      </button>
+      <small title={frameFile}>{frameFile.replace(/.*[/\\]/, "")}</small>
+      {error && <p className="diagnostic">{error}</p>}
+    </div>
+  );
+}
+
 function FrameImageTabs({
   assets,
+  frameFile,
   asset,
   prompt,
 }: {
   assets: ShotCard["frameAssets"];
+  frameFile: string;
   asset: (reference: string) => React.ReactNode;
   prompt: React.ReactNode;
 }) {
   const [active, setActive] = useState<"assets" | "prompt">("assets");
+  const frameName = frameFile.replace(/.*[/\\]/, "");
   return (
     <div className="frame-image-tabs">
       <div role="tablist" aria-label={ui.board.frameImage}>
@@ -299,18 +381,32 @@ function FrameImageTabs({
       </div>
       {active === "assets" ? (
         <div role="tabpanel" className="frame-assets">
-          {assets.map((item) => (
-            <article
-              className="frame-asset"
-              key={`${item.label}-${item.reference}`}
-            >
-              {asset(item.reference)}
-              <strong>
-                {item.label} · {item.name}
+          {frameFile && (
+            <article className="frame-asset" key={`frame-${frameFile}`}>
+              {asset(frameFile)}
+              <strong title={frameFile}>
+                {ui.board.frameFile}
+                {frameName ? ` · ${frameName}` : ""}
               </strong>
             </article>
-          ))}
-          {!assets.length && (
+          )}
+          {assets.map((item) => {
+            const filename = item.reference.replace(/.*[/\\]/, "");
+            return (
+              <article
+                className="frame-asset"
+                key={`${item.label}-${item.reference}`}
+              >
+                {asset(item.reference)}
+                <strong
+                  title={`${item.label} · ${item.name}\n${item.reference}`}
+                >
+                  {filename}
+                </strong>
+              </article>
+            );
+          })}
+          {!frameFile && !assets.length && (
             <p className="muted">{ui.board.noFrameMaterials}</p>
           )}
         </div>

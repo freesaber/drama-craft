@@ -11,6 +11,7 @@ import type {
 } from "./types";
 import { ui } from "./i18n";
 import { parseEpisode } from "./episode";
+import { VIDEO_REF_COLUMNS } from "./episodeFormat";
 
 const range = (node: Node): SourceRange => ({
   start: node.position!.start.offset!,
@@ -288,6 +289,57 @@ export function parseStoryboard(source: string): Storyboard {
         });
       }
     }
+    const videoInputs: ShotCard["videoInputs"] = [];
+    const videoInputKeys = new Set<string>();
+    const cellPlain = (cell?: Node) => (cell ? plain(cell).trim() : "");
+    const cellReference = (cell?: Node) => {
+      if (!cell) return null;
+      const found: string[] = [];
+      visit(cell, (child) => {
+        let value: string | undefined;
+        if (child.type === "inlineCode" && "value" in child)
+          value = String(child.value);
+        else if (
+          (child.type === "link" || child.type === "image") &&
+          "url" in child
+        )
+          value = String(child.url);
+        const ref = value ? normalizeReference(value) : null;
+        if (ref) found.push(ref);
+      });
+      if (found.length === 1) return found[0];
+      return normalizeReference(cellPlain(cell));
+    };
+    for (const contents of sections("视频生成")) {
+      for (const node of contents) {
+        if (node.type !== "table" || !node.children.length) continue;
+        const headers = node.children[0].children.map((cell) => cellPlain(cell));
+        if (headers.join("|") !== VIDEO_REF_COLUMNS.join("|")) continue;
+        for (const row of node.children.slice(1)) {
+          const cells = row.children;
+          const param = cellPlain(cells[0]);
+          const tag = cellPlain(cells[1]);
+          const reference = cellReference(cells[2]);
+          const kind = /^ref_image_\d+$/i.test(param)
+            ? "image"
+            : /^ref_audio_\d+$/i.test(param)
+              ? "audio"
+              : null;
+          if (!kind || !reference) continue;
+          const key = `${kind}:${param}:${reference}`;
+          if (videoInputKeys.has(key)) continue;
+          videoInputKeys.add(key);
+          videoInputs.push({ param, tag, reference, kind });
+        }
+      }
+    }
+    videoInputs.sort((a, b) => {
+      const rank = (item: ShotCard["videoInputs"][number]) => {
+        const match = /(\d+)$/.exec(item.param);
+        return (item.kind === "audio" ? 1000 : 0) + Number(match?.[1] ?? 0);
+      };
+      return rank(a) - rank(b);
+    });
     if (Object.values(fields).some((f) => f.ambiguous))
       localDiagnostics.push(ui.board.unmapped);
     const references: ShotCard["references"] = [];
@@ -322,6 +374,7 @@ export function parseStoryboard(source: string): Storyboard {
       ...shot,
       fields,
       frameAssets,
+      videoInputs,
       references,
       diagnostics: localDiagnostics,
     };

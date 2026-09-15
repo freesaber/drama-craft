@@ -26,6 +26,32 @@ describe("storyboard structure", () => {
       source.replace("01 S001.mp4", "新视频.mp4"),
     );
   });
+  it("reads video upload slots from the API mapping table", () => {
+    const source = `${documentTemplate("episode", "01 灯火.md").replace(
+      "| `ref_image_0` | `<Picture 1>` | `01 首帧_S001.png` |",
+      "| `ref_image_0` | `<Picture 1>` | `01 首帧_S001.png` |\n| `ref_image_1` | `<Picture 2>` | `01 素材_苏铭.png` |\n| `ref_audio_0` | `<Audio 1>` | `F:/voices/旁白.MP3` |",
+    )}`;
+    expect(parseStoryboard(source).cards[0].videoInputs).toEqual([
+      {
+        param: "ref_image_0",
+        tag: "<Picture 1>",
+        reference: "01 首帧_S001.png",
+        kind: "image",
+      },
+      {
+        param: "ref_image_1",
+        tag: "<Picture 2>",
+        reference: "01 素材_苏铭.png",
+        kind: "image",
+      },
+      {
+        param: "ref_audio_0",
+        tag: "<Audio 1>",
+        reference: "F:/voices/旁白.MP3",
+        kind: "audio",
+      },
+    ]);
+  });
   it("extracts named GPT attachments only from the first-frame section", () => {
     const source =
       "## S007 私粮\n\n### 首帧生成\n\n出图文件名：`01 首帧_S007.png`。保存位置：同目录。GPT附件：**图片1＝白石村寨空粮仓（`01 素材_空粮仓.png`）；图片2＝大猩猩拳师参考图（[0071 大猩猩拳师.png](<F:/角色/0071 大猩猩拳师.png>)）**。\n\n**首帧图片提示词**\n\n```text\n静态画面\n```\n\n### 视频生成\n\n`不应出现.png`\n";

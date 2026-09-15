@@ -1,17 +1,8 @@
 import { useState } from "react";
-import type { EpisodeData, Project } from "./types";
 import { api, chooseMedia, desktop, errorMessage } from "./api";
 import { ui } from "./i18n";
-
-function isProjectRelativeImage(reference: string | null): reference is string {
-  if (!reference) return false;
-  const value = reference.trim();
-  if (!value || value === "—" || value === "-") return false;
-  if (/^[a-zA-Z]:[\\/]/.test(value) || value.startsWith("\\\\") || value.startsWith("//"))
-    return false;
-  if (value.includes("://") || value.includes("..")) return false;
-  return /\.(png|jpe?g|webp|gif|bmp)$/i.test(value);
-}
+import { isProjectRelativeImage } from "./markdown";
+import type { EpisodeData, Project } from "./types";
 
 export default function EpisodeOverview({
   episode,

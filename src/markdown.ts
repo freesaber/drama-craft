@@ -72,6 +72,22 @@ export function normalizeReference(value: string): string | null {
     return null;
   return ref;
 }
+/** Relative image path next to the episode document (not absolute / remote). */
+export function isProjectRelativeImage(
+  reference: string | null | undefined,
+): reference is string {
+  if (!reference) return false;
+  const value = reference.trim();
+  if (!value || value === "—" || value === "-") return false;
+  if (
+    /^[a-zA-Z]:[\\/]/.test(value) ||
+    value.startsWith("\\\\") ||
+    value.startsWith("//")
+  )
+    return false;
+  if (value.includes("://") || value.includes("..")) return false;
+  return /\.(png|jpe?g|webp|gif|bmp)$/i.test(value);
+}
 export function analyzeMarkdown(text: string): {
   shots: Shot[];
   references: string[];

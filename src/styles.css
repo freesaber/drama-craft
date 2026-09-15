@@ -723,6 +723,38 @@
   font-size: 13px;
   font-weight: 600;
 }
+.shot-frame-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.shot-frame-heading > h3 {
+  margin: 0;
+  color: #45634a;
+  font-size: 13px;
+  font-weight: 600;
+}
+.shot-frame-place {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.shot-frame-place-button {
+  width: auto;
+  margin-top: 0;
+  padding: 4px 12px;
+  white-space: nowrap;
+}
+.shot-frame-place > small {
+  color: #829078;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .frame-image-tabs > [role="tablist"] {
   display: flex;
   gap: 20px;

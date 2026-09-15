@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { api, chooseMedia, errorMessage } from "./api";
+import { api, errorMessage } from "./api";
 import { Asset } from "./Preview";
-import { fieldPatch } from "./storyboard";
 import { ui } from "./i18n";
 import type {
   BoardField,
@@ -10,12 +9,9 @@ import type {
   GenerationRecord,
   Project,
   ShotCard,
-  SourceField,
-  SourcePatch,
-  Storyboard,
 } from "./types";
 
-type InputAsset = { reference: string; field?: SourceField; label: string };
+type InputAsset = { reference: string; label: string };
 
 function mediaKind(reference: string): "image" | "audio" | "video" | null {
   const clean = reference.split(/[?#]/)[0].toLowerCase();
@@ -92,7 +88,6 @@ const running = (status: string) =>
 
 export default function GenerationPanel({
   card,
-  board,
   episode,
   project,
   document,
@@ -100,13 +95,11 @@ export default function GenerationPanel({
   busy,
   configured,
   configure,
-  apply,
   useVideo,
   renderField,
   video,
 }: {
   card: ShotCard;
-  board: Storyboard;
   episode: EpisodeData;
   project: Project;
   document: string;
@@ -114,7 +107,6 @@ export default function GenerationPanel({
   busy: boolean;
   configured: boolean;
   configure: () => void;
-  apply: (patch: SourcePatch) => boolean;
   useVideo: (reference: string) => Promise<void>;
   renderField: (key: BoardField, multiline?: boolean) => React.ReactNode;
   video: React.ReactNode;
@@ -125,25 +117,21 @@ export default function GenerationPanel({
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [preview, setPreview] = useState<InputAsset | null>(null);
-  const [imageOverrides, setImageOverrides] = useState<Record<number, string>>(
-    {},
-  );
-  const [audioOverrides, setAudioOverrides] = useState<Record<number, string>>(
-    {},
-  );
-  const [extraImages, setExtraImages] = useState<string[]>([]);
   const applied = useRef(new Set<string>());
 
-  const cast = new Set(episode.castByShot[card.id] ?? []);
   const imageInputs = useMemo(() => {
+    const mapped = card.videoInputs.filter((item) => item.kind === "image");
+    if (mapped.length)
+      return mapped.map((item) => ({
+        reference: item.reference,
+        label:
+          /Picture\s*\d+/i.exec(item.tag)?.[0]?.replace(/\s+/g, " ") ??
+          item.param,
+      }));
+    const cast = new Set(episode.castByShot[card.id] ?? []);
     const items: InputAsset[] = [];
     const frame = card.fields.frameFile.value.trim();
-    if (frame)
-      items.push({
-        reference: frame,
-        field: card.fields.frameFile,
-        label: "首帧",
-      });
+    if (frame) items.push({ reference: frame, label: "首帧" });
     for (const role of episode.characters)
       if (cast.has(role.id) && role.image)
         items.push({ reference: role.image, label: role.name });
@@ -158,12 +146,19 @@ export default function GenerationPanel({
       if (mediaKind(entry.reference) === "image")
         items.push({
           reference: entry.reference,
-          field: entry.field,
           label: "素材",
         });
     return unique(items).slice(0, 9);
   }, [card, episode]);
   const audioInputs = useMemo(() => {
+    const mapped = card.videoInputs.filter((item) => item.kind === "audio");
+    if (mapped.length)
+      return mapped.map((item) => ({
+        reference: item.reference,
+        label:
+          /Audio\s*\d+/i.exec(item.tag)?.[0]?.replace(/\s+/g, " ") ?? item.param,
+      }));
+    const cast = new Set(episode.castByShot[card.id] ?? []);
     const items: InputAsset[] = [];
     for (const role of episode.characters)
       if (cast.has(role.id) && role.voice)
@@ -172,20 +167,10 @@ export default function GenerationPanel({
       if (mediaKind(entry.reference) === "audio")
         items.push({
           reference: entry.reference,
-          field: entry.field,
           label: "声音",
         });
     return unique(items).slice(0, 3);
   }, [card, episode]);
-  const effectiveImages = [
-    ...imageInputs.map(
-      (item, index) => imageOverrides[index] ?? item.reference,
-    ),
-    ...extraImages,
-  ].slice(0, 9);
-  const effectiveAudios = audioInputs.map(
-    (item, index) => audioOverrides[index] ?? item.reference,
-  );
 
   const loadHistory = async () => {
     const records = await api.generationHistory(
@@ -233,37 +218,6 @@ export default function GenerationPanel({
     };
   }, [task, project.handle, useVideo]);
 
-  const replace = async (
-    kind: "image" | "audio",
-    index: number,
-    item?: InputAsset,
-  ) => {
-    try {
-      const selected = await chooseMedia(kind);
-      if (!selected) return;
-      const reference = await api.importGenerationMedia(
-        project.handle,
-        document,
-        selected,
-        card.id,
-        `${kind}_${index}`,
-      );
-      if (item?.field && !apply(fieldPatch(board, item.field, reference)))
-        return;
-      if (kind === "image") {
-        if (item)
-          setImageOverrides((value) => ({ ...value, [index]: reference }));
-        else
-          setExtraImages((value) =>
-            [...value, reference].slice(0, 9 - imageInputs.length),
-          );
-      } else setAudioOverrides((value) => ({ ...value, [index]: reference }));
-      setError("");
-    } catch (e) {
-      setError(errorMessage(e));
-    }
-  };
-
   const submit = async () => {
     if (!configured) {
       configure();
@@ -285,8 +239,8 @@ export default function GenerationPanel({
         duration,
         resolution: card.fields.resolution.value || "768p竖",
         seed: parsedSeed,
-        imageRefs: effectiveImages,
-        audioRefs: effectiveAudios,
+        imageRefs: imageInputs.map((item) => item.reference),
+        audioRefs: audioInputs.map((item) => item.reference),
       });
       setTask(next);
       setHistory((items) => [
@@ -331,92 +285,45 @@ export default function GenerationPanel({
         <div className="generation-assets">
           <div className="generation-section-title">
             <span>{ui.generation.referenceImages}</span>
-            <small>{effectiveImages.length}/9</small>
+            <small>{imageInputs.length}/9</small>
           </div>
           <div className="generation-thumbs">
-            {imageInputs.map((item, index) => {
-              const current = {
-                ...item,
-                reference: imageOverrides[index] ?? item.reference,
-              };
-              return (
-                <div
-                  className="generation-thumb-wrap"
-                  key={`${index}-${current.reference}`}
-                >
-                  <Thumbnail
-                    project={project}
-                    document={document}
-                    item={{ ...current, label: `图 ${index + 1}` }}
-                    refreshKey={refreshKey}
-                    onOpen={() => setPreview(current)}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => void replace("image", index, item)}
-                  >
-                    {ui.generation.replace}
-                  </button>
-                </div>
-              );
-            })}
-            {extraImages.map((reference, extraIndex) => (
-              <div className="generation-thumb-wrap" key={reference}>
+            {imageInputs.map((item, index) => (
+              <div className="generation-thumb-wrap" key={`${index}-${item.reference}`}>
                 <Thumbnail
                   project={project}
                   document={document}
-                  item={{
-                    reference,
-                    label: `图 ${imageInputs.length + extraIndex + 1}`,
-                  }}
+                  item={{ ...item, label: `图 ${index + 1}` }}
                   refreshKey={refreshKey}
-                  onOpen={() => setPreview({ reference, label: "本次添加" })}
+                  onOpen={() => setPreview(item)}
                 />
               </div>
             ))}
-            {effectiveImages.length < 9 && (
-              <button
-                className="generation-add-asset"
-                type="button"
-                onClick={() => void replace("image", effectiveImages.length)}
-              >
-                ＋<small>{ui.generation.addImage}</small>
-              </button>
+            {!imageInputs.length && (
+              <p className="muted">{ui.board.noFrame}</p>
             )}
           </div>
           {!!audioInputs.length && (
             <>
               <div className="generation-section-title audio-title">
                 <span>{ui.generation.referenceAudios}</span>
-                <small>{effectiveAudios.length}/3</small>
+                <small>{audioInputs.length}/3</small>
               </div>
               <div className="generation-thumbs">
-                {audioInputs.map((item, index) => {
-                  const current = {
-                    ...item,
-                    reference: audioOverrides[index] ?? item.reference,
-                  };
-                  return (
-                    <div
-                      className="generation-thumb-wrap"
-                      key={`${index}-${current.reference}`}
-                    >
-                      <Thumbnail
-                        project={project}
-                        document={document}
-                        item={current}
-                        refreshKey={refreshKey}
-                        onOpen={() => setPreview(current)}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => void replace("audio", index, item)}
-                      >
-                        {ui.generation.replace}
-                      </button>
-                    </div>
-                  );
-                })}
+                {audioInputs.map((item, index) => (
+                  <div
+                    className="generation-thumb-wrap"
+                    key={`${index}-${item.reference}`}
+                  >
+                    <Thumbnail
+                      project={project}
+                      document={document}
+                      item={item}
+                      refreshKey={refreshKey}
+                      onOpen={() => setPreview(item)}
+                    />
+                  </div>
+                ))}
               </div>
             </>
           )}
@@ -442,7 +349,7 @@ export default function GenerationPanel({
               submitting ||
               !!(task && running(task.status)) ||
               !card.fields.videoPrompt.value.trim() ||
-              !effectiveImages.length
+              !imageInputs.length
             }
             onClick={() => void submit()}
           >
@@ -503,17 +410,15 @@ export default function GenerationPanel({
       {preview && (
         <div
           className="modal-backdrop generation-preview"
-          onClick={() => setPreview(null)}
+          onMouseDown={() => setPreview(null)}
         >
           <section
             className="modal"
-            role="dialog"
-            aria-modal="true"
-            onClick={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
           >
-            <button className="modal-close" onClick={() => setPreview(null)}>
-              ×
-            </button>
+            <h2>
+              {preview.label} · {preview.reference}
+            </h2>
             <Asset
               project={project}
               document={document}
@@ -521,6 +426,11 @@ export default function GenerationPanel({
               refreshKey={refreshKey}
               hero
             />
+            <div className="modal-actions">
+              <button type="button" onClick={() => setPreview(null)}>
+                {ui.confirm}
+              </button>
+            </div>
           </section>
         </div>
       )}
