@@ -1,16 +1,35 @@
 import { useState } from "react";
-import type { EpisodeData } from "./types";
+import type { EpisodeData, Project } from "./types";
+import { api, chooseMedia, desktop, errorMessage } from "./api";
 import { ui } from "./i18n";
+
+function isProjectRelativeImage(reference: string | null): reference is string {
+  if (!reference) return false;
+  const value = reference.trim();
+  if (!value || value === "—" || value === "-") return false;
+  if (/^[a-zA-Z]:[\\/]/.test(value) || value.startsWith("\\\\") || value.startsWith("//"))
+    return false;
+  if (value.includes("://") || value.includes("..")) return false;
+  return /\.(png|jpe?g|webp|gif|bmp)$/i.test(value);
+}
 
 export default function EpisodeOverview({
   episode,
+  project,
+  document,
+  busy = false,
   asset,
+  onMediaPlaced,
 }: {
   episode: EpisodeData;
+  project: Project;
+  document: string;
+  busy?: boolean;
   asset: (
     reference: string,
     onAvailability?: (exists: boolean) => void,
   ) => React.ReactNode;
+  onMediaPlaced?: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<"roles" | "assets">("roles");
   const [availability, setAvailability] = useState<Record<string, boolean>>({});
@@ -18,6 +37,8 @@ export default function EpisodeOverview({
     null,
   );
   const [promptCopied, setPromptCopied] = useState(false);
+  const [placingKey, setPlacingKey] = useState<string | null>(null);
+  const [placeError, setPlaceError] = useState("");
   const materialAssets = episode.assets.filter(
     (item) =>
       !episode.characters.some(
@@ -45,6 +66,27 @@ export default function EpisodeOverview({
       click();
     }
   };
+  const placeImage = async (key: string, reference: string) => {
+    if (!desktop || busy || placingKey) return;
+    setPlaceError("");
+    setPlacingKey(key);
+    try {
+      const selected = await chooseMedia("image");
+      if (!selected) return;
+      await api.placeDocumentMedia(
+        project.handle,
+        document,
+        reference,
+        selected,
+      );
+      remember(key, true);
+      onMediaPlaced?.();
+    } catch (error) {
+      setPlaceError(errorMessage(error));
+    } finally {
+      setPlacingKey(null);
+    }
+  };
 
   return (
     <section className="episode-overview">
@@ -54,6 +96,7 @@ export default function EpisodeOverview({
       <p className="episode-summary">
         {episode.summary || ui.episodeData.noSummary}
       </p>
+      {placeError && <p className="diagnostic">{placeError}</p>}
       <div className="episode-library-tabs">
         <div role="tablist" aria-label={ui.episodeData.material}>
           <button
@@ -87,6 +130,8 @@ export default function EpisodeOverview({
                   role.name,
                   role.imagePrompt,
                 );
+              const canPlace =
+                !!role.imagePrompt && isProjectRelativeImage(role.image);
               return (
                 <article
                   className="episode-material-card"
@@ -112,6 +157,24 @@ export default function EpisodeOverview({
                   >
                     {role.voice ? asset(role.voice) : ui.episodeData.noVoice}
                   </div>
+                  {canPlace && (
+                    <button
+                      type="button"
+                      className="episode-material-place"
+                      title={`${ui.episodeData.mediaPlaceHint}：${role.image}`}
+                      disabled={busy || placingKey === key}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void placeImage(key, role.image!);
+                      }}
+                    >
+                      {placingKey === key
+                        ? ui.busy
+                        : availability[key]
+                          ? ui.episodeData.replaceImage
+                          : ui.episodeData.uploadImage}
+                    </button>
+                  )}
                 </article>
               );
             })}
@@ -130,6 +193,8 @@ export default function EpisodeOverview({
                   item.name,
                   item.prompt,
                 );
+              const canPlace =
+                !!item.prompt && isProjectRelativeImage(item.reference);
               return (
                 <article
                   className="episode-material-card"
@@ -148,6 +213,24 @@ export default function EpisodeOverview({
                   </div>
                   <strong>{item.name}</strong>
                   <small>{item.kind || item.id}</small>
+                  {canPlace && (
+                    <button
+                      type="button"
+                      className="episode-material-place"
+                      title={`${ui.episodeData.mediaPlaceHint}：${item.reference}`}
+                      disabled={busy || placingKey === key}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void placeImage(key, item.reference!);
+                      }}
+                    >
+                      {placingKey === key
+                        ? ui.busy
+                        : availability[key]
+                          ? ui.episodeData.replaceImage
+                          : ui.episodeData.uploadImage}
+                    </button>
+                  )}
                 </article>
               );
             })}

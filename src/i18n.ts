@@ -16,6 +16,10 @@ export const ui = {
     noGenerationPrompt: "文档中尚未填写对应的生成提示词。",
     copyPrompt: "复制",
     promptCopied: "已复制",
+    uploadImage: "上传",
+    replaceImage: "替换",
+    mediaPlaced: "图片已放入项目目录",
+    mediaPlaceHint: "选择生成好的图片，保存为文档中的文件名",
 
     v1: "剧集格式 v1",
     noSummary: "尚未填写本集内容",

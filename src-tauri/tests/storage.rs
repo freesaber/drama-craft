@@ -165,6 +165,47 @@ fn reads_assets_from_document_parent_and_external_paths() {
     assert!(resolve_media(&root, "章节/01 示例.md", "app.exe").is_err());
 }
 #[test]
+fn places_episode_images_with_markdown_filenames() {
+    let temp = workspace();
+    let root = root(&temp);
+    create_document(&root, "01 示例.md", "# 示例").unwrap();
+    let source_dir = temp.path().join("imports");
+    fs::create_dir_all(&source_dir).unwrap();
+    let source = source_dir.join("generated.png");
+    fs::write(&source, b"generated-image").unwrap();
+    let placed =
+        place_document_media(&root, "01 示例.md", "01 素材_旅人.png", &source.to_string_lossy())
+            .unwrap();
+    assert!(placed.exists);
+    assert_eq!(
+        fs::read(root.join("01 素材_旅人.png")).unwrap(),
+        b"generated-image"
+    );
+    fs::write(&source, b"replaced-image").unwrap();
+    place_document_media(&root, "01 示例.md", "01 素材_旅人.png", &source.to_string_lossy())
+        .unwrap();
+    assert_eq!(
+        fs::read(root.join("01 素材_旅人.png")).unwrap(),
+        b"replaced-image"
+    );
+    let jpg = source_dir.join("generated.jpg");
+    fs::write(&jpg, b"jpg").unwrap();
+    assert_eq!(
+        place_document_media(&root, "01 示例.md", "01 素材_旅人.png", &jpg.to_string_lossy())
+            .err()
+            .unwrap()
+            .code,
+        "media"
+    );
+    assert!(place_document_media(
+        &root,
+        "01 示例.md",
+        "F:/outside/a.png",
+        &source.to_string_lossy()
+    )
+    .is_err());
+}
+#[test]
 fn readonly_files_are_not_replaced() {
     let temp = workspace();
     let root = root(&temp);

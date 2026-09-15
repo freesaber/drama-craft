@@ -60,6 +60,7 @@ export default function BoardView({
   configureGeneration,
   useVideo,
   showSourceActions = true,
+  onMediaPlaced,
 }: {
   board: Board;
   project: Project;
@@ -74,6 +75,7 @@ export default function BoardView({
   configureGeneration: () => void;
   useVideo: (index: number, reference: string) => Promise<void>;
   showSourceActions?: boolean;
+  onMediaPlaced?: () => void;
 }) {
   const asset = (
     reference: string,
@@ -129,7 +131,14 @@ export default function BoardView({
         </p>
       ))}
       {board.episode.format !== "document" && (
-        <EpisodeOverview episode={board.episode} asset={asset} />
+        <EpisodeOverview
+          episode={board.episode}
+          project={project}
+          document={document}
+          busy={busy}
+          asset={asset}
+          onMediaPlaced={onMediaPlaced}
+        />
       )}
       {board.sections.map((section, sectionIndex) => {
         if (board.episode.format === "unsupported") return null;

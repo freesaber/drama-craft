@@ -44,6 +44,18 @@ export const api = {
     invoke<Snapshot>("save_document", { handle, path, text, expectedHash }),
   media: (handle: string, document: string, reference: string) =>
     invoke<Media>("resolve_media", { handle, document, reference }),
+  placeDocumentMedia: (
+    handle: string,
+    document: string,
+    reference: string,
+    source: string,
+  ) =>
+    invoke<Media>("place_document_media", {
+      handle,
+      document,
+      reference,
+      source,
+    }),
   openMedia: (handle: string, document: string, reference: string) =>
     invoke<void>("open_media", { handle, document, reference }),
   preferences: () =>

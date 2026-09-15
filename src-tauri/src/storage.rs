@@ -1008,3 +1008,95 @@ pub fn resolve_media(root: &Path, document: &str, reference: &str) -> Result<Med
         kind: kind.into(),
     })
 }
+
+fn normalize_image_ext(ext: &str) -> String {
+    let lower = ext.to_lowercase();
+    if lower == "jpeg" {
+        "jpg".into()
+    } else {
+        lower
+    }
+}
+
+/// Copy a local image into the episode document directory using the Markdown reference name.
+pub fn place_document_media(
+    root: &Path,
+    document: &str,
+    reference: &str,
+    source: &str,
+) -> Result<Media> {
+    let doc = document_path(root, document, true)?;
+    let value = reference
+        .trim()
+        .trim_start_matches('<')
+        .trim_end_matches('>');
+    let rel = Path::new(value);
+    if value.is_empty()
+        || rel.as_os_str().is_empty()
+        || rel.is_absolute()
+        || value.contains("://")
+        || value.starts_with("\\\\")
+        || value.starts_with("//")
+        || rel.components().any(|c| !matches!(c, Component::Normal(_)))
+    {
+        return Err(AppError::new(
+            "path",
+            "素材路径必须是文档旁的项目内相对路径",
+        ));
+    }
+    for part in rel.components() {
+        let name = part.as_os_str().to_string_lossy();
+        validate_name(&name)?;
+        if ignored(&name) {
+            return Err(AppError::new("path", "不能写入隐藏或应用管理目录"));
+        }
+    }
+    let target_ext = rel
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("");
+    let target_kind = normalize_image_ext(target_ext);
+    if !matches!(
+        target_kind.as_str(),
+        "png" | "jpg" | "webp" | "gif" | "bmp"
+    ) {
+        return Err(AppError::new("media", "仅可写入图片素材"));
+    }
+    let source = fs::canonicalize(source)?;
+    if !source.is_file() {
+        return Err(AppError::new("media", "请选择图片文件"));
+    }
+    let source_ext = source
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("");
+    if normalize_image_ext(source_ext) != target_kind {
+        return Err(AppError::new(
+            "media",
+            format!("请选择 .{target_ext} 图片，以匹配文档中的文件名"),
+        ));
+    }
+    let parent = doc
+        .parent()
+        .ok_or_else(|| AppError::new("path", "文档缺少父目录"))?;
+    let destination = parent.join(rel);
+    if let Some(folder) = destination.parent() {
+        fs::create_dir_all(folder)?;
+        let canonical_folder = fs::canonicalize(folder)?;
+        if !canonical_folder.starts_with(root) {
+            return Err(AppError::new("path", "路径超出项目目录"));
+        }
+    }
+    let mut current = parent.to_path_buf();
+    for part in rel.components() {
+        current.push(part.as_os_str());
+        if let Ok(meta) = fs::symlink_metadata(&current) {
+            if meta.file_type().is_symlink() {
+                return Err(AppError::new("path", "不写入链接文件或链接目录"));
+            }
+        }
+    }
+    let bytes = fs::read(&source)?;
+    atomic_write(&destination, &bytes, false)?;
+    resolve_media(root, document, reference)
+}

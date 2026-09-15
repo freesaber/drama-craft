@@ -902,6 +902,10 @@ export default function App() {
                   configureGeneration={configureGeneration}
                   useVideo={useGeneratedVideo}
                   showSourceActions={!isOverviewDocument(path)}
+                  onMediaPlaced={() => {
+                    setRefreshKey((key) => key + 1);
+                    setNotice(ui.episodeData.mediaPlaced);
+                  }}
                 />
               ) : (
                 <div className="empty-editor">

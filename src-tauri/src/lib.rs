@@ -251,6 +251,25 @@ fn resolve_media(
     Ok(media)
 }
 #[tauri::command]
+fn place_document_media(
+    app: tauri::AppHandle,
+    state: State<Sessions>,
+    handle: String,
+    document: String,
+    reference: String,
+    source: String,
+) -> Result<storage::Media> {
+    let media = with_root(&state, &handle, |root| {
+        storage::place_document_media(root, &document, &reference, &source)
+    })?;
+    if let Some(path) = &media.path {
+        app.asset_protocol_scope()
+            .allow_file(path)
+            .map_err(|e| AppError::new("media", e.to_string()))?;
+    }
+    Ok(media)
+}
+#[tauri::command]
 fn open_media(
     app: tauri::AppHandle,
     state: State<Sessions>,
@@ -618,6 +637,7 @@ pub fn run() {
             read_document,
             save_document,
             resolve_media,
+            place_document_media,
             open_media,
             get_preferences,
             remove_recent,
