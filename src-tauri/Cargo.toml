@@ -28,6 +28,5 @@ base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
-keyring = { version = "3.6", default-features = false, features = ["windows-native"] }
 
 [dev-dependencies]

@@ -153,8 +153,6 @@ export default function EpisodeOverview({
           </div>
         )}
       </div>
-      <p className="episode-source-note">{ui.episodeData.sourceNotes}</p>
-
       {prompt && (
         <div className="modal-backdrop" onMouseDown={() => setPrompt(null)}>
           <section

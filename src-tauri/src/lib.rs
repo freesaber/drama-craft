@@ -39,6 +39,21 @@ struct Preferences {
     generation_base_url: String,
     #[serde(default)]
     generation_configuration: settings::Configuration,
+    #[serde(default)]
+    generation_authorizations: HashMap<String, String>,
+}
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PublicPreferences {
+    recent: Vec<Recent>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    preview_visible: Option<bool>,
+}
+fn public_preferences(prefs: &Preferences) -> PublicPreferences {
+    PublicPreferences {
+        recent: prefs.recent.clone(),
+        preview_visible: prefs.preview_visible,
+    }
 }
 fn prefs_path(app: &tauri::AppHandle) -> Result<PathBuf> {
     let dir = app
@@ -254,11 +269,11 @@ fn open_media(
         .map_err(|e| AppError::new("media", e.to_string()))
 }
 #[tauri::command]
-fn get_preferences(app: tauri::AppHandle) -> Result<Preferences> {
-    read_prefs(&app)
+fn get_preferences(app: tauri::AppHandle) -> Result<PublicPreferences> {
+    Ok(public_preferences(&read_prefs(&app)?))
 }
 #[tauri::command]
-fn remove_recent(app: tauri::AppHandle, path: String) -> Result<Preferences> {
+fn remove_recent(app: tauri::AppHandle, path: String) -> Result<PublicPreferences> {
     let mut prefs = read_prefs(&app)?;
     prefs.recent.retain(|r| r.path != path);
     storage::atomic_write(
@@ -266,7 +281,7 @@ fn remove_recent(app: tauri::AppHandle, path: String) -> Result<Preferences> {
         &serde_json::to_vec_pretty(&prefs)?,
         false,
     )?;
-    Ok(prefs)
+    Ok(public_preferences(&prefs))
 }
 #[tauri::command]
 fn default_voice_directory(app: tauri::AppHandle) -> Result<String> {
@@ -376,6 +391,39 @@ mod tests {
         assert_eq!(prefs.recent.len(), 1);
         assert_eq!(prefs.recent[0].updated_at, None);
     }
+
+    #[test]
+    fn token_is_kept_in_private_app_preferences_and_removed_with_profile() {
+        let config = settings::Configuration {
+            profiles: vec![settings::ApiProfile {
+                id: "legacy".into(),
+                name: "默认 API".into(),
+                base_url: "https://example.test".into(),
+                has_authorization: false,
+            }],
+            active_profile_id: "legacy".into(),
+            default_resolution: "480p横".into(),
+        };
+        let mut prefs = Preferences::default();
+        update_authorizations(
+            &mut prefs,
+            &config,
+            HashMap::from([("legacy".into(), " Token local-test ".into())]),
+        )
+        .unwrap();
+
+        assert_eq!(authorization(&prefs, "legacy"), "Token local-test");
+        let public_json = serde_json::to_string(&public_preferences(&prefs)).unwrap();
+        assert!(!public_json.contains("local-test"));
+
+        let empty_config = settings::Configuration {
+            profiles: Vec::new(),
+            active_profile_id: String::new(),
+            default_resolution: "480p横".into(),
+        };
+        update_authorizations(&mut prefs, &empty_config, HashMap::new()).unwrap();
+        assert_eq!(authorization(&prefs, "legacy"), "");
+    }
 }
 #[tauri::command]
 fn set_preview_visible(app: tauri::AppHandle, visible: bool) -> Result<()> {
@@ -387,25 +435,15 @@ fn set_preview_visible(app: tauri::AppHandle, visible: bool) -> Result<()> {
         false,
     )
 }
-fn credential(id: &str) -> Result<keyring::Entry> {
-    let account = if id == "legacy" {
-        "video-api-authorization".to_owned()
-    } else {
-        format!("video-api-{id}")
-    };
-    keyring::Entry::new("DramaCraft", &account)
-        .map_err(|_| AppError::new("credential", "无法访问系统凭据管理器"))
+fn authorization(prefs: &Preferences, id: &str) -> String {
+    prefs
+        .generation_authorizations
+        .get(id)
+        .cloned()
+        .unwrap_or_default()
 }
-fn authorization(id: &str) -> Result<String> {
-    match credential(id)?.get_password() {
-        Ok(value) => Ok(value),
-        Err(keyring::Error::NoEntry) => Ok(String::new()),
-        Err(_) => Err(AppError::new("credential", "无法读取 API 密钥")),
-    }
-}
-fn configuration(app: &tauri::AppHandle) -> Result<settings::Configuration> {
-    let prefs = read_prefs(app)?;
-    let mut config = prefs.generation_configuration;
+fn configuration_from_preferences(prefs: &Preferences) -> settings::Configuration {
+    let mut config = prefs.generation_configuration.clone();
     if config.default_resolution.is_empty() {
         config.default_resolution = "480p横".into();
     }
@@ -414,14 +452,17 @@ fn configuration(app: &tauri::AppHandle) -> Result<settings::Configuration> {
         config.profiles.push(settings::ApiProfile {
             id: "legacy".into(),
             name: "默认 API".into(),
-            base_url: prefs.generation_base_url,
+            base_url: prefs.generation_base_url.clone(),
             has_authorization: false,
         });
     }
     for profile in &mut config.profiles {
-        profile.has_authorization = !authorization(&profile.id)?.is_empty();
+        profile.has_authorization = !authorization(prefs, &profile.id).is_empty();
     }
-    Ok(config)
+    config
+}
+fn configuration(app: &tauri::AppHandle) -> Result<settings::Configuration> {
+    Ok(configuration_from_preferences(&read_prefs(app)?))
 }
 fn generation_settings(
     app: &tauri::AppHandle,
@@ -434,23 +475,37 @@ fn generation_settings(
         .iter()
         .find(|profile| profile.id == id)
         .ok_or_else(|| AppError::new("config", "请先在视频 API 设置中配置服务和密钥"))?;
+    let prefs = read_prefs(app)?;
     Ok(generation::GenerationSettings {
         profile_id: profile.id.clone(),
         base_url: profile.base_url.clone(),
-        authorization: authorization(&profile.id)?,
+        authorization: authorization(&prefs, &profile.id),
     })
 }
 #[tauri::command]
 fn get_generation_settings(app: tauri::AppHandle) -> Result<settings::Configuration> {
     configuration(&app)
 }
+
 #[tauri::command]
-fn set_generation_settings(
-    app: tauri::AppHandle,
-    configuration: settings::Configuration,
+fn get_generation_authorization(app: tauri::AppHandle, profile_id: String) -> Result<String> {
+    let prefs = read_prefs(&app)?;
+    let config = configuration_from_preferences(&prefs);
+    if !config
+        .profiles
+        .iter()
+        .any(|profile| profile.id == profile_id)
+    {
+        return Err(AppError::new("config", "密钥没有对应的 API 配置"));
+    }
+    Ok(authorization(&prefs, &profile_id))
+}
+
+fn update_authorizations(
+    prefs: &mut Preferences,
+    config: &settings::Configuration,
     authorizations: HashMap<String, String>,
-) -> Result<settings::Configuration> {
-    let mut config = configuration.normalize()?;
+) -> Result<()> {
     for (id, value) in &authorizations {
         if !config.profiles.iter().any(|profile| &profile.id == id) {
             return Err(AppError::new("config", "密钥没有对应的 API 配置"));
@@ -459,23 +514,32 @@ fn set_generation_settings(
             .map_err(|_| AppError::new("config", "Authorization 内容无效"))?;
     }
     for (id, value) in authorizations {
-        let entry = credential(&id)?;
         if value.trim().is_empty() {
-            if let Err(e) = entry.delete_credential() {
-                if !matches!(e, keyring::Error::NoEntry) {
-                    return Err(AppError::new("credential", "无法清除 API 密钥"));
-                }
-            }
+            prefs.generation_authorizations.remove(&id);
         } else {
-            entry
-                .set_password(value.trim())
-                .map_err(|_| AppError::new("credential", "无法保存 API 密钥"))?;
+            prefs
+                .generation_authorizations
+                .insert(id, value.trim().to_owned());
         }
     }
-    for profile in &mut config.profiles {
-        profile.has_authorization = !authorization(&profile.id)?.is_empty();
-    }
+    prefs
+        .generation_authorizations
+        .retain(|id, _| config.profiles.iter().any(|profile| &profile.id == id));
+    Ok(())
+}
+
+#[tauri::command]
+fn set_generation_settings(
+    app: tauri::AppHandle,
+    configuration: settings::Configuration,
+    authorizations: HashMap<String, String>,
+) -> Result<settings::Configuration> {
+    let mut config = configuration.normalize()?;
     let mut prefs = read_prefs(&app)?;
+    update_authorizations(&mut prefs, &config, authorizations)?;
+    for profile in &mut config.profiles {
+        profile.has_authorization = !authorization(&prefs, &profile.id).is_empty();
+    }
     prefs.generation_configuration = config.clone();
     prefs.generation_base_url.clear();
     storage::atomic_write(
@@ -562,6 +626,7 @@ pub fn run() {
             open_in_terminal,
             set_preview_visible,
             get_generation_settings,
+            get_generation_authorization,
             set_generation_settings,
             submit_generation,
             poll_generation,

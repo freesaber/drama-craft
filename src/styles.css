@@ -122,9 +122,6 @@
 .episode-material-card .character-voice audio {
   height: 28px;
 }
-.episode-source-note {
-  margin: 14px 0 0;
-}
 .generation-prompt-modal {
   position: relative;
   width: min(680px, 94vw);
@@ -186,8 +183,7 @@
   font-size: 11px;
   color: #5e7550;
 }
-.character-usage,
-.episode-source-note {
+.character-usage {
   font-size: 10px;
   color: #94a188;
 }
@@ -1751,6 +1747,10 @@ select:focus {
 .secret-input button {
   margin-top: 8px;
   flex-shrink: 0;
+}
+.api-profile-actions {
+  display: flex;
+  gap: 8px;
 }
 .credential-status {
   display: block;

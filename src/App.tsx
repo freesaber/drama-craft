@@ -60,6 +60,13 @@ export default function App() {
   const activeApi = apiDraft.profiles.find(
     (profile) => profile.id === apiDraft.activeProfileId,
   );
+  const activeApiTokenDraft = activeApi
+    ? apiAuthorizations[activeApi.id]
+    : undefined;
+  const activeApiHasToken =
+    activeApiTokenDraft === undefined
+      ? Boolean(activeApi?.hasAuthorization)
+      : Boolean(activeApiTokenDraft.trim());
   const updateApi = (
     values: Partial<Pick<import("./types").ApiProfile, "name" | "baseUrl">>,
   ) =>
@@ -86,6 +93,30 @@ export default function App() {
         },
       ],
     }));
+  };
+  const deleteApi = () => {
+    if (!activeApi) return;
+    const deletedId = activeApi.id;
+    setApiDraft((draft) => {
+      const deletedIndex = draft.profiles.findIndex(
+        (profile) => profile.id === deletedId,
+      );
+      const profiles = draft.profiles.filter(
+        (profile) => profile.id !== deletedId,
+      );
+      const nextProfile = profiles[Math.min(deletedIndex, profiles.length - 1)];
+      return {
+        ...draft,
+        profiles,
+        activeProfileId: nextProfile?.id ?? "",
+      };
+    });
+    setApiAuthorizations((values) => {
+      const next = { ...values };
+      delete next[deletedId];
+      return next;
+    });
+    setShowApiToken(false);
   };
   const [modal, setModal] = useState<
     "project" | "open" | "libraries" | "api" | null
@@ -452,6 +483,25 @@ export default function App() {
     }
     setModal("api");
   };
+  const toggleApiToken = () => {
+    if (showApiToken) {
+      setShowApiToken(false);
+      return;
+    }
+    if (!activeApi) return;
+    if (activeApiTokenDraft !== undefined) {
+      setShowApiToken(true);
+      return;
+    }
+    void run(async () => {
+      const authorization = await api.generationAuthorization(activeApi.id);
+      setApiAuthorizations((values) => ({
+        ...values,
+        [activeApi.id]: authorization,
+      }));
+      setShowApiToken(true);
+    });
+  };
   const useGeneratedVideo = async (index: number, reference: string) => {
     if (!project || !snapshot) throw new Error(ui.generation.noDocument);
     if (snapshot.readonly) throw new Error(ui.readonly);
@@ -635,9 +685,7 @@ export default function App() {
                       onClick={(e) => {
                         e.stopPropagation();
                         void navigator.clipboard
-                          .writeText(
-                            item.path.replace(/^\\\\\?\\/, ""),
-                          )
+                          .writeText(item.path.replace(/^\\\\\?\\/, ""))
                           .then(() => setNotice(ui.pathCopied));
                       }}
                     >
@@ -936,12 +984,13 @@ export default function App() {
                       <select
                         value={apiDraft.activeProfileId}
                         disabled={busy}
-                        onChange={(event) =>
+                        onChange={(event) => {
+                          setShowApiToken(false);
                           setApiDraft((draft) => ({
                             ...draft,
                             activeProfileId: event.target.value,
-                          }))
-                        }
+                          }));
+                        }}
                       >
                         {apiDraft.profiles.map((profile) => (
                           <option key={profile.id} value={profile.id}>
@@ -950,72 +999,88 @@ export default function App() {
                         ))}
                       </select>
                     </label>
-                    <button type="button" disabled={busy} onClick={addApi}>
-                      {ui.generation.addProfile}
-                    </button>
-                    <label>
-                      {ui.generation.profileName}
-                      <input
-                        value={activeApi?.name ?? ""}
-                        required
-                        disabled={busy}
-                        onChange={(event) =>
-                          updateApi({ name: event.target.value })
-                        }
-                      />
-                    </label>
-                    <label>
-                      {ui.generation.baseUrl}
-                      <input
-                        autoFocus
-                        value={activeApi?.baseUrl ?? ""}
-                        onChange={(event) =>
-                          updateApi({ baseUrl: event.target.value })
-                        }
-                        placeholder="https://api.example.com"
-                        required
-                        disabled={busy}
-                      />
-                    </label>
-                    <label>
-                      {ui.generation.authorization}
-                      <span className="secret-input">
-                        <input
-                          type={showApiToken ? "text" : "password"}
-                          value={
-                            apiAuthorizations[apiDraft.activeProfileId] ?? ""
-                          }
-                          onChange={(event) =>
-                            setApiAuthorizations((values) => ({
-                              ...values,
-                              [apiDraft.activeProfileId]: event.target.value,
-                            }))
-                          }
-                          placeholder={
-                            activeApi?.hasAuthorization
-                              ? ui.generation.savedAuthorization
-                              : ui.generation.authorizationPlaceholder
-                          }
-                          autoComplete="new-password"
-                          disabled={busy}
-                        />
+                    <div className="api-profile-actions">
+                      <button type="button" disabled={busy} onClick={addApi}>
+                        {ui.generation.addProfile}
+                      </button>
+                      {activeApi && (
                         <button
                           type="button"
+                          className="danger-button"
                           disabled={busy}
-                          onClick={() => setShowApiToken((visible) => !visible)}
+                          onClick={deleteApi}
                         >
-                          {showApiToken
-                            ? ui.generation.hideToken
-                            : ui.generation.showToken}
+                          {ui.generation.deleteProfile}
                         </button>
-                      </span>
-                      {activeApi?.hasAuthorization && (
-                        <small className="credential-status">
-                          {ui.generation.tokenSaved}
-                        </small>
                       )}
-                      <small>{ui.generation.authorizationHint}</small>
-                    </label>
+                    </div>
+                    {activeApi ? (
+                      <>
+                        <label>
+                          {ui.generation.profileName}
+                          <input
+                            value={activeApi.name}
+                            required
+                            disabled={busy}
+                            onChange={(event) =>
+                              updateApi({ name: event.target.value })
+                            }
+                          />
+                        </label>
+                        <label>
+                          {ui.generation.baseUrl}
+                          <input
+                            autoFocus
+                            value={activeApi.baseUrl}
+                            onChange={(event) =>
+                              updateApi({ baseUrl: event.target.value })
+                            }
+                            placeholder="https://api.example.com"
+                            required
+                            disabled={busy}
+                          />
+                        </label>
+                        <label>
+                          {ui.generation.authorization}
+                          <span className="secret-input">
+                            <input
+                              type={showApiToken ? "text" : "password"}
+                              value={apiAuthorizations[activeApi.id] ?? ""}
+                              onChange={(event) =>
+                                setApiAuthorizations((values) => ({
+                                  ...values,
+                                  [activeApi.id]: event.target.value,
+                                }))
+                              }
+                              placeholder={
+                                activeApi.hasAuthorization
+                                  ? ui.generation.savedAuthorization
+                                  : ui.generation.authorizationPlaceholder
+                              }
+                              autoComplete="new-password"
+                              disabled={busy}
+                            />
+                            <button
+                              type="button"
+                              disabled={busy || !activeApiHasToken}
+                              onClick={toggleApiToken}
+                            >
+                              {showApiToken
+                                ? ui.generation.hideToken
+                                : ui.generation.showToken}
+                            </button>
+                          </span>
+                          {activeApi.hasAuthorization && activeApiHasToken && (
+                            <small className="credential-status">
+                              {ui.generation.tokenSaved}
+                            </small>
+                          )}
+                          <small>{ui.generation.authorizationHint}</small>
+                        </label>
+                      </>
+                    ) : (
+                      <p className="muted">{ui.generation.noProfiles}</p>
+                    )}
                   </>
                 ) : modal === "project" ||
                   modal === "open" ||

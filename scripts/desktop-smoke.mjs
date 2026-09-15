@@ -19,6 +19,7 @@ import assert from "node:assert/strict";
 const executable = resolve(
   process.env.DRAMACRAFT_TEST_EXE || "src-tauri/target/debug/drama-craft.exe",
 );
+const debugPort = Number(process.env.DRAMACRAFT_TEST_PORT || "19420");
 await access(executable);
 const testRoot = await mkdtemp(join(tmpdir(), "dramacraft-smoke-"));
 const voiceLibrary = join(testRoot, "测试声音库");
@@ -43,7 +44,7 @@ const app = spawn(executable, [], {
   windowsHide: true,
   env: {
     ...process.env,
-    WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: "--remote-debugging-port=19420",
+    WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${debugPort}`,
     WEBVIEW2_USER_DATA_FOLDER: profile,
   },
   stdio: "ignore",
@@ -53,7 +54,7 @@ let page;
 try {
   for (let attempt = 0; attempt < 60; attempt++) {
     try {
-      browser = await chromium.connectOverCDP("http://127.0.0.1:19420");
+      browser = await chromium.connectOverCDP(`http://127.0.0.1:${debugPort}`);
       break;
     } catch {
       await new Promise((r) => setTimeout(r, 500));
@@ -70,9 +71,7 @@ try {
   page.on("pageerror", (e) => errors.push(e.message));
   await expect(page.getByText("从文字，到每一个镜头。")).toBeVisible();
   await page.screenshot({ path: join(output, "desktop-home.png") });
-  await page
-    .getByRole("button", { name: "打开项目目录", exact: false })
-    .click();
+  await page.locator(".start-card", { hasText: "打开项目目录" }).click();
   await page.getByLabel("目录路径", { exact: false }).fill(legacyRoot);
   await page.getByRole("button", { name: "确认", exact: true }).click();
   await expect(
@@ -274,7 +273,7 @@ try {
   await expect(page.getByLabel("API 服务地址", { exact: true })).toHaveValue(
     "https://secondary.example.test",
   );
-  // Save only synthetic metadata; leave every existing credential untouched.
+  await tokenInput.fill("Token synthetic-saved-test");
   await page.getByRole("button", { name: "确认", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page
@@ -289,6 +288,22 @@ try {
   await expect(
     page.getByLabel("当前使用配置（保存后生效）").locator("option"),
   ).toHaveCount(initialProfiles + 1);
+  await expect(tokenInput).toHaveValue("");
+  await page.getByRole("button", { name: "显示", exact: true }).click();
+  await expect(tokenInput).toHaveValue("Token synthetic-saved-test");
+  await expect(tokenInput).toHaveAttribute("type", "text");
+  await page.getByRole("button", { name: "隐藏", exact: true }).click();
+  await page.getByRole("button", { name: "删除当前配置", exact: true }).click();
+  await expect(
+    page.getByLabel("当前使用配置（保存后生效）").locator("option"),
+  ).toHaveCount(initialProfiles);
+  await page.getByRole("button", { name: "确认", exact: true }).click();
+  await page
+    .getByRole("button", { name: "视频 API / Token", exact: true })
+    .click();
+  await expect(
+    page.getByLabel("当前使用配置（保存后生效）").locator("option"),
+  ).toHaveCount(initialProfiles);
   await page.screenshot({ path: join(output, "desktop-api-settings.png") });
   await page.getByRole("button", { name: "取消", exact: true }).click();
   await expect(firstCard().getByLabel("故事走向", { exact: true })).toHaveCount(
@@ -560,9 +575,7 @@ try {
   await page.getByRole("button", { name: "返回项目首页", exact: true }).click();
   await page.getByRole("button", { name: "放弃修改", exact: true }).click();
   await expect(page.getByText("从文字，到每一个镜头。")).toBeVisible();
-  await page
-    .getByRole("button", { name: "打开项目目录", exact: false })
-    .click();
+  await page.locator(".start-card", { hasText: "打开项目目录" }).click();
   await page.getByLabel("目录路径", { exact: false }).fill(testRoot);
   await page.getByRole("button", { name: "确认", exact: true }).click();
   await expect(

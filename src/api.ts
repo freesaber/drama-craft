@@ -57,6 +57,8 @@ export const api = {
     invoke<void>("set_preview_visible", { visible }),
   generationSettings: () =>
     invoke<GenerationSettings>("get_generation_settings"),
+  generationAuthorization: (profileId: string) =>
+    invoke<string>("get_generation_authorization", { profileId }),
   setGenerationSettings: (
     configuration: GenerationSettings,
     authorizations: Record<string, string>,

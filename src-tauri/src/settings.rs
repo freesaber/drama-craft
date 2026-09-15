@@ -36,6 +36,10 @@ impl Configuration {
         ) {
             return Err(AppError::new("config", "默认分辨率不在接口支持范围内"));
         }
+        if self.profiles.is_empty() {
+            self.active_profile_id.clear();
+            return Ok(self);
+        }
         let mut ids = HashSet::new();
         for profile in &mut self.profiles {
             if profile.id != "legacy" && uuid::Uuid::parse_str(&profile.id).is_err() {
@@ -95,6 +99,15 @@ mod tests {
         let mut duplicate = config();
         duplicate.profiles.push(duplicate.profiles[0].clone());
         assert!(duplicate.normalize().is_err());
+
+        let empty = Configuration {
+            profiles: Vec::new(),
+            active_profile_id: "deleted-profile".into(),
+            default_resolution: default_resolution(),
+        }
+        .normalize()
+        .unwrap();
+        assert_eq!(empty.active_profile_id, "");
     }
     #[test]
     fn rejects_credentials_in_portable_endpoint_metadata() {

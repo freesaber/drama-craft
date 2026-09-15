@@ -17,8 +17,6 @@ export const ui = {
 
     v1: "剧集格式 v1",
     noSummary: "尚未填写本集内容",
-    sourceNotes:
-      "客户端不提供剧集结构编辑；如需修改，请使用第三方编辑器或 Markdown 源码。其他原文内容已保留。",
     unsupported: "此剧集格式版本尚不支持，请使用源码模式。",
     duplicateRoles: "存在多个角色绑定表，未合并角色关系。",
     missingRoles: "v1 剧集须包含唯一的角色绑定表，表头必须遵循规范。",
@@ -126,7 +124,9 @@ export const ui = {
     profileName: "配置名称",
     defaultProfile: "默认 API",
     addProfile: "添加 API 配置",
-    savedAuthorization: "Token 已保存；留空保持不变",
+    deleteProfile: "删除当前配置",
+    noProfiles: "尚未添加 API 配置。",
+    savedAuthorization: "Token 已保存；点击显示查看",
     authorizationPlaceholder: "在这里填写 API Token",
     showToken: "显示",
     hideToken: "隐藏",
@@ -134,7 +134,7 @@ export const ui = {
     baseUrl: "API 服务地址",
     authorization: "API Token（Authorization 请求头）",
     authorizationHint:
-      "按服务文档填写 Authorization 请求头的完整值，程序不会自动添加 Bearer。密钥保存在 Windows 凭据管理器中，所有生成任务统一使用这里的配置。修改后清空可删除密钥。",
+      "按服务文档填写 Authorization 请求头的完整值，程序不会自动添加 Bearer。Token 保存在本机应用配置中，所有生成任务统一使用这里的配置。",
     settingsSaved: "视频 API 配置已保存",
     seed: "随机种子",
     randomSeed: "留空则随机",

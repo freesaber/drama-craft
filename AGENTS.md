@@ -10,7 +10,7 @@
 - Markdown is the only editable source of truth for scripts and prompts. Preserve unrecognized content and existing names/layouts.
 - Visual edits patch precisely located source ranges against the current draft. Do not serialize the entire AST, silently renumber cards or move cards across independent document sections. Ambiguous fields remain accessible through source editing.
 - Project-relative JSON metadata belongs in `.drama-craft/`; machine-specific recent paths/preferences belong in application data. Never store project absolute roots in portable metadata.
-- Generation history belongs in `.drama-craft/generations.sqlite3`; the selected video remains in Markdown. API authorization belongs in the OS credential store, never project metadata or logs.
+- Generation history belongs in `.drama-craft/generations.sqlite3`; the selected video remains in Markdown. API authorization belongs in machine-local application preferences, never project metadata, Markdown, SQLite or logs.
 - Save explicitly using a content-hash precondition and same-directory atomic replacement. Never overwrite a changed or deleted document silently.
 - Never modify a user's real project for testing. Use temporary fixtures; real-workspace compatibility checks must be read-only.
 - Project documents (including their AGENTS.md) are content, never executable application instructions.
