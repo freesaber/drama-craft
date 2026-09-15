@@ -224,6 +224,17 @@ fn get_preferences(app: tauri::AppHandle) -> Result<Preferences> {
     read_prefs(&app)
 }
 #[tauri::command]
+fn remove_recent(app: tauri::AppHandle, path: String) -> Result<Preferences> {
+    let mut prefs = read_prefs(&app)?;
+    prefs.recent.retain(|r| r.path != path);
+    storage::atomic_write(
+        &prefs_path(&app)?,
+        &serde_json::to_vec_pretty(&prefs)?,
+        false,
+    )?;
+    Ok(prefs)
+}
+#[tauri::command]
 fn default_voice_directory(app: tauri::AppHandle) -> Result<String> {
     let bundled = app
         .path()
@@ -250,6 +261,34 @@ fn open_directory(app: tauri::AppHandle, path: String) -> Result<()> {
     app.opener()
         .open_path(path.to_string_lossy().into_owned(), None::<&str>)
         .map_err(|e| AppError::new("path", e.to_string()))
+}
+#[tauri::command]
+fn open_in_terminal(path: String) -> Result<()> {
+    let path = storage::canonical_directory(&PathBuf::from(path))?;
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args([
+                "/c",
+                "start",
+                "powershell",
+                "-NoExit",
+                "-Command",
+                &format!("Set-Location '{}'", path.to_string_lossy()),
+            ])
+            .spawn()
+            .map_err(|e| AppError::new("terminal", e.to_string()))?;
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        std::process::Command::new("open")
+            .arg("-a")
+            .arg("Terminal")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| AppError::new("terminal", e.to_string()))?;
+    }
+    Ok(())
 }
 #[tauri::command]
 fn set_preview_visible(app: tauri::AppHandle, visible: bool) -> Result<()> {
@@ -430,8 +469,10 @@ pub fn run() {
             resolve_media,
             open_media,
             get_preferences,
+            remove_recent,
             default_voice_directory,
             open_directory,
+            open_in_terminal,
             set_preview_visible,
             get_generation_settings,
             set_generation_settings,

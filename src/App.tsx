@@ -341,14 +341,16 @@ export default function App() {
         await openReadyProject(parent.trim());
       } else if (modal === "project") {
         if (!parent || !name.trim() || !voiceDirectory.trim()) return;
-        await installProject(
-          await api.create(
-            parent,
-            name.trim(),
-            characterDirectory.trim() || undefined,
-            voiceDirectory.trim(),
-          ),
+        const created = await api.create(
+          parent,
+          name.trim(),
+          characterDirectory.trim() || undefined,
+          voiceDirectory.trim(),
         );
+        await api.close(created.handle);
+        await loadPreferences();
+        setModal(null);
+        setNotice(ui.projectCreated);
       } else if (modal === "libraries") {
         if (!pendingProject || !voiceDirectory.trim()) return;
         await installProject(
@@ -554,19 +556,80 @@ export default function App() {
             </div>
             {recent.length ? (
               recent.map((item) => (
-                <button
-                  className="recent-project"
-                  key={item.path}
-                  disabled={busy}
-                  onClick={() => void openPath(item.path)}
-                >
-                  <span className="project-icon">▤</span>
-                  <span>
-                    <strong>{item.name}</strong>
-                    <small>{item.path.replace(/^\\\\\?\\/, "")}</small>
+                <div className="recent-project" key={item.path}>
+                  <button
+                    className="recent-project-main"
+                    disabled={busy}
+                    onClick={() => void openPath(item.path)}
+                  >
+                    <span className="project-icon">▤</span>
+                    <span>
+                      <strong>{item.name}</strong>
+                      <small>{item.path.replace(/^\\\\\?\\/, "")}</small>
+                    </span>
+                  </button>
+                  <span className="recent-actions">
+                    <button
+                      title={ui.openInTerminal}
+                      disabled={busy}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void run(async () => {
+                          await api.openInTerminal(item.path);
+                        });
+                      }}
+                    >
+                      ⌨
+                    </button>
+                    <button
+                      title={ui.openInExplorer}
+                      disabled={busy}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void run(async () => {
+                          await api.openDirectory(item.path);
+                        });
+                      }}
+                    >
+                      📂
+                    </button>
+                    <button
+                      title={ui.copyPath}
+                      disabled={busy}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void navigator.clipboard
+                          .writeText(
+                            item.path.replace(/^\\\\\?\\/, ""),
+                          )
+                          .then(() => setNotice(ui.pathCopied));
+                      }}
+                    >
+                      📋
+                    </button>
+                    <button
+                      className="recent-remove-btn"
+                      title={ui.removeRecent}
+                      disabled={busy}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void run(async () => {
+                          const result = await api.removeRecent(item.path);
+                          setRecent(result.recent);
+                        });
+                      }}
+                    >
+                      ✕
+                    </button>
                   </span>
-                  <span className="recent-arrow">→</span>
-                </button>
+                  <button
+                    className="recent-open-btn"
+                    disabled={busy}
+                    onClick={() => void openPath(item.path)}
+                  >
+                    →
+                  </button>
+                </div>
               ))
             ) : (
               <div className="empty-recent">

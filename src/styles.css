@@ -1087,11 +1087,10 @@ select:focus {
 .recent-project {
   display: flex;
   align-items: center;
-  gap: 16px;
   width: 100%;
-  text-align: left;
   margin-top: 12px;
-  border-color: #e4e9df;
+  border: 1px solid #e4e9df;
+  border-radius: 10px;
   padding: 17px 18px;
   background: #fbfcf9;
 }
@@ -1107,7 +1106,7 @@ select:focus {
   color: #909a89;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 680px;
+  max-width: 580px;
   white-space: nowrap;
 }
 .project-icon {
@@ -1117,9 +1116,71 @@ select:focus {
   padding: 8px 11px;
   border-radius: 8px;
 }
-.recent-arrow {
-  margin-left: auto;
+.recent-project-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+}
+.recent-project-main:hover strong {
+  color: #3a6b42;
+}
+.recent-actions {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.recent-project:hover .recent-actions {
+  opacity: 1;
+}
+.recent-actions button {
+  padding: 5px 8px;
+  font-size: 14px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  color: #6c8560;
+  line-height: 1;
+}
+.recent-actions button:hover {
+  background: #e5ecdd;
+  border-color: #d0dac6;
+}
+.recent-remove-btn {
+  color: #b08070 !important;
+}
+.recent-remove-btn:hover {
+  background: #fceae6 !important;
+  border-color: #f0cfc8 !important;
+  color: #a34836 !important;
+}
+.recent-open-btn {
+  margin-left: 8px;
   color: #95a388;
+  background: transparent;
+  border: 0;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.recent-project:hover .recent-open-btn {
+  opacity: 1;
+}
+.recent-open-btn:hover {
+  color: #3a6b42;
+  background: #e5ecdd;
 }
 .roadmap-note {
   color: #9aa393;
