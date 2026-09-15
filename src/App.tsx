@@ -2,6 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { api, chooseDirectory, desktop, errorMessage } from "./api";
 import { isOverviewDocument, sortDocuments } from "./markdown";
+import {
+  filterAndSortProjects,
+  projectPage,
+  projectPageCount,
+} from "./projectList";
 import { ui } from "./i18n";
 import Storyboard from "./BoardView";
 import { applySourcePatch, fieldPatch, parseStoryboard } from "./storyboard";
@@ -24,6 +29,10 @@ export default function App() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [text, setText] = useState("");
   const [recent, setRecent] = useState<Recent[]>([]);
+  const [projectSearch, setProjectSearch] = useState("");
+  const [currentProjectPage, setCurrentProjectPage] = useState(1);
+  const [pendingRecentRemoval, setPendingRecentRemoval] =
+    useState<Recent | null>(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [error, setError] = useState("");
@@ -97,6 +106,18 @@ export default function App() {
   dirtyRef.current = dirty;
 
   const board = useMemo(() => parseStoryboard(text), [text]);
+  const filteredProjects = useMemo(
+    () => filterAndSortProjects(recent, projectSearch),
+    [recent, projectSearch],
+  );
+  const totalProjectPages = projectPageCount(filteredProjects.length);
+  const visibleProjects = useMemo(
+    () => projectPage(filteredProjects, currentProjectPage),
+    [filteredProjects, currentProjectPage],
+  );
+  useEffect(() => {
+    setCurrentProjectPage((page) => Math.min(page, totalProjectPages));
+  }, [totalProjectPages]);
   const textRef = useRef(text);
   textRef.current = text;
   const run = useCallback(async (action: () => Promise<void>) => {
@@ -554,8 +575,23 @@ export default function App() {
               <h2>{ui.recent}</h2>
               <span>{recent.length.toString().padStart(2, "0")}</span>
             </div>
-            {recent.length ? (
-              recent.map((item) => (
+            {recent.length > 0 && (
+              <div className="project-list-toolbar">
+                <input
+                  type="search"
+                  value={projectSearch}
+                  onChange={(event) => {
+                    setProjectSearch(event.target.value);
+                    setCurrentProjectPage(1);
+                  }}
+                  placeholder={ui.searchProjects}
+                  aria-label={ui.searchProjects}
+                />
+                <span>{ui.projectListResult(filteredProjects.length)}</span>
+              </div>
+            )}
+            {visibleProjects.length ? (
+              visibleProjects.map((item) => (
                 <div className="recent-project" key={item.path}>
                   <button
                     className="recent-project-main"
@@ -613,10 +649,7 @@ export default function App() {
                       disabled={busy}
                       onClick={(e) => {
                         e.stopPropagation();
-                        void run(async () => {
-                          const result = await api.removeRecent(item.path);
-                          setRecent(result.recent);
-                        });
+                        setPendingRecentRemoval(item);
                       }}
                     >
                       ✕
@@ -624,18 +657,45 @@ export default function App() {
                   </span>
                   <button
                     className="recent-open-btn"
+                    aria-label={ui.open}
+                    title={ui.open}
                     disabled={busy}
                     onClick={() => void openPath(item.path)}
                   >
-                    →
+                    <span aria-hidden="true">→</span>
                   </button>
                 </div>
               ))
             ) : (
               <div className="empty-recent">
                 <span>▤</span>
-                {ui.noRecent}
+                {recent.length ? ui.noProjectMatch : ui.noRecent}
               </div>
+            )}
+            {filteredProjects.length > 0 && (
+              <nav className="project-pagination" aria-label={ui.pagination}>
+                <button
+                  disabled={busy || currentProjectPage === 1}
+                  onClick={() =>
+                    setCurrentProjectPage((page) => Math.max(1, page - 1))
+                  }
+                >
+                  {ui.previousPage}
+                </button>
+                <span>
+                  {currentProjectPage} / {totalProjectPages}
+                </span>
+                <button
+                  disabled={busy || currentProjectPage === totalProjectPages}
+                  onClick={() =>
+                    setCurrentProjectPage((page) =>
+                      Math.min(totalProjectPages, page + 1),
+                    )
+                  }
+                >
+                  {ui.nextPage}
+                </button>
+              </nav>
             )}
           </section>
           <p className="roadmap-note">{ui.noGeneration}</p>
@@ -1114,6 +1174,48 @@ export default function App() {
                 {error}
               </p>
             )}
+          </section>
+        </div>
+      )}
+      {pendingRecentRemoval && (
+        <div className="modal-backdrop">
+          <section
+            className="modal confirmation-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="remove-recent-title"
+          >
+            <h2 id="remove-recent-title">{ui.removeRecent}</h2>
+            <p>{ui.removeConfirm}</p>
+            <div className="confirmation-target">
+              <strong>{pendingRecentRemoval.name}</strong>
+              <small>
+                {pendingRecentRemoval.path.replace(/^\\\\\?\\/, "")}
+              </small>
+            </div>
+            <div className="modal-actions">
+              <button
+                autoFocus
+                disabled={busy}
+                onClick={() => setPendingRecentRemoval(null)}
+              >
+                {ui.cancel}
+              </button>
+              <button
+                className="danger-button"
+                disabled={busy}
+                onClick={() => {
+                  const target = pendingRecentRemoval;
+                  void run(async () => {
+                    const result = await api.removeRecent(target.path);
+                    setRecent(result.recent);
+                    setPendingRecentRemoval(null);
+                  });
+                }}
+              >
+                {ui.removeConfirmAction}
+              </button>
+            </div>
           </section>
         </div>
       )}

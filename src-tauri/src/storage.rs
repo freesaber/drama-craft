@@ -332,6 +332,21 @@ fn validate_library(path: &Path, allowed: &[&str], label: &str) -> Result<PathBu
     }
     Ok(path)
 }
+
+pub(crate) fn regular_path(path: &Path) -> String {
+    let value = path.to_string_lossy();
+    #[cfg(windows)]
+    {
+        if let Some(rest) = value.strip_prefix(r"\\?\UNC\") {
+            return format!(r"\\{rest}");
+        }
+        if let Some(rest) = value.strip_prefix(r"\\?\") {
+            return rest.to_owned();
+        }
+    }
+    value.into_owned()
+}
+
 pub fn load_project(root: &Path) -> Result<(ProjectMeta, Option<String>)> {
     let (_, file) = metadata_paths(root)?;
     if file.exists() {
@@ -402,8 +417,8 @@ pub fn configure_project(
         })
         .transpose()?;
     let libraries = ProjectLibraries {
-        characters: characters.map(|path| path.to_string_lossy().into_owned()),
-        voices: voices.to_string_lossy().into_owned(),
+        characters: characters.as_deref().map(regular_path),
+        voices: regular_path(&voices),
     };
     let existing = if file.exists() {
         let metadata: ProjectMeta = serde_json::from_slice(&fs::read(&file)?)?;

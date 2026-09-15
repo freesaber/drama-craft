@@ -13,6 +13,19 @@ fn voice_library(parent: &Path) -> std::path::PathBuf {
     fs::write(path.join("旁白.wav"), b"synthetic-audio").unwrap();
     path
 }
+fn regular_path(path: &Path) -> String {
+    let value = path.to_string_lossy();
+    #[cfg(windows)]
+    {
+        if let Some(rest) = value.strip_prefix(r"\\?\UNC\") {
+            return format!(r"\\{rest}");
+        }
+        if let Some(rest) = value.strip_prefix(r"\\?\") {
+            return rest.to_owned();
+        }
+    }
+    value.into_owned()
+}
 
 #[test]
 fn preserves_custom_content_bom_crlf_and_rejects_conflicts() {
@@ -110,6 +123,22 @@ fn project_identity_moves_while_external_library_configuration_is_preserved() {
     );
 }
 #[test]
+fn new_project_metadata_uses_regular_library_paths() {
+    let temp = workspace();
+    let root = root(&temp);
+    let library_temp = workspace();
+    let voices = voice_library(library_temp.path());
+    let project = create_project(&root, "路径示例", None, &voices).unwrap();
+    let (metadata, _) = load_project(&project).unwrap();
+    assert_eq!(metadata.libraries.voices, regular_path(&voices));
+    #[cfg(windows)]
+    {
+        assert!(!metadata.libraries.voices.starts_with(r"\\?\"));
+        let json = fs::read_to_string(project.join(".drama-craft/project.json")).unwrap();
+        assert!(!json.contains(r"\\\\?\\"));
+    }
+}
+#[test]
 fn reads_assets_from_document_parent_and_external_paths() {
     let temp = workspace();
     let root = root(&temp);
@@ -196,9 +225,9 @@ fn legacy_project_requires_voice_setup_without_copying_or_editing_documents() {
     let metadata = configure_project(&project, Some(&characters), &voices).unwrap();
     assert_eq!(
         metadata.libraries.characters.as_deref(),
-        Some(characters.to_string_lossy().as_ref())
+        Some(regular_path(&characters).as_str())
     );
-    assert_eq!(metadata.libraries.voices, voices.to_string_lossy());
+    assert_eq!(metadata.libraries.voices, regular_path(&voices));
     assert!(!project.join(".drama-craft/libraries").exists());
     let json = fs::read_to_string(project.join(".drama-craft/project.json")).unwrap();
     assert!(json.contains("测试角色库"));

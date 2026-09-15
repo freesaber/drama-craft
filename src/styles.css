@@ -1069,6 +1069,26 @@ select:focus {
   font-size: 12px;
   font-family: monospace;
 }
+.project-list-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+.project-list-toolbar input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 1px solid #dce3d8;
+  border-radius: 7px;
+  background: #fff;
+  color: inherit;
+}
+.project-list-toolbar > span {
+  flex-shrink: 0;
+  color: #909b89;
+  font-size: 11px;
+}
 .empty-recent {
   margin-top: 16px;
   display: flex;
@@ -1135,11 +1155,6 @@ select:focus {
 .recent-actions {
   display: flex;
   gap: 2px;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-.recent-project:hover .recent-actions {
-  opacity: 1;
 }
 .recent-actions button {
   padding: 5px 8px;
@@ -1164,23 +1179,44 @@ select:focus {
   color: #a34836 !important;
 }
 .recent-open-btn {
+  display: grid;
+  place-items: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
   margin-left: 8px;
   color: #95a388;
   background: transparent;
   border: 0;
   font-size: 16px;
+  line-height: 1;
   cursor: pointer;
-  padding: 4px 6px;
+  padding: 0;
   border-radius: 6px;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-.recent-project:hover .recent-open-btn {
-  opacity: 1;
 }
 .recent-open-btn:hover {
   color: #3a6b42;
   background: #e5ecdd;
+}
+.recent-open-btn > span {
+  transform: translateY(-1px);
+}
+.project-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+.project-pagination button {
+  padding: 6px 11px;
+  font-size: 12px;
+}
+.project-pagination > span {
+  min-width: 48px;
+  color: #7f8d79;
+  font: 12px/1 monospace;
+  text-align: center;
 }
 .roadmap-note {
   color: #9aa393;
@@ -1657,6 +1693,39 @@ select:focus {
   font-size: 20px;
   margin: 0 0 24px;
   font-weight: 600;
+}
+.confirmation-modal {
+  width: 430px;
+}
+.confirmation-modal > p {
+  margin: 0;
+  color: #6e786b;
+  line-height: 1.7;
+}
+.confirmation-target {
+  margin-top: 18px;
+  padding: 13px 14px;
+  border: 1px solid #e1e6dc;
+  border-radius: 8px;
+  background: #f3f5f0;
+}
+.confirmation-target strong,
+.confirmation-target small {
+  display: block;
+}
+.confirmation-target small {
+  margin-top: 5px;
+  color: #899384;
+  overflow-wrap: anywhere;
+}
+.danger-button {
+  border-color: #e1bdb5;
+  background: #fff3f0;
+  color: #a34836;
+}
+.danger-button:hover:not(:disabled) {
+  border-color: #d9998c;
+  background: #fce5df;
 }
 .modal label {
   display: block;

@@ -2,7 +2,12 @@ pub mod generation;
 pub mod settings;
 pub mod storage;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fs, path::PathBuf, sync::Mutex};
+use std::{
+    collections::HashMap,
+    fs,
+    path::{Path, PathBuf},
+    sync::Mutex,
+};
 use storage::{AppError, Result};
 use tauri::{Manager, State};
 use tauri_plugin_opener::OpenerExt;
@@ -16,10 +21,13 @@ struct Opened {
     metadata: storage::ProjectMeta,
     warning: Option<String>,
 }
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct Recent {
     name: String,
     path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    updated_at: Option<String>,
 }
 #[derive(Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -46,6 +54,47 @@ fn read_prefs(app: &tauri::AppHandle) -> Result<Preferences> {
         return Ok(Preferences::default());
     }
     Ok(serde_json::from_slice(&fs::read(path)?)?)
+}
+fn upsert_recent(recent: &mut Vec<Recent>, name: String, path: String, updated_at: String) {
+    recent.retain(|item| item.path != path);
+    recent.insert(
+        0,
+        Recent {
+            name,
+            path,
+            updated_at: Some(updated_at),
+        },
+    );
+}
+fn touch_recent(app: &tauri::AppHandle, root: &Path, name: Option<&str>) -> Result<()> {
+    let mut prefs = read_prefs(app)?;
+    let path = root.to_string_lossy().into_owned();
+    let name = name
+        .map(str::to_owned)
+        .or_else(|| {
+            prefs
+                .recent
+                .iter()
+                .find(|item| item.path == path)
+                .map(|item| item.name.clone())
+        })
+        .unwrap_or_else(|| {
+            root.file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned()
+        });
+    upsert_recent(
+        &mut prefs.recent,
+        name,
+        path,
+        chrono::Utc::now().to_rfc3339(),
+    );
+    storage::atomic_write(
+        &prefs_path(app)?,
+        &serde_json::to_vec_pretty(&prefs)?,
+        false,
+    )
 }
 fn with_root<T>(
     state: &State<Sessions>,
@@ -101,24 +150,7 @@ fn open_project(
         .lock()
         .map_err(|_| AppError::new("session", "项目会话不可用"))?
         .insert(handle.clone(), root.clone());
-    let save_recent = || -> Result<()> {
-        let mut prefs = read_prefs(&app)?;
-        let path = root.to_string_lossy().into_owned();
-        prefs.recent.retain(|r| r.path != path);
-        prefs.recent.insert(
-            0,
-            Recent {
-                name: metadata.name.clone(),
-                path,
-            },
-        );
-        prefs.recent.truncate(12);
-        storage::atomic_write(
-            &prefs_path(&app)?,
-            &serde_json::to_vec_pretty(&prefs)?,
-            false,
-        )
-    };
+    let save_recent = || -> Result<()> { touch_recent(&app, &root, Some(&metadata.name)) };
     if let Err(e) = save_recent() {
         warning = Some(format!(
             "{} 最近项目保存失败：{}",
@@ -173,15 +205,17 @@ fn read_document(
 }
 #[tauri::command]
 fn save_document(
+    app: tauri::AppHandle,
     state: State<Sessions>,
     handle: String,
     path: String,
     text: String,
     expected_hash: String,
 ) -> Result<storage::Snapshot> {
-    with_root(&state, &handle, |root| {
-        storage::save_document(root, &path, &text, &expected_hash)
-    })
+    let root = root_for(&state, &handle)?;
+    let snapshot = storage::save_document(&root, &path, &text, &expected_hash)?;
+    let _ = touch_recent(&app, &root, None);
+    Ok(snapshot)
 }
 #[tauri::command]
 fn resolve_media(
@@ -252,8 +286,8 @@ fn default_voice_directory(app: tauri::AppHandle) -> Result<String> {
             "内置声音资源目录缺失，请重新安装客户端",
         ));
     };
-    let path = fs::canonicalize(path)?.to_string_lossy().into_owned();
-    Ok(path.strip_prefix(r"\\?\").unwrap_or(&path).to_owned())
+    let path = fs::canonicalize(path)?;
+    Ok(storage::regular_path(&path))
 }
 #[tauri::command]
 fn open_directory(app: tauri::AppHandle, path: String) -> Result<()> {
@@ -262,20 +296,19 @@ fn open_directory(app: tauri::AppHandle, path: String) -> Result<()> {
         .open_path(path.to_string_lossy().into_owned(), None::<&str>)
         .map_err(|e| AppError::new("path", e.to_string()))
 }
+#[cfg(target_os = "windows")]
+fn terminal_directory(path: &Path) -> PathBuf {
+    PathBuf::from(storage::regular_path(path))
+}
 #[tauri::command]
 fn open_in_terminal(path: String) -> Result<()> {
     let path = storage::canonical_directory(&PathBuf::from(path))?;
     #[cfg(target_os = "windows")]
     {
+        let directory = terminal_directory(&path);
         std::process::Command::new("cmd")
-            .args([
-                "/c",
-                "start",
-                "powershell",
-                "-NoExit",
-                "-Command",
-                &format!("Set-Location '{}'", path.to_string_lossy()),
-            ])
+            .current_dir(directory)
+            .args(["/c", "start", "", "powershell", "-NoExit"])
             .spawn()
             .map_err(|e| AppError::new("terminal", e.to_string()))?;
     }
@@ -289,6 +322,60 @@ fn open_in_terminal(path: String) -> Result<()> {
             .map_err(|e| AppError::new("terminal", e.to_string()))?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn terminal_directory_uses_a_regular_windows_path() {
+        assert_eq!(
+            terminal_directory(Path::new(r"\\?\F:\漫剧测试\test")),
+            PathBuf::from(r"F:\漫剧测试\test")
+        );
+    }
+
+    #[test]
+    fn project_activity_moves_an_existing_project_to_the_front() {
+        let mut items = (0..12)
+            .map(|index| Recent {
+                name: format!("项目{index}"),
+                path: format!(r"F:\项目\{index}"),
+                updated_at: None,
+            })
+            .collect::<Vec<_>>();
+
+        upsert_recent(
+            &mut items,
+            "项目5".into(),
+            r"F:\项目\5".into(),
+            "2026-09-15T09:00:00Z".into(),
+        );
+
+        assert_eq!(items.len(), 12);
+        assert_eq!(items[0].name, "项目5");
+        assert_eq!(items[0].updated_at.as_deref(), Some("2026-09-15T09:00:00Z"));
+
+        upsert_recent(
+            &mut items,
+            "项目12".into(),
+            r"F:\项目\12".into(),
+            "2026-09-15T10:00:00Z".into(),
+        );
+        assert_eq!(items.len(), 13);
+        assert_eq!(items[0].name, "项目12");
+    }
+
+    #[test]
+    fn legacy_project_list_without_timestamps_still_deserializes() {
+        let prefs: Preferences =
+            serde_json::from_str(r#"{"recent":[{"name":"旧项目","path":"F:\\\\旧项目"}]}"#)
+                .unwrap();
+        assert_eq!(prefs.recent.len(), 1);
+        assert_eq!(prefs.recent[0].updated_at, None);
+    }
 }
 #[tauri::command]
 fn set_preview_visible(app: tauri::AppHandle, visible: bool) -> Result<()> {
