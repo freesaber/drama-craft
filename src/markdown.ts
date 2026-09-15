@@ -15,6 +15,10 @@ export function plain(node: Node): string {
     return (node.children as PhrasingContent[]).map(plain).join("");
   return "";
 }
+/** Match section titles like 故事走向, allowing a trailing fullwidth/halfwidth colon. */
+export function matchSectionHeading(text: string, name: string): boolean {
+  return text.trim().replace(/[：:]\s*$/, "") === name;
+}
 /** Only root-level, standalone markers are eligible. Never inspect code/table children. */
 export function findShots(
   text: string,

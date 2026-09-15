@@ -1,6 +1,6 @@
 import type { Nodes, Root, Table, TableCell } from "mdast";
 import { visit } from "unist-util-visit";
-import { normalizeReference, plain } from "./markdown";
+import { normalizeReference, plain, matchSectionHeading } from "./markdown";
 import type { CharacterData, EpisodeData, Shot } from "./types";
 import { ui } from "./i18n";
 import { ROLE_COLUMNS, ASSET_COLUMNS, DIALOGUE_COLUMNS } from "./episodeFormat";
@@ -235,7 +235,10 @@ export function parseEpisode(
         if (role.shots.includes(shot.id) !== cast.includes(role.id))
           data.diagnostics.push(ui.episodeData.castMismatch(shot.id, role.id));
       const stories = nodes.filter(
-        (n) => n.type === "heading" && n.depth === 3 && plain(n) === "故事走向",
+        (n) =>
+          n.type === "heading" &&
+          n.depth === 3 &&
+          matchSectionHeading(plain(n), "故事走向"),
       );
       if (stories.length !== 1)
         data.diagnostics.push(ui.episodeData.missingStory(shot.id));

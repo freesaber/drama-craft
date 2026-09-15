@@ -1,6 +1,6 @@
 import type { Root, RootContent, Node } from "mdast";
 import { visit } from "unist-util-visit";
-import { findShots, normalizeReference, parser, plain } from "./markdown";
+import { findShots, matchSectionHeading, normalizeReference, parser, plain } from "./markdown";
 import type {
   BoardField,
   ShotCard,
@@ -86,7 +86,9 @@ export function parseStoryboard(source: string): Storyboard {
             insertion: { offset: shot.end, before: eol + eol + before, after },
           };
     const sectionNodes = (name: string) =>
-      nodes.filter((n) => n.type === "heading" && plain(n) === name);
+      nodes.filter(
+        (n) => n.type === "heading" && matchSectionHeading(plain(n), name),
+      );
     const sections = (name: string): RootContent[][] =>
       sectionNodes(name).map((header) => {
         const index = nodes.indexOf(header);
