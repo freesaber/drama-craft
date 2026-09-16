@@ -1,7 +1,10 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type {
+  BatchAdvanceResult,
+  BatchJob,
   Candidate,
+  CreateBatchJobInput,
   DocumentEntry,
   GenerationInput,
   GenerationRecord,
@@ -103,6 +106,20 @@ export const api = {
       shotId,
       slot,
     }),
+  createBatchJob: (handle: string, input: CreateBatchJobInput) =>
+    invoke<BatchJob>("create_batch_job", { handle, input }),
+  listBatchJobs: (handle: string) =>
+    invoke<BatchJob[]>("list_batch_jobs", { handle }),
+  getBatchJob: (handle: string, jobId: string) =>
+    invoke<BatchJob>("get_batch_job", { handle, jobId }),
+  cancelBatchJob: (handle: string, jobId: string) =>
+    invoke<BatchJob>("cancel_batch_job", { handle, jobId }),
+  cancelBatchJobItem: (handle: string, itemId: string) =>
+    invoke<BatchJob>("cancel_batch_job_item", { handle, itemId }),
+  syncBatchJobs: (handle: string) =>
+    invoke<BatchJob[]>("sync_batch_jobs", { handle }),
+  advanceBatchJobs: (handle: string) =>
+    invoke<BatchAdvanceResult>("advance_batch_jobs", { handle }),
 };
 export async function chooseDirectory(): Promise<string | null> {
   if (!desktop) return null;

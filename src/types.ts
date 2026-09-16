@@ -70,6 +70,62 @@ export interface GenerationRecord {
   createdAt: string;
   updatedAt: string;
 }
+export type BatchJobType = "generation" | "merge";
+export interface BatchJobItemInput {
+  shotId: string;
+  shotTitle: string;
+  prompt: string;
+  duration: number;
+  resolution: string;
+  seed: number | null;
+  imageRefs: string[];
+  audioRefs: string[];
+}
+export interface CreateBatchJobInput {
+  jobType: BatchJobType;
+  name: string;
+  document: string;
+  delayHours: number;
+  items: BatchJobItemInput[];
+}
+export interface BatchJobItem {
+  itemId: string;
+  jobId: string;
+  shotId: string;
+  shotTitle: string;
+  status: string;
+  prompt: string;
+  duration: number;
+  resolution: string;
+  seed: number | null;
+  imageRefs: string[];
+  audioRefs: string[];
+  generationTaskId: string | null;
+  localFile: string | null;
+  error: string | null;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface BatchJob {
+  jobId: string;
+  jobType: BatchJobType | string;
+  name: string;
+  document: string;
+  status: string;
+  scheduledAt: string;
+  createdAt: string;
+  updatedAt: string;
+  itemTotal: number;
+  itemCompleted: number;
+  itemCancelled: number;
+  itemFailed: number;
+  items: BatchJobItem[];
+}
+export interface BatchAdvanceResult {
+  submitted: BatchJobItem | null;
+  jobs: BatchJob[];
+}
 export interface Shot {
   id: string;
   title: string;

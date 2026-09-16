@@ -50,7 +50,7 @@ pub struct GenerationRecord {
     pub updated_at: String,
 }
 
-fn database(root: &Path) -> Result<Connection> {
+pub(crate) fn open_database(root: &Path) -> Result<Connection> {
     let dir = root.join(".drama-craft");
     fs::create_dir_all(&dir)?;
     let connection = Connection::open(dir.join(DATABASE_NAME))
@@ -79,10 +79,47 @@ fn database(root: &Path) -> Result<Connection> {
                ON generations(document, shot_id, created_at DESC);
              CREATE TABLE IF NOT EXISTS generation_providers (
                task_id TEXT PRIMARY KEY, profile_id TEXT NOT NULL, base_url TEXT NOT NULL
-             );",
+             );
+             CREATE TABLE IF NOT EXISTS batch_jobs (
+               job_id TEXT PRIMARY KEY,
+               job_type TEXT NOT NULL,
+               name TEXT NOT NULL,
+               document TEXT NOT NULL,
+               status TEXT NOT NULL,
+               scheduled_at TEXT NOT NULL,
+               created_at TEXT NOT NULL,
+               updated_at TEXT NOT NULL
+             );
+             CREATE INDEX IF NOT EXISTS batch_jobs_updated
+               ON batch_jobs(updated_at DESC);
+             CREATE TABLE IF NOT EXISTS batch_job_items (
+               item_id TEXT PRIMARY KEY,
+               job_id TEXT NOT NULL,
+               shot_id TEXT NOT NULL,
+               shot_title TEXT NOT NULL,
+               status TEXT NOT NULL,
+               prompt TEXT NOT NULL,
+               duration INTEGER NOT NULL,
+               resolution TEXT NOT NULL,
+               seed INTEGER,
+               image_refs TEXT NOT NULL,
+               audio_refs TEXT NOT NULL,
+               generation_task_id TEXT,
+               local_file TEXT,
+               error TEXT,
+               sort_order INTEGER NOT NULL,
+               created_at TEXT NOT NULL,
+               updated_at TEXT NOT NULL
+             );
+             CREATE INDEX IF NOT EXISTS batch_job_items_job
+               ON batch_job_items(job_id, sort_order);",
         )
         .map_err(|e| AppError::new("database", e.to_string()))?;
     Ok(connection)
+}
+
+fn database(root: &Path) -> Result<Connection> {
+    open_database(root)
 }
 
 fn row(row: &rusqlite::Row<'_>) -> rusqlite::Result<GenerationRecord> {

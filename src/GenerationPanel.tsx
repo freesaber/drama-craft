@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { api, errorMessage } from "./api";
+import {
+  mediaKind,
+  shotAudioInputs,
+  shotImageInputs,
+  type InputAsset,
+} from "./generationInputs";
 import { Asset } from "./Preview";
 import { ui } from "./i18n";
 import type {
@@ -10,25 +16,6 @@ import type {
   Project,
   ShotCard,
 } from "./types";
-
-type InputAsset = { reference: string; label: string };
-
-function mediaKind(reference: string): "image" | "audio" | "video" | null {
-  const clean = reference.split(/[?#]/)[0].toLowerCase();
-  if (/\.(png|jpe?g|webp)$/.test(clean)) return "image";
-  if (/\.(mp3|wav|flac)$/.test(clean)) return "audio";
-  if (/\.mp4$/.test(clean)) return "video";
-  return null;
-}
-
-function unique(items: InputAsset[]) {
-  const seen = new Set<string>();
-  return items.filter((item) => {
-    if (!item.reference || seen.has(item.reference)) return false;
-    seen.add(item.reference);
-    return true;
-  });
-}
 
 function Thumbnail({
   project,
@@ -119,61 +106,14 @@ export default function GenerationPanel({
   const [preview, setPreview] = useState<InputAsset | null>(null);
   const applied = useRef(new Set<string>());
 
-  const imageInputs = useMemo(() => {
-    if (card.videoInputs.length)
-      return card.videoInputs
-        .filter((item) => item.kind === "image")
-        .map((item) => ({
-          reference: item.reference,
-          label:
-            /Picture\s*\d+/i.exec(item.tag)?.[0]?.replace(/\s+/g, " ") ??
-            item.param,
-        }));
-    const cast = new Set(episode.castByShot[card.id] ?? []);
-    const items: InputAsset[] = [];
-    const frame = card.fields.frameFile.value.trim();
-    if (frame) items.push({ reference: frame, label: "首帧" });
-    for (const role of episode.characters)
-      if (cast.has(role.id) && role.image)
-        items.push({ reference: role.image, label: role.name });
-    for (const asset of episode.assets)
-      if (
-        asset.reference &&
-        asset.shots.includes(card.id) &&
-        mediaKind(asset.reference) === "image"
-      )
-        items.push({ reference: asset.reference, label: asset.name });
-    for (const entry of card.references)
-      if (mediaKind(entry.reference) === "image")
-        items.push({
-          reference: entry.reference,
-          label: "素材",
-        });
-    return unique(items).slice(0, 9);
-  }, [card, episode]);
-  const audioInputs = useMemo(() => {
-    if (card.videoInputs.length)
-      return card.videoInputs
-        .filter((item) => item.kind === "audio")
-        .map((item) => ({
-          reference: item.reference,
-          label:
-            /Audio\s*\d+/i.exec(item.tag)?.[0]?.replace(/\s+/g, " ") ??
-            item.param,
-        }));
-    const cast = new Set(episode.castByShot[card.id] ?? []);
-    const items: InputAsset[] = [];
-    for (const role of episode.characters)
-      if (cast.has(role.id) && role.voice)
-        items.push({ reference: role.voice, label: role.name });
-    for (const entry of card.references)
-      if (mediaKind(entry.reference) === "audio")
-        items.push({
-          reference: entry.reference,
-          label: "声音",
-        });
-    return unique(items).slice(0, 3);
-  }, [card, episode]);
+  const imageInputs = useMemo(
+    () => shotImageInputs(card, episode),
+    [card, episode],
+  );
+  const audioInputs = useMemo(
+    () => shotAudioInputs(card, episode),
+    [card, episode],
+  );
 
   const loadHistory = async () => {
     const records = await api.generationHistory(

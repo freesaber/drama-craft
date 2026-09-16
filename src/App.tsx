@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { api, chooseDirectory, desktop, errorMessage } from "./api";
+import BatchGenerateDialog from "./BatchGenerateDialog";
 import { isOverviewDocument, sortDocuments } from "./markdown";
 import {
   filterAndSortProjects,
@@ -9,9 +10,11 @@ import {
 } from "./projectList";
 import { ui } from "./i18n";
 import Storyboard from "./BoardView";
+import TaskListView from "./TaskListView";
 import { applySourcePatch, fieldPatch, parseStoryboard } from "./storyboard";
 import { useUnsavedChanges } from "./useUnsavedChanges";
 import type {
+  BatchJob,
   Candidate,
   DocumentEntry,
   GenerationSettings,
@@ -39,6 +42,12 @@ export default function App() {
   const [notice, setNotice] = useState("");
   const [conflict, setConflict] = useState(false);
   const [mode, setMode] = useState<"board" | "source">("board");
+  const [workspaceView, setWorkspaceView] = useState<"storyboard" | "tasks">(
+    "storyboard",
+  );
+  const [batchJobs, setBatchJobs] = useState<BatchJob[]>([]);
+  const [showBatchDialog, setShowBatchDialog] = useState(false);
+  const appliedBatchItems = useRef(new Set<string>());
   const [activeShot, setActiveShot] = useState(0);
   const pendingJump = useRef<number | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -151,6 +160,10 @@ export default function App() {
   }, [totalProjectPages]);
   const textRef = useRef(text);
   textRef.current = text;
+  const pathRef = useRef(path);
+  pathRef.current = path;
+  const snapshotRef = useRef(snapshot);
+  snapshotRef.current = snapshot;
   const run = useCallback(async (action: () => Promise<void>) => {
     if (busyRef.current) return;
     busyRef.current = true;
@@ -203,6 +216,9 @@ export default function App() {
     if (project) await api.close(project.handle);
     setProject(next);
     setMode("board");
+    setWorkspaceView("storyboard");
+    setBatchJobs([]);
+    appliedBatchItems.current.clear();
     setActiveShot(0);
     setPath("");
     setSnapshot(null);
@@ -365,6 +381,10 @@ export default function App() {
       setDocuments([]);
       setNotice("");
       setConflict(false);
+      setWorkspaceView("storyboard");
+      setBatchJobs([]);
+      appliedBatchItems.current.clear();
+      setShowBatchDialog(false);
     });
   const reload = () =>
     run(async () => {
@@ -538,6 +558,98 @@ export default function App() {
       setBusy(false);
     }
   };
+  const applyBatchVideo = useCallback(
+    async (documentPath: string, shotId: string, reference: string) => {
+      if (!project) return;
+      const currentSnapshot = snapshotRef.current;
+      const currentPath = pathRef.current;
+      if (!currentSnapshot || currentSnapshot.readonly || documentPath !== currentPath)
+        return;
+      if (busyRef.current) return;
+      const current = parseStoryboard(textRef.current);
+      const card = current.cards.find((item) => item.id === shotId);
+      if (!card) return;
+      if (card.fields.videoFile.value === reference) return;
+      busyRef.current = true;
+      setBusy(true);
+      try {
+        const nextText = applySourcePatch(
+          textRef.current,
+          fieldPatch(current, card.fields.videoFile, reference),
+        );
+        textRef.current = nextText;
+        setText(nextText);
+        const saved = await api.save(
+          project.handle,
+          currentPath,
+          nextText,
+          currentSnapshot.hash,
+        );
+        replaceDocument(currentPath, saved);
+        setRefreshKey((key) => key + 1);
+        setNotice(ui.batch.applyVideo);
+      } catch (e) {
+        if (e && typeof e === "object" && "code" in e && e.code === "conflict")
+          setConflict(true);
+        setError(errorMessage(e));
+      } finally {
+        busyRef.current = false;
+        setBusy(false);
+      }
+    },
+    [project],
+  );
+  const refreshBatchJobs = useCallback(async () => {
+    if (!project) return;
+    const jobs = await api.syncBatchJobs(project.handle);
+    setBatchJobs(jobs);
+  }, [project]);
+  useEffect(() => {
+    if (!project) return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const synced = await api.syncBatchJobs(project.handle);
+        for (const job of synced) {
+          for (const item of job.items) {
+            if (
+              !item.generationTaskId ||
+              !["submitted", "running"].includes(item.status)
+            )
+              continue;
+            try {
+              await api.pollGeneration(project.handle, item.generationTaskId);
+            } catch {
+              /* keep polling later */
+            }
+          }
+        }
+        const advanced = await api.advanceBatchJobs(project.handle);
+        if (cancelled) return;
+        setBatchJobs(advanced.jobs);
+        for (const job of advanced.jobs) {
+          for (const item of job.items) {
+            if (
+              item.status !== "completed" ||
+              !item.localFile ||
+              appliedBatchItems.current.has(item.itemId)
+            )
+              continue;
+            appliedBatchItems.current.add(item.itemId);
+            await applyBatchVideo(job.document, item.shotId, item.localFile);
+          }
+        }
+      } catch {
+        /* batch runner is best-effort while the project stays open */
+      }
+    };
+    void tick();
+    const timer = window.setInterval(() => void tick(), 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [project, applyBatchVideo]);
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -760,6 +872,15 @@ export default function App() {
             <button disabled={busy} onClick={configureGeneration}>
               {ui.generation.apiSettings}
             </button>
+            <button
+              disabled={busy}
+              onClick={() => {
+                setWorkspaceView("tasks");
+                void refreshBatchJobs().catch((e) => setError(errorMessage(e)));
+              }}
+            >
+              {ui.batch.tasks}
+            </button>
           </div>
           {conflict && (
             <div className="banner conflict" role="alert">
@@ -769,6 +890,16 @@ export default function App() {
               </button>
             </div>
           )}
+          {workspaceView === "tasks" ? (
+            <TaskListView
+              project={project}
+              jobs={batchJobs}
+              busy={busy}
+              onBack={() => setWorkspaceView("storyboard")}
+              onRefresh={refreshBatchJobs}
+              onJobsChange={setBatchJobs}
+            />
+          ) : (
           <main className="workspace storyboard-workspace">
             <aside className="sidebar">
               <div className="sidebar-heading">
@@ -869,6 +1000,18 @@ export default function App() {
                   >
                     {busy ? ui.busy : ui.save}
                   </button>
+                  <button
+                    type="button"
+                    disabled={
+                      busy ||
+                      !board.cards.length ||
+                      isOverviewDocument(path) ||
+                      snapshot?.readonly
+                    }
+                    onClick={() => setShowBatchDialog(true)}
+                  >
+                    {ui.batch.generate}
+                  </button>
                 </div>
               </div>
               {snapshot && mode === "source" ? (
@@ -920,7 +1063,21 @@ export default function App() {
               </div>
             </section>
           </main>
+          )}
         </>
+      )}
+      {showBatchDialog && project && snapshot && (
+        <BatchGenerateDialog
+          project={project}
+          document={path}
+          board={board}
+          busy={busy}
+          onClose={() => setShowBatchDialog(false)}
+          onCreated={(message) => {
+            setNotice(message);
+            void refreshBatchJobs().catch((e) => setError(errorMessage(e)));
+          }}
+        />
       )}
       {(modal || candidates) && (
         <div className="modal-backdrop">

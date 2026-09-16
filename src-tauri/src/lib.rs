@@ -1,3 +1,4 @@
+pub mod batch;
 pub mod generation;
 pub mod settings;
 pub mod storage;
@@ -622,6 +623,55 @@ fn import_generation_media(
         generation::import_media(root, &document, &source, &shot_id, &slot)
     })
 }
+#[tauri::command]
+fn create_batch_job(
+    state: State<Sessions>,
+    handle: String,
+    input: batch::CreateBatchJobInput,
+) -> Result<batch::BatchJob> {
+    with_root(&state, &handle, |root| batch::create_job(root, input))
+}
+#[tauri::command]
+fn list_batch_jobs(state: State<Sessions>, handle: String) -> Result<Vec<batch::BatchJob>> {
+    with_root(&state, &handle, batch::list_jobs)
+}
+#[tauri::command]
+fn get_batch_job(
+    state: State<Sessions>,
+    handle: String,
+    job_id: String,
+) -> Result<batch::BatchJob> {
+    with_root(&state, &handle, |root| batch::get_job(root, &job_id))
+}
+#[tauri::command]
+fn cancel_batch_job(
+    state: State<Sessions>,
+    handle: String,
+    job_id: String,
+) -> Result<batch::BatchJob> {
+    with_root(&state, &handle, |root| batch::cancel_job(root, &job_id))
+}
+#[tauri::command]
+fn cancel_batch_job_item(
+    state: State<Sessions>,
+    handle: String,
+    item_id: String,
+) -> Result<batch::BatchJob> {
+    with_root(&state, &handle, |root| batch::cancel_item(root, &item_id))
+}
+#[tauri::command]
+fn sync_batch_jobs(state: State<Sessions>, handle: String) -> Result<Vec<batch::BatchJob>> {
+    with_root(&state, &handle, batch::sync_jobs)
+}
+#[tauri::command]
+async fn advance_batch_jobs(
+    app: tauri::AppHandle,
+    state: State<'_, Sessions>,
+    handle: String,
+) -> Result<batch::BatchAdvanceResult> {
+    let root = root_for(&state, &handle)?;
+    batch::advance(&root, &generation_settings(&app, None)?).await
+}
 
 pub fn run() {
     tauri::Builder::default()
@@ -651,7 +701,14 @@ pub fn run() {
             submit_generation,
             poll_generation,
             generation_history,
-            import_generation_media
+            import_generation_media,
+            create_batch_job,
+            list_batch_jobs,
+            get_batch_job,
+            cancel_batch_job,
+            cancel_batch_job_item,
+            sync_batch_jobs,
+            advance_batch_jobs
         ])
         .run(tauri::generate_context!())
         .expect("Unable to start DramaCraft");
