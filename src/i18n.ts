@@ -20,8 +20,8 @@ export const ui = {
     promptCopied: "已复制",
     uploadImage: "上传",
     replaceImage: "替换",
-    mediaPlaced: "图片已放入项目目录",
-    mediaPlaceHint: "选择生成好的图片，保存为文档中的文件名",
+    mediaPlaced: "已按文档中的文件名保存",
+    mediaPlaceHint: "选择生成好的图片，保存为文档中的文件名（替换时覆盖原文件，不改名）",
 
     v1: "剧集格式 v1",
     noSummary: "尚未填写本集内容",

@@ -13,6 +13,22 @@ fn voice_library(parent: &Path) -> std::path::PathBuf {
     fs::write(path.join("旁白.wav"), b"synthetic-audio").unwrap();
     path
 }
+fn visible_png_names(dir: &Path) -> Vec<String> {
+    let mut names: Vec<String> = fs::read_dir(dir)
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if name.starts_with('.') || !name.to_ascii_lowercase().ends_with(".png") {
+                None
+            } else {
+                Some(name)
+            }
+        })
+        .collect();
+    names.sort();
+    names
+}
 fn regular_path(path: &Path) -> String {
     let value = path.to_string_lossy();
     #[cfg(windows)]
@@ -109,7 +125,7 @@ fn project_identity_moves_while_external_library_configuration_is_preserved() {
     create_document(&project, "assets/补充.md", "unknown sections\n").unwrap();
     let metadata = fs::read(project.join(".drama-craft/project.json")).unwrap();
     assert!(String::from_utf8_lossy(&metadata).contains("测试声音库"));
-    assert_eq!(scan(&project).unwrap().documents.len(), 3);
+    assert_eq!(scan(&project).unwrap().documents.len(), 4);
     assert_eq!(
         metadata,
         fs::read(project.join(".drama-craft/project.json")).unwrap()
@@ -173,28 +189,46 @@ fn places_episode_images_with_markdown_filenames() {
     fs::create_dir_all(&source_dir).unwrap();
     let source = source_dir.join("generated.png");
     fs::write(&source, b"generated-image").unwrap();
-    let placed =
-        place_document_media(&root, "01 示例.md", "01 素材_旅人.png", &source.to_string_lossy())
-            .unwrap();
+    let placed = place_document_media(
+        &root,
+        "01 示例.md",
+        "01 素材_旅人.png",
+        &source.to_string_lossy(),
+    )
+    .unwrap();
     assert!(placed.exists);
     assert_eq!(
         fs::read(root.join("01 素材_旅人.png")).unwrap(),
         b"generated-image"
     );
     fs::write(&source, b"replaced-image").unwrap();
-    place_document_media(&root, "01 示例.md", "01 素材_旅人.png", &source.to_string_lossy())
-        .unwrap();
+    place_document_media(
+        &root,
+        "01 示例.md",
+        "01 素材_旅人.png",
+        &source.to_string_lossy(),
+    )
+    .unwrap();
     assert_eq!(
         fs::read(root.join("01 素材_旅人.png")).unwrap(),
         b"replaced-image"
     );
+    assert_eq!(
+        visible_png_names(&root),
+        vec!["01 素材_旅人.png".to_string()]
+    );
     let jpg = source_dir.join("generated.jpg");
     fs::write(&jpg, b"jpg").unwrap();
     assert_eq!(
-        place_document_media(&root, "01 示例.md", "01 素材_旅人.png", &jpg.to_string_lossy())
-            .err()
-            .unwrap()
-            .code,
+        place_document_media(
+            &root,
+            "01 示例.md",
+            "01 素材_旅人.png",
+            &jpg.to_string_lossy()
+        )
+        .err()
+        .unwrap()
+        .code,
         "media"
     );
     assert!(place_document_media(
@@ -204,6 +238,36 @@ fn places_episode_images_with_markdown_filenames() {
         &source.to_string_lossy()
     )
     .is_err());
+}
+#[test]
+fn replaces_open_first_frame_without_renaming() {
+    let temp = workspace();
+    let root = root(&temp);
+    create_document(&root, "01 示例.md", "# 示例").unwrap();
+    let dest = root.join("01 首帧_S007.png");
+    fs::write(&dest, b"old-frame").unwrap();
+    let source_dir = temp.path().join("imports");
+    fs::create_dir_all(&source_dir).unwrap();
+    let source = source_dir.join("latest.png");
+    fs::write(&source, b"new-frame").unwrap();
+    let _held = fs::File::open(&dest).unwrap();
+    place_document_media(
+        &root,
+        "01 示例.md",
+        "01 首帧_S007.png",
+        &source.to_string_lossy(),
+    )
+    .expect("replacing a displayed first-frame image should succeed");
+    assert_eq!(fs::read(&dest).unwrap(), b"new-frame");
+    assert_eq!(
+        dest.file_name().unwrap().to_string_lossy(),
+        "01 首帧_S007.png"
+    );
+    assert!(!root.join("latest.png").exists());
+    assert_eq!(
+        visible_png_names(&root),
+        vec!["01 首帧_S007.png".to_string()]
+    );
 }
 #[test]
 fn readonly_files_are_not_replaced() {

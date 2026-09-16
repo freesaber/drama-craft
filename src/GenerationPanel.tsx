@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { api, errorMessage } from "./api";
+import { withMediaRevision } from "./mediaUrl";
 import {
   mediaKind,
   shotAudioInputs,
@@ -40,7 +41,13 @@ function Thumbnail({
     void api
       .media(project.handle, document, item.reference)
       .then((media) => {
-        if (alive && media.path) setSrc(convertFileSrc(media.path));
+        if (alive && media.path)
+          setSrc(
+            withMediaRevision(
+              convertFileSrc(media.path),
+              `${refreshKey}:${media.revision ?? ""}`,
+            ),
+          );
       })
       .catch(() => undefined);
     return () => {
@@ -55,7 +62,7 @@ function Thumbnail({
       onClick={onOpen}
     >
       {src && kind === "image" ? (
-        <img src={src} alt="" />
+        <img key={src} src={src} alt="" />
       ) : (
         <span>{kind === "audio" ? "♫" : "▧"}</span>
       )}

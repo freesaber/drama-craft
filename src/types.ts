@@ -33,6 +33,7 @@ export interface Media {
   path: string | null;
   exists: boolean;
   kind: "image" | "audio" | "video";
+  revision?: string | null;
 }
 export type ApiPlatformType = "autodl";
 

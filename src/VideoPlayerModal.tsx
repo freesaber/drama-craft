@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { api, errorMessage } from "./api";
 import { ui } from "./i18n";
+import { withMediaRevision } from "./mediaUrl";
 import type { Project } from "./types";
 
 export default function VideoPlayerModal({
@@ -42,7 +43,12 @@ export default function VideoPlayerModal({
           setError(ui.videoPlayer.notVideo);
           return;
         }
-        setSrc(convertFileSrc(media.path));
+        setSrc(
+          withMediaRevision(
+            convertFileSrc(media.path),
+            `${refreshKey}:${media.revision ?? ""}`,
+          ),
+        );
       })
       .catch((e) => {
         if (active) setError(errorMessage(e));

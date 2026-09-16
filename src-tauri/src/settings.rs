@@ -181,9 +181,7 @@ impl Configuration {
             if profile.name.is_empty() {
                 return Err(AppError::new("config", "请填写配置名称"));
             }
-            if !profile.default_seed.is_empty()
-                && profile.default_seed.parse::<i64>().is_err()
-            {
+            if !profile.default_seed.is_empty() && profile.default_seed.parse::<i64>().is_err() {
                 return Err(AppError::new("config", "默认 seed 须为整数，或留空"));
             }
         }

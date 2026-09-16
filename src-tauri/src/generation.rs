@@ -307,7 +307,10 @@ pub async fn submit(
     }
     let resolution = input.resolution.trim().to_owned();
     if settings.resolutions.is_empty() {
-        return Err(AppError::new("config", "当前 API 配置未设置 resolution 列表"));
+        return Err(AppError::new(
+            "config",
+            "当前 API 配置未设置 resolution 列表",
+        ));
     }
     if !settings.resolutions.iter().any(|item| item == &resolution) {
         return Err(AppError::new(

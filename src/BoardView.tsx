@@ -85,7 +85,7 @@ export default function BoardView({
     onAvailability?: (exists: boolean) => void,
   ) => (
     <LazyAsset
-      key={reference}
+      key={`${reference}:${refreshKey}`}
       project={project}
       document={document}
       reference={reference}

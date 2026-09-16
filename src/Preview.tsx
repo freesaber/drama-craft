@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { api, errorMessage } from "./api";
 import { ui } from "./i18n";
+import { withMediaRevision } from "./mediaUrl";
 import type { Media, Project } from "./types";
 
 export function Asset({
@@ -49,7 +50,12 @@ export function Asset({
       active = false;
     };
   }, [project.handle, document, reference, refreshKey]);
-  const src = media?.path ? convertFileSrc(media.path) : "";
+  const src = media?.path
+    ? withMediaRevision(
+        convertFileSrc(media.path),
+        `${refreshKey}:${media.revision ?? ""}`,
+      )
+    : "";
   return (
     <article className="asset-card">
       <div className="asset-name" title={reference}>
@@ -74,6 +80,7 @@ export function Asset({
             !failed &&
             (media.kind === "image" ? (
               <img
+                key={src}
                 src={src}
                 alt={reference}
                 onError={() => {

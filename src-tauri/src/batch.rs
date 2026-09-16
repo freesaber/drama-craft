@@ -422,9 +422,7 @@ pub fn list_jobs(root: &Path) -> Result<Vec<BatchJob>> {
     }
     let connection = generation::open_database(root)?;
     let mut statement = connection
-        .prepare(
-            "SELECT job_id FROM batch_jobs ORDER BY created_at DESC LIMIT 200",
-        )
+        .prepare("SELECT job_id FROM batch_jobs ORDER BY created_at DESC LIMIT 200")
         .map_err(|e| AppError::new("database", e.to_string()))?;
     let ids = statement
         .query_map([], |row| row.get::<_, String>(0))
@@ -522,10 +520,7 @@ pub fn sync_jobs(root: &Path) -> Result<Vec<BatchJob>> {
     list_jobs(root)
 }
 
-pub async fn advance(
-    root: &Path,
-    settings: &GenerationSettings,
-) -> Result<BatchAdvanceResult> {
+pub async fn advance(root: &Path, settings: &GenerationSettings) -> Result<BatchAdvanceResult> {
     let _ = sync_jobs(root)?;
 
     struct PendingSubmit {

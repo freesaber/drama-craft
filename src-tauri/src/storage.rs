@@ -4,6 +4,7 @@ use std::{
     fs,
     io::Write,
     path::{Component, Path, PathBuf},
+    time::UNIX_EPOCH,
 };
 use uuid::Uuid;
 use walkdir::WalkDir;
@@ -489,10 +490,7 @@ fn scan_voice_catalog(voice_dir: &Path) -> Vec<String> {
         .filter_map(std::result::Result::ok)
         .filter(|e| {
             e.file_type().is_file()
-                && has_extension(
-                    e.path(),
-                    &["mp3", "wav", "flac", "ogg", "m4a"],
-                )
+                && has_extension(e.path(), &["mp3", "wav", "flac", "ogg", "m4a"])
         })
         .map(|e| e.file_name().to_string_lossy().into_owned())
         .collect();
@@ -510,17 +508,11 @@ fn agents_md(
     let voice_table = if voice_catalog.is_empty() {
         "（创建项目时未扫描到音色文件，请手动读取声音目录）".to_string()
     } else {
-        let mut table = String::from(
-            "| 文件名 | 性别 | 年龄段 | 角色名 | 声音特征 |\n|---|---|---|---|---|\n",
-        );
+        let mut table =
+            String::from("| 文件名 | 性别 | 年龄段 | 角色名 | 声音特征 |\n|---|---|---|---|---|\n");
         for file in voice_catalog {
             let stem = file.rsplit('.').last().unwrap_or(file);
-            let parts: Vec<&str> = file
-                .rsplit('.')
-                .nth(1)
-                .unwrap_or(stem)
-                .split('_')
-                .collect();
+            let parts: Vec<&str> = file.rsplit('.').nth(1).unwrap_or(stem).split('_').collect();
             if parts.len() >= 4 {
                 table.push_str(&format!(
                     "| `{}` | {} | {} | {} | {} |\n",
@@ -1031,6 +1023,8 @@ pub struct Media {
     pub path: Option<String>,
     pub exists: bool,
     pub kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub revision: Option<String>,
 }
 pub fn resolve_media(root: &Path, document: &str, reference: &str) -> Result<Media> {
     let doc = document_path(root, document, true)?;
@@ -1063,6 +1057,7 @@ pub fn resolve_media(root: &Path, document: &str, reference: &str) -> Result<Med
     Ok(Media {
         reference: reference.into(),
         exists: resolved.is_some(),
+        revision: resolved.as_ref().and_then(|path| media_revision(path)),
         path: resolved.map(|p| p.to_string_lossy().into_owned()),
         kind: kind.into(),
     })
@@ -1115,10 +1110,7 @@ pub fn place_document_media(
         .and_then(|value| value.to_str())
         .unwrap_or("");
     let target_kind = normalize_image_ext(target_ext);
-    if !matches!(
-        target_kind.as_str(),
-        "png" | "jpg" | "webp" | "gif" | "bmp"
-    ) {
+    if !matches!(target_kind.as_str(), "png" | "jpg" | "webp" | "gif" | "bmp") {
         return Err(AppError::new("media", "仅可写入图片素材"));
     }
     let source = fs::canonicalize(source)?;
@@ -1156,6 +1148,60 @@ pub fn place_document_media(
         }
     }
     let bytes = fs::read(&source)?;
-    atomic_write(&destination, &bytes, false)?;
+    if fs::canonicalize(&destination).ok().as_ref() == Some(&source) {
+        return resolve_media(root, document, reference);
+    }
+    replace_file(&destination, &bytes)?;
     resolve_media(root, document, reference)
+}
+
+fn media_revision(path: &Path) -> Option<String> {
+    let meta = fs::metadata(path).ok()?;
+    let elapsed = meta.modified().ok()?.duration_since(UNIX_EPOCH).ok()?;
+    Some(format!("{}-{}", elapsed.as_millis(), meta.len()))
+}
+
+fn displaced_sibling(path: &Path) -> PathBuf {
+    let name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("file");
+    path.with_file_name(format!(".~dc-replacing-{}-{name}", Uuid::new_v4().simple()))
+}
+
+fn overwrite_in_place(path: &Path, bytes: &[u8]) -> Result<()> {
+    let mut options = fs::OpenOptions::new();
+    options.write(true).truncate(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        // FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE
+        options.share_mode(0x00000007);
+    }
+    let mut file = options.open(path)?;
+    file.write_all(bytes)?;
+    file.sync_all()?;
+    Ok(())
+}
+
+/// Replace `path` with `bytes` while keeping the original filename.
+///
+/// Windows cannot `MoveFileExW(REPLACE_EXISTING)` while WebView still has the
+/// displayed image open. Displace the original first, then fall back to an
+/// in-place truncate write so the Markdown name never changes.
+fn replace_file(path: &Path, bytes: &[u8]) -> Result<()> {
+    if !path.exists() {
+        return atomic_write(path, bytes, true);
+    }
+    let displaced = displaced_sibling(path);
+    if fs::rename(path, &displaced).is_ok() {
+        let written = atomic_write(path, bytes, true);
+        if written.is_ok() {
+            let _ = fs::remove_file(&displaced);
+        } else {
+            let _ = fs::rename(&displaced, path);
+        }
+        return written;
+    }
+    overwrite_in_place(path, bytes)
 }
