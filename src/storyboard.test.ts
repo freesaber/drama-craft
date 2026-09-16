@@ -122,7 +122,7 @@ describe("storyboard structure", () => {
   });
   it("binds template fields without guessing arbitrary code blocks", () => {
     const fields = parseStoryboard(template).cards[0].fields;
-    expect(fields.framePrompt.value).toContain("静态画面");
+    expect(fields.framePrompt.value).toContain("群像素材图");
     expect(fields.videoPrompt.value).toContain("摄影机");
     expect(fields.duration.value).toBe("5");
     expect(fields.resolution.value).toBe("480p横(864*480)");
