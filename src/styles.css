@@ -1334,6 +1334,39 @@ select:focus {
   font-size: 11px;
   margin-top: 28px;
 }
+.toast-host {
+  position: fixed;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  pointer-events: none;
+  max-width: min(520px, calc(100vw - 32px));
+}
+.toast {
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  box-shadow: 0 10px 30px #10271728;
+  animation: toast-in 0.2s ease-out;
+}
+.toast-success {
+  background: #f4f8ef;
+  color: #3f5a38;
+  border: 1px solid #d5e3cb;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 .banner {
   padding: 10px 24px;
   display: flex;

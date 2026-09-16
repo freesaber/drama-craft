@@ -164,6 +164,11 @@ export default function App() {
   dirtyRef.current = dirty;
 
   const board = useMemo(() => parseStoryboard(text), [text]);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(""), 2800);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
   const activeVideoOptions = useMemo(() => {
     const profile = generationSettings.profiles.find(
       (item) => item.id === generationSettings.activeProfileId,
@@ -748,11 +753,10 @@ export default function App() {
         </div>
       )}
       {notice && (
-        <div role="status" className="banner neutral">
-          {notice}
-          <button onClick={() => setNotice("")} aria-label="关闭通知">
-            ×
-          </button>
+        <div className="toast-host" aria-live="polite">
+          <div role="status" className="toast toast-success">
+            {notice}
+          </div>
         </div>
       )}
       {!project ? (
