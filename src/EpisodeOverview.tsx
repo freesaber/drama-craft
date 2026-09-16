@@ -43,16 +43,9 @@ export default function EpisodeOverview({
     setAvailability((current) =>
       current[key] === exists ? current : { ...current, [key]: exists },
     );
-  const showPromptWhenMissing = (
-    key: string,
-    reference: string | null,
-    name: string,
-    text: string,
-  ) => {
-    if (!reference || availability[key] === false) {
-      setPromptCopied(false);
-      setPrompt({ name, text });
-    }
+  const openPromptModal = (name: string, text: string) => {
+    setPromptCopied(false);
+    setPrompt({ name, text });
   };
   const keyboardClick = (event: React.KeyboardEvent, click: () => void) => {
     if (event.key === "Enter" || event.key === " ") {
@@ -127,12 +120,7 @@ export default function EpisodeOverview({
             {episode.characters.map((role, index) => {
               const key = `role-${role.id}-${index}`;
               const openPrompt = () =>
-                showPromptWhenMissing(
-                  key,
-                  role.image,
-                  role.name,
-                  role.imagePrompt,
-                );
+                openPromptModal(role.name, role.imagePrompt);
               const canPlace =
                 !!role.imagePrompt && isProjectRelativeImage(role.image);
               return (
@@ -189,13 +177,7 @@ export default function EpisodeOverview({
           <div role="tabpanel" className="episode-material-row">
             {materialAssets.map((item, index) => {
               const key = `asset-${item.id}-${index}`;
-              const openPrompt = () =>
-                showPromptWhenMissing(
-                  key,
-                  item.reference,
-                  item.name,
-                  item.prompt,
-                );
+              const openPrompt = () => openPromptModal(item.name, item.prompt);
               const canPlace =
                 !!item.prompt && isProjectRelativeImage(item.reference);
               return (
