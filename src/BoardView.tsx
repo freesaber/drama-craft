@@ -232,21 +232,21 @@ export default function BoardView({
               renderField={(key, multiline) => field(card, key, multiline)}
             />
             <section className="shot-details shot-frame-area">
-              <div className="shot-frame-heading">
-                <h3>{ui.board.frameImage}</h3>
-                <FrameFilePlace
-                  project={project}
-                  document={document}
-                  frameFile={card.fields.frameFile.value.trim()}
-                  refreshKey={refreshKey}
-                  busy={busy}
-                  onPlaced={onMediaPlaced}
-                />
-              </div>
+              <h3>{ui.board.frameImage}</h3>
               <FrameImageTabs
                 key={`${document}-${index}`}
                 assets={card.frameAssets}
                 frameFile={card.fields.frameFile.value.trim()}
+                place={
+                  <FrameFilePlace
+                    project={project}
+                    document={document}
+                    frameFile={card.fields.frameFile.value.trim()}
+                    refreshKey={refreshKey}
+                    busy={busy}
+                    onPlaced={onMediaPlaced}
+                  />
+                }
                 asset={(reference) => (
                   <LazyAsset
                     project={project}
@@ -345,7 +345,6 @@ function FrameFilePlace({
             ? ui.episodeData.replaceImage
             : ui.episodeData.uploadImage}
       </button>
-      <small title={frameFile}>{frameFile.replace(/.*[/\\]/, "")}</small>
       {error && <p className="diagnostic">{error}</p>}
     </div>
   );
@@ -354,34 +353,41 @@ function FrameFilePlace({
 function FrameImageTabs({
   assets,
   frameFile,
+  place,
   asset,
   prompt,
 }: {
   assets: ShotCard["frameAssets"];
   frameFile: string;
+  place: React.ReactNode;
   asset: (reference: string) => React.ReactNode;
   prompt: React.ReactNode;
 }) {
-  const [active, setActive] = useState<"assets" | "prompt">("assets");
+  const [active, setActive] = useState<"frame" | "assets" | "prompt">("assets");
   const frameName = frameFile.replace(/.*[/\\]/, "");
+  const tabs = [
+    { id: "assets" as const, label: ui.board.materials },
+    { id: "prompt" as const, label: ui.board.promptTab },
+    { id: "frame" as const, label: ui.board.frameImage },
+  ];
   return (
     <div className="frame-image-tabs">
       <div role="tablist" aria-label={ui.board.frameImage}>
-        {(["assets", "prompt"] as const).map((tab) => (
+        {tabs.map((tab) => (
           <button
-            key={tab}
+            key={tab.id}
             type="button"
             role="tab"
-            aria-selected={active === tab}
-            onClick={() => setActive(tab)}
+            aria-selected={active === tab.id}
+            onClick={() => setActive(tab.id)}
           >
-            {tab === "assets" ? ui.board.materials : ui.board.promptTab}
+            {tab.label}
           </button>
         ))}
       </div>
-      {active === "assets" ? (
-        <div role="tabpanel" className="frame-assets">
-          {frameFile && (
+      {active === "frame" ? (
+        <div role="tabpanel" className="frame-output-panel">
+          {frameFile ? (
             <article className="frame-asset" key={`frame-${frameFile}`}>
               {asset(frameFile)}
               <strong title={frameFile}>
@@ -389,7 +395,13 @@ function FrameImageTabs({
                 {frameName ? ` · ${frameName}` : ""}
               </strong>
             </article>
+          ) : (
+            <p className="muted">{ui.board.noFrame}</p>
           )}
+          {place}
+        </div>
+      ) : active === "assets" ? (
+        <div role="tabpanel" className="frame-assets">
           {assets.map((item) => {
             const filename = item.reference.replace(/.*[/\\]/, "");
             return (
@@ -406,7 +418,7 @@ function FrameImageTabs({
               </article>
             );
           })}
-          {!frameFile && !assets.length && (
+          {!assets.length && (
             <p className="muted">{ui.board.noFrameMaterials}</p>
           )}
         </div>

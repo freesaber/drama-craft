@@ -723,24 +723,14 @@
   font-size: 13px;
   font-weight: 600;
 }
-.shot-frame-heading {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 10px;
-  flex-wrap: wrap;
-}
-.shot-frame-heading > h3 {
-  margin: 0;
-  color: #45634a;
-  font-size: 13px;
-  font-weight: 600;
-}
 .shot-frame-place {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
+  flex: 0 0 auto;
   min-width: 0;
+  margin: 0;
+  padding-top: 4px;
 }
 .shot-frame-place-button {
   width: auto;
@@ -748,12 +738,21 @@
   padding: 4px 12px;
   white-space: nowrap;
 }
-.shot-frame-place > small {
-  color: #829078;
-  font-size: 11px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.shot-frame-place > .diagnostic {
+  margin: 0;
+}
+.frame-output-panel {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 16px;
+}
+.frame-output-panel > .frame-asset {
+  flex: none;
+  width: min(100%, 320px);
+}
+.frame-output-panel > .muted {
+  margin: 0;
 }
 .frame-image-tabs > [role="tablist"] {
   display: flex;
