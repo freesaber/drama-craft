@@ -24,6 +24,9 @@ import type {
   SourcePatch,
 } from "./types";
 
+const DEFAULT_VIDEO_SUBMIT_URL =
+  "https://autodl.art/api/v1/comfyui/comfyui_workflow/minimax_h3_zm_u24";
+
 export default function App() {
   const { ask: discardChanges, dialog: unsavedDialog } = useUnsavedChanges();
   const [project, setProject] = useState<Project | null>(null);
@@ -97,7 +100,7 @@ export default function App() {
         {
           id,
           name: `${ui.generation.profileName} ${draft.profiles.length + 1}`,
-          baseUrl: "https://autodl.art",
+          baseUrl: DEFAULT_VIDEO_SUBMIT_URL,
           hasAuthorization: false,
         },
       ],
@@ -504,7 +507,7 @@ export default function App() {
           {
             id,
             name: ui.generation.defaultProfile,
-            baseUrl: "https://autodl.art",
+            baseUrl: DEFAULT_VIDEO_SUBMIT_URL,
             hasAuthorization: false,
           },
         ],
@@ -1236,10 +1239,11 @@ export default function App() {
                             onChange={(event) =>
                               updateApi({ baseUrl: event.target.value })
                             }
-                            placeholder="https://api.example.com"
+                            placeholder={DEFAULT_VIDEO_SUBMIT_URL}
                             required
                             disabled={busy}
                           />
+                          <small>{ui.generation.baseUrlHint}</small>
                         </label>
                         <label>
                           {ui.generation.authorization}

@@ -141,7 +141,9 @@ export const ui = {
     showToken: "显示",
     hideToken: "隐藏",
     tokenSaved: "✓ 当前配置已有 Token",
-    baseUrl: "API 服务地址",
+    baseUrl: "提交任务地址",
+    baseUrlHint:
+      "填写服务商文档中的完整提交 URL；不同 workflow 可新建配置切换。仅填域名时会使用默认 minimax_h3_zm_u24 路径。",
     authorization: "API Token（Authorization 请求头）",
     authorizationHint:
       "按服务文档填写 Authorization 请求头的完整值，程序不会自动添加 Bearer。Token 保存在本机应用配置中，所有生成任务统一使用这里的配置。",

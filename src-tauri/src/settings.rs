@@ -62,7 +62,7 @@ impl Configuration {
             {
                 return Err(AppError::new(
                     "config",
-                    "请填写配置名称和不含密钥、查询参数的 HTTP(S) 服务地址",
+                    "请填写配置名称和不含密钥、查询参数的 HTTP(S) 提交地址",
                 ));
             }
         }

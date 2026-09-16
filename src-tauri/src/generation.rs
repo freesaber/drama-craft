@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{fs, io::Write, path::Path};
 
-const SUBMIT_PATH: &str = "/api/v1/comfyui/comfyui_workflow/minimax_h3_zm_u24";
+const DEFAULT_SUBMIT_PATH: &str = "/api/v1/comfyui/comfyui_workflow/minimax_h3_zm_u24";
 const RESULT_PATH: &str = "/api/v1/comfyui/comfyui_workflow/result";
 const DATABASE_NAME: &str = "generations.sqlite3";
 
@@ -185,15 +185,34 @@ fn get(root: &Path, task_id: &str) -> Result<GenerationRecord> {
         .map_err(|e| AppError::new("database", e.to_string()))
 }
 
-fn endpoint(settings: &GenerationSettings, path: &str) -> Result<String> {
-    let base = settings.base_url.trim().trim_end_matches('/');
-    if !(base.starts_with("https://") || base.starts_with("http://")) {
+fn parse_http_url(raw: &str) -> Result<reqwest::Url> {
+    let trimmed = raw.trim().trim_end_matches('/');
+    let url = reqwest::Url::parse(trimmed)
+        .map_err(|_| AppError::new("config", "请先填写有效的 http:// 或 https:// 地址"))?;
+    if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none() {
         return Err(AppError::new(
             "config",
-            "请先填写以 http:// 或 https:// 开头的 API 地址",
+            "请先填写有效的 http:// 或 https:// 地址",
         ));
     }
-    Ok(format!("{base}{path}"))
+    Ok(url)
+}
+
+fn submit_endpoint(settings: &GenerationSettings) -> Result<String> {
+    let url = parse_http_url(&settings.base_url)?;
+    let path = url.path();
+    if path.is_empty() || path == "/" {
+        let base = settings.base_url.trim().trim_end_matches('/');
+        Ok(format!("{base}{DEFAULT_SUBMIT_PATH}"))
+    } else {
+        Ok(url.as_str().trim_end_matches('/').to_owned())
+    }
+}
+
+fn result_endpoint(settings: &GenerationSettings, task_id: &str) -> Result<String> {
+    let url = parse_http_url(&settings.base_url)?;
+    let origin = url.origin().ascii_serialization();
+    Ok(format!("{origin}{RESULT_PATH}/{task_id}"))
 }
 
 fn client(settings: &GenerationSettings) -> Result<Client> {
@@ -307,7 +326,7 @@ pub async fn submit(
     }
     let value = envelope(
         client(settings)?
-            .post(endpoint(settings, SUBMIT_PATH)?)
+            .post(submit_endpoint(settings)?)
             .json(&body)
             .send()
             .await
@@ -479,7 +498,7 @@ pub async fn poll(
     }
     let value = envelope(
         client(settings)?
-            .get(format!("{}/{}", endpoint(settings, RESULT_PATH)?, task_id))
+            .get(result_endpoint(settings, task_id)?)
             .send()
             .await
             .map_err(|e| AppError::new("network", e.to_string()))?,
@@ -650,7 +669,7 @@ mod tests {
         let server = thread::spawn(move || {
             let (mut submit, _) = listener.accept().unwrap();
             let submitted = request(&mut submit);
-            assert!(submitted.starts_with(&format!("POST {SUBMIT_PATH} ")));
+            assert!(submitted.starts_with(&format!("POST {DEFAULT_SUBMIT_PATH} ")));
             assert!(submitted
                 .to_ascii_lowercase()
                 .contains("authorization: token fixture"));
@@ -723,6 +742,48 @@ mod tests {
         assert!(file.ends_with(".mp4"), "{file}");
         assert_eq!(fs::read(root.join(&file)).unwrap(), b"synthetic-video");
         assert_eq!(history(&root, "01 测试.md", "S001").unwrap().len(), 1);
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn submit_endpoint_uses_configured_workflow_url() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let workflow = "/api/v1/comfyui/comfyui_workflow/minimax_h3_z0903";
+        let server = thread::spawn(move || {
+            let (mut submit, _) = listener.accept().unwrap();
+            assert!(request(&mut submit).starts_with(&format!("POST {workflow} ")));
+            respond(
+                &mut submit,
+                "application/json",
+                br#"{"code":"Success","data":{"task_id":"task-custom","status":"queued"}}"#,
+            );
+        });
+
+        let project = tempfile::tempdir().unwrap();
+        let root = storage::canonical_directory(project.path()).unwrap();
+        storage::create_document(&root, "01 测试.md", "# S001 测试\n").unwrap();
+        fs::write(root.join("frame.png"), b"synthetic-image").unwrap();
+        let settings = GenerationSettings {
+            profile_id: "fixture".into(),
+            base_url: format!("http://{address}{workflow}"),
+            authorization: String::new(),
+        };
+        tauri::async_runtime::block_on(submit(
+            &root,
+            &settings,
+            GenerationInput {
+                document: "01 测试.md".into(),
+                shot_id: "S001".into(),
+                prompt: "向前走".into(),
+                duration: 5,
+                resolution: "768p横".into(),
+                seed: None,
+                image_refs: vec!["frame.png".into()],
+                audio_refs: vec![],
+            },
+        ))
+        .unwrap();
         server.join().unwrap();
     }
 
