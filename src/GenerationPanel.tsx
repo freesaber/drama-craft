@@ -8,6 +8,7 @@ import {
   type InputAsset,
 } from "./generationInputs";
 import { Asset } from "./Preview";
+import VideoPlayerModal from "./VideoPlayerModal";
 import { ui } from "./i18n";
 import type {
   BoardField,
@@ -105,6 +106,7 @@ export default function GenerationPanel({
   const [submitting, setSubmitting] = useState(false);
   const [preview, setPreview] = useState<InputAsset | null>(null);
   const [omitNarratorAudio, setOmitNarratorAudio] = useState(false);
+  const [playingVideo, setPlayingVideo] = useState<string | null>(null);
   const applied = useRef(new Set<string>());
   const useVideoRef = useRef(useVideo);
   useVideoRef.current = useVideo;
@@ -356,17 +358,27 @@ export default function GenerationPanel({
                     )}
                   </div>
                   {record.localFile && (
-                    <button
-                      type="button"
-                      disabled={
-                        busy || record.localFile === card.fields.videoFile.value
-                      }
-                      onClick={() => void useVideo(record.localFile!)}
-                    >
-                      {record.localFile === card.fields.videoFile.value
-                        ? ui.generation.inUse
-                        : ui.generation.useVersion}
-                    </button>
+                    <div className="generation-history-actions">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => setPlayingVideo(record.localFile!)}
+                      >
+                        {ui.generation.play}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={
+                          busy ||
+                          record.localFile === card.fields.videoFile.value
+                        }
+                        onClick={() => void useVideo(record.localFile!)}
+                      >
+                        {record.localFile === card.fields.videoFile.value
+                          ? ui.generation.inUse
+                          : ui.generation.useVersion}
+                      </button>
+                    </div>
                   )}
                 </article>
               ))}
@@ -374,6 +386,16 @@ export default function GenerationPanel({
           </details>
         )}
       </div>
+      {playingVideo && (
+        <VideoPlayerModal
+          project={project}
+          document={document}
+          reference={playingVideo}
+          title={playingVideo.replace(/.*[/\\]/, "")}
+          refreshKey={refreshKey}
+          onClose={() => setPlayingVideo(null)}
+        />
+      )}
       {preview && (
         <div
           className="modal-backdrop generation-preview"

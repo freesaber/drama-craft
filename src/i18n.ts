@@ -161,6 +161,7 @@ export const ui = {
     history: "历史生成版本",
     useVersion: "设为当前",
     inUse: "当前版本",
+    play: "播放",
     noDocument: "当前没有可更新的文档",
     shotChanged: "分镜结构已改变，请重新选择历史视频",
     videoApplied: "视频已下载，并设为当前版本",
@@ -180,6 +181,9 @@ export const ui = {
         cancelled: "已取消",
         download_failed: "下载失败",
       })[status.toLowerCase()] ?? status,
+  },
+  videoPlayer: {
+    notVideo: "所选文件不是视频",
   },
   batch: {
     generate: "批量生成",
