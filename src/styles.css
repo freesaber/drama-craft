@@ -143,6 +143,24 @@
 .episode-material-card .character-voice audio {
   height: 28px;
 }
+.episode-dialogue-panel {
+  min-height: 0;
+}
+.episode-dialogue-script {
+  width: 100%;
+  min-height: 180px;
+  max-height: 320px;
+  resize: vertical;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 12px 14px;
+  border: 1px solid #d7dfd6;
+  border-radius: 7px;
+  background: #fff;
+  color: #20372b;
+  white-space: pre-wrap;
+}
 .generation-prompt-modal {
   position: relative;
   width: min(680px, 94vw);

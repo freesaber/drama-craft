@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api, chooseMedia, desktop, errorMessage } from "./api";
+import { formatDialogueScript } from "./episodeFormat";
 import { ui } from "./i18n";
 import { isProjectRelativeImage } from "./markdown";
 import type { EpisodeData, Project } from "./types";
@@ -22,7 +23,9 @@ export default function EpisodeOverview({
   ) => React.ReactNode;
   onMediaPlaced?: () => void;
 }) {
-  const [activeTab, setActiveTab] = useState<"roles" | "assets">("roles");
+  const [activeTab, setActiveTab] = useState<"roles" | "assets" | "dialogues">(
+    "roles",
+  );
   const [availability, setAvailability] = useState<Record<string, boolean>>({});
   const [prompt, setPrompt] = useState<{ name: string; text: string } | null>(
     null,
@@ -108,6 +111,15 @@ export default function EpisodeOverview({
             {ui.episodeData.assetTab}
             <span>{materialAssets.length}</span>
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "dialogues"}
+            onClick={() => setActiveTab("dialogues")}
+          >
+            {ui.episodeData.dialogueTab}
+            <span>{episode.dialogues.length}</span>
+          </button>
         </div>
 
         {activeTab === "roles" ? (
@@ -173,7 +185,7 @@ export default function EpisodeOverview({
               <p className="muted">{ui.episodeData.noCharacters}</p>
             )}
           </div>
-        ) : (
+        ) : activeTab === "assets" ? (
           <div role="tabpanel" className="episode-material-row">
             {materialAssets.map((item, index) => {
               const key = `asset-${item.id}-${index}`;
@@ -227,6 +239,23 @@ export default function EpisodeOverview({
             })}
             {!materialAssets.length && (
               <p className="muted">{ui.episodeData.noMaterials}</p>
+            )}
+          </div>
+        ) : (
+          <div role="tabpanel" className="episode-dialogue-panel">
+            {episode.dialogues.length ? (
+              <textarea
+                className="episode-dialogue-script"
+                readOnly
+                spellCheck={false}
+                value={formatDialogueScript(
+                  episode.dialogues,
+                  episode.characters,
+                )}
+                aria-label={ui.episodeData.dialogueTab}
+              />
+            ) : (
+              <p className="muted">{ui.episodeData.noDialogues}</p>
             )}
           </div>
         )}

@@ -165,13 +165,15 @@ export default function BoardView({
                 )}
               </div>
               <Preview text={raw} />
-              <details className="shot-details">
-                <summary>{ui.assets}</summary>
-                <PublicAssets
-                  references={analyzeMarkdown(raw).references}
-                  asset={asset}
-                />
-              </details>
+              {showSourceActions && (
+                <details className="shot-details">
+                  <summary>{ui.assets}</summary>
+                  <PublicAssets
+                    references={analyzeMarkdown(raw).references}
+                    asset={asset}
+                  />
+                </details>
+              )}
             </section>
           );
         }
