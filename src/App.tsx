@@ -295,6 +295,15 @@ export default function App() {
         throw e;
       }
     });
+  const revert = () =>
+    run(async () => {
+      if (!snapshot || !dirty) return;
+      if (!(await discardChanges())) return;
+      textRef.current = snapshot.text;
+      setText(snapshot.text);
+      setConflict(false);
+      setNotice(ui.reverted);
+    });
   const refresh = (automatic = false) =>
     run(async () => {
       if (!project) return;
@@ -1017,6 +1026,13 @@ export default function App() {
                         ? ui.unsaved
                         : ui.saved}
                   </span>
+                  <button
+                    type="button"
+                    disabled={busy || !dirty || snapshot?.readonly}
+                    onClick={() => void revert()}
+                  >
+                    {ui.revert}
+                  </button>
                   <button
                     className="primary-button"
                     disabled={busy || !dirty || snapshot?.readonly}
