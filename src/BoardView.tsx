@@ -6,6 +6,7 @@ import { ui } from "./i18n";
 import { api, chooseMedia, desktop, errorMessage } from "./api";
 import EpisodeOverview from "./EpisodeOverview";
 import GenerationPanel from "./GenerationPanel";
+import type { VideoApiOptions } from "./videoWorkflows";
 import type {
   BoardField,
   Project,
@@ -57,6 +58,7 @@ export default function BoardView({
   active,
   select,
   generationConfigured,
+  videoWorkflow,
   configureGeneration,
   useVideo,
   showSourceActions = true,
@@ -72,6 +74,7 @@ export default function BoardView({
   active: number;
   select: (index: number) => void;
   generationConfigured: boolean;
+  videoWorkflow: VideoApiOptions;
   configureGeneration: () => void;
   useVideo: (index: number, reference: string) => Promise<void>;
   showSourceActions?: boolean;
@@ -102,7 +105,7 @@ export default function BoardView({
         placeholder={key === "story" ? ui.board.emptyStory : undefined}
         options={
           key === "resolution"
-            ? ["480p横", "480p竖", "768p横", "768p竖", "480p(1:1)", "768p(1:1)"]
+            ? [...videoWorkflow.resolutions]
             : key === "duration"
               ? Array.from({ length: 15 }, (_, i) => String(i + 1))
               : undefined
@@ -229,6 +232,7 @@ export default function BoardView({
               refreshKey={refreshKey}
               busy={busy}
               configured={generationConfigured}
+              videoWorkflow={videoWorkflow}
               configure={configureGeneration}
               useVideo={(reference) => useVideo(index, reference)}
               renderField={(key, multiline) => field(card, key, multiline)}

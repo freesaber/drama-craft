@@ -5,6 +5,7 @@ import {
   shotGenerationPayload,
 } from "./generationInputs";
 import { ui } from "./i18n";
+import type { VideoApiOptions } from "./videoWorkflows";
 import type { BatchJobItemInput, Project, Storyboard } from "./types";
 
 type Candidate = BatchJobItemInput & { missing: string[] };
@@ -13,6 +14,7 @@ export default function BatchGenerateDialog({
   project,
   document,
   board,
+  videoWorkflow,
   busy,
   onClose,
   onCreated,
@@ -20,6 +22,7 @@ export default function BatchGenerateDialog({
   project: Project;
   document: string;
   board: Storyboard;
+  videoWorkflow: VideoApiOptions;
   busy: boolean;
   onClose: () => void;
   onCreated: (notice: string) => void;
@@ -40,7 +43,10 @@ export default function BatchGenerateDialog({
         const next: Candidate[] = [];
         for (const card of board.cards) {
           if (hasVideoReference(card)) continue;
-          const payload = shotGenerationPayload(card, board.episode);
+          const payload = shotGenerationPayload(card, board.episode, {
+            maxImages: videoWorkflow.maxImages,
+            defaultResolution: videoWorkflow.defaultResolution,
+          });
           if (!payload) continue;
           const missing: string[] = [];
           for (const reference of [...payload.imageRefs, ...payload.audioRefs]) {
@@ -70,7 +76,7 @@ export default function BatchGenerateDialog({
     return () => {
       alive = false;
     };
-  }, [board, document, project.handle]);
+  }, [board, document, project.handle, videoWorkflow]);
 
   const delayOptions = useMemo(
     () => Array.from({ length: 13 }, (_, hour) => hour),

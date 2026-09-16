@@ -702,7 +702,7 @@ mod tests {
             shot_title: format!("{shot} 标题"),
             prompt: "测试提示词".into(),
             duration: 5,
-            resolution: "768p竖".into(),
+            resolution: "768p竖(768*1376)".into(),
             seed: None,
             image_refs: vec!["frame.png".into()],
             audio_refs: vec![],

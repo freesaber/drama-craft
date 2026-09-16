@@ -32,7 +32,7 @@ function card(partial: {
       framePrompt: field(""),
       videoPrompt: field(partial.videoPrompt ?? ""),
       duration: field(partial.duration ?? "5"),
-      resolution: field(partial.resolution ?? "768p竖"),
+      resolution: field(partial.resolution ?? "768p竖(768*1376)"),
       frameFile: field(partial.frameFile ?? ""),
       videoFile: field(partial.videoFile ?? ""),
     },

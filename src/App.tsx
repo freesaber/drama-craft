@@ -14,6 +14,7 @@ import TaskListView from "./TaskListView";
 import { applySourcePatch, fieldPatch, parseStoryboard } from "./storyboard";
 import { useUnsavedChanges } from "./useUnsavedChanges";
 import type {
+  ApiProfile,
   BatchJob,
   Candidate,
   DocumentEntry,
@@ -23,9 +24,14 @@ import type {
   Snapshot,
   SourcePatch,
 } from "./types";
-
-const DEFAULT_VIDEO_SUBMIT_URL =
-  "https://autodl.art/api/v1/comfyui/comfyui_workflow/minimax_h3_zm_u24";
+import {
+  API_PLATFORM_TYPES,
+  autodlPresetValues,
+  compactResolutionsJson,
+  emptyApiProfile,
+  migrateGenerationSettings,
+  optionsFromProfile,
+} from "./videoWorkflows";
 
 export default function App() {
   const { ask: discardChanges, dialog: unsavedDialog } = useUnsavedChanges();
@@ -58,12 +64,12 @@ export default function App() {
     useState<GenerationSettings>({
       profiles: [],
       activeProfileId: "",
-      defaultResolution: "480p横",
+      defaultResolution: "480p横(864*480)",
     });
   const [apiDraft, setApiDraft] = useState<GenerationSettings>({
     profiles: [],
     activeProfileId: "",
-    defaultResolution: "480p横",
+    defaultResolution: "480p横(864*480)",
   });
   const [apiAuthorizations, setApiAuthorizations] = useState<
     Record<string, string>
@@ -75,13 +81,20 @@ export default function App() {
   const activeApiTokenDraft = activeApi
     ? apiAuthorizations[activeApi.id]
     : undefined;
-  const activeApiHasToken =
-    activeApiTokenDraft === undefined
-      ? Boolean(activeApi?.hasAuthorization)
-      : Boolean(activeApiTokenDraft.trim());
-  const updateApi = (
-    values: Partial<Pick<import("./types").ApiProfile, "name" | "baseUrl">>,
-  ) =>
+  const activeApiTokenInDraft = activeApiTokenDraft !== undefined;
+  const activeApiHasToken = activeApiTokenInDraft
+    ? Boolean(activeApiTokenDraft.trim())
+    : Boolean(activeApi?.hasAuthorization);
+  const activeApiTokenDisplay = showApiToken
+    ? (activeApiTokenDraft ?? "")
+    : activeApiHasToken
+      ? activeApiTokenInDraft
+        ? activeApiTokenDraft
+        : "••••••••••••••••••••••••••••••••"
+      : (activeApiTokenDraft ?? "");
+  const activeApiTokenReadOnly =
+    !showApiToken && activeApiHasToken && !activeApiTokenInDraft;
+  const updateApi = (values: Partial<ApiProfile>) =>
     setApiDraft((draft) => ({
       ...draft,
       profiles: draft.profiles.map((profile) =>
@@ -97,14 +110,16 @@ export default function App() {
       activeProfileId: id,
       profiles: [
         ...draft.profiles,
-        {
+        emptyApiProfile(
           id,
-          name: `${ui.generation.profileName} ${draft.profiles.length + 1}`,
-          baseUrl: DEFAULT_VIDEO_SUBMIT_URL,
-          hasAuthorization: false,
-        },
+          `${ui.generation.profileName} ${draft.profiles.length + 1}`,
+        ),
       ],
     }));
+  };
+  const syncAutodlPreset = (profile: ApiProfile): ApiProfile => {
+    const preset = autodlPresetValues(profile);
+    return preset ? { ...profile, ...preset } : profile;
   };
   const deleteApi = () => {
     if (!activeApi) return;
@@ -149,6 +164,12 @@ export default function App() {
   dirtyRef.current = dirty;
 
   const board = useMemo(() => parseStoryboard(text), [text]);
+  const activeVideoOptions = useMemo(() => {
+    const profile = generationSettings.profiles.find(
+      (item) => item.id === generationSettings.activeProfileId,
+    );
+    return optionsFromProfile(profile);
+  }, [generationSettings]);
   const filteredProjects = useMemo(
     () => filterAndSortProjects(recent, projectSearch),
     [recent, projectSearch],
@@ -194,7 +215,9 @@ export default function App() {
         .catch((e) => setError(errorMessage(e)));
       void api
         .generationSettings()
-        .then(setGenerationSettings)
+        .then((settings) =>
+          setGenerationSettings(migrateGenerationSettings(settings)),
+        )
         .catch((e) => setError(errorMessage(e)));
     }
   }, [loadPreferences]);
@@ -495,7 +518,6 @@ export default function App() {
     }
   };
   const configureGeneration = () => {
-    setApiDraft(generationSettings);
     setApiAuthorizations({});
     setShowApiToken(false);
     if (!generationSettings.profiles.length) {
@@ -503,14 +525,18 @@ export default function App() {
       setApiDraft({
         activeProfileId: id,
         defaultResolution: generationSettings.defaultResolution,
-        profiles: [
-          {
-            id,
-            name: ui.generation.defaultProfile,
-            baseUrl: DEFAULT_VIDEO_SUBMIT_URL,
-            hasAuthorization: false,
-          },
-        ],
+        profiles: [emptyApiProfile(id, ui.generation.defaultProfile)],
+      });
+    } else {
+      const migrated = migrateGenerationSettings(generationSettings);
+      setApiDraft({
+        ...migrated,
+        profiles: migrated.profiles.map((profile) =>
+          syncAutodlPreset({
+            ...profile,
+            resolutions: compactResolutionsJson(profile.resolutions),
+          }),
+        ),
       });
     }
     setModal("api");
@@ -1083,8 +1109,11 @@ export default function App() {
                   generationConfigured={generationSettings.profiles.some(
                     (profile) =>
                       profile.id === generationSettings.activeProfileId &&
-                      profile.hasAuthorization,
+                      profile.hasAuthorization &&
+                      Boolean(profile.submitUrl?.trim()) &&
+                      Boolean(profile.queryUrl?.trim()),
                   )}
+                  videoWorkflow={activeVideoOptions}
                   configureGeneration={configureGeneration}
                   useVideo={useGeneratedVideo}
                   showSourceActions={!isOverviewDocument(path)}
@@ -1114,6 +1143,7 @@ export default function App() {
           project={project}
           document={path}
           board={board}
+          videoWorkflow={activeVideoOptions}
           busy={busy}
           onClose={() => setShowBatchDialog(false)}
           onCreated={(message) => {
@@ -1125,7 +1155,7 @@ export default function App() {
       {(modal || candidates) && (
         <div className="modal-backdrop">
           <section
-            className="modal"
+            className={`modal${modal === "api" ? " api-modal" : ""}`}
             role="dialog"
             aria-modal="true"
             aria-labelledby="modal-title"
@@ -1190,9 +1220,15 @@ export default function App() {
                         disabled={busy}
                         onChange={(event) => {
                           setShowApiToken(false);
+                          const nextId = event.target.value;
                           setApiDraft((draft) => ({
                             ...draft,
-                            activeProfileId: event.target.value,
+                            activeProfileId: nextId,
+                            profiles: draft.profiles.map((profile) =>
+                              profile.id === nextId
+                                ? syncAutodlPreset(profile)
+                                : profile,
+                            ),
                           }));
                         }}
                       >
@@ -1221,67 +1257,139 @@ export default function App() {
                     {activeApi ? (
                       <>
                         <label>
+                          {ui.generation.platformType}
+                          <select
+                            value={activeApi.type}
+                            disabled={busy}
+                            onChange={(event) =>
+                              updateApi({
+                                type: event.target
+                                  .value as ApiProfile["type"],
+                              })
+                            }
+                          >
+                            {API_PLATFORM_TYPES.map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.label}
+                              </option>
+                            ))}
+                          </select>
+                          <small>{ui.generation.platformTypeHint}</small>
+                        </label>
+                        <label>
                           {ui.generation.profileName}
                           <input
                             value={activeApi.name}
                             required
                             disabled={busy}
-                            onChange={(event) =>
-                              updateApi({ name: event.target.value })
-                            }
+                            onChange={(event) => {
+                              const next = syncAutodlPreset({
+                                ...activeApi,
+                                name: event.target.value,
+                              });
+                              updateApi({
+                                name: next.name,
+                                resolutions: next.resolutions,
+                                defaultSeed: next.defaultSeed,
+                              });
+                            }}
                           />
                         </label>
                         <label>
-                          {ui.generation.baseUrl}
+                          {ui.generation.submitUrl}
                           <input
                             autoFocus
-                            value={activeApi.baseUrl}
-                            onChange={(event) =>
-                              updateApi({ baseUrl: event.target.value })
-                            }
-                            placeholder={DEFAULT_VIDEO_SUBMIT_URL}
+                            value={activeApi.submitUrl}
+                            onChange={(event) => {
+                              const next = syncAutodlPreset({
+                                ...activeApi,
+                                submitUrl: event.target.value,
+                              });
+                              updateApi({
+                                submitUrl: next.submitUrl,
+                                resolutions: next.resolutions,
+                                defaultSeed: next.defaultSeed,
+                              });
+                            }}
+                            placeholder={ui.generation.submitUrlPlaceholder}
                             required
                             disabled={busy}
                           />
-                          <small>{ui.generation.baseUrlHint}</small>
+                          <small>{ui.generation.submitUrlHint}</small>
                         </label>
                         <label>
-                          {ui.generation.authorization}
+                          {ui.generation.queryUrl}
+                          <input
+                            value={activeApi.queryUrl}
+                            onChange={(event) =>
+                              updateApi({ queryUrl: event.target.value })
+                            }
+                            placeholder={ui.generation.queryUrlPlaceholder}
+                            required
+                            disabled={busy}
+                          />
+                          <small>{ui.generation.queryUrlHint}</small>
+                        </label>
+                        <div className="api-inline-field">
+                          <span>{ui.generation.resolutions}</span>
+                          <input
+                            value={activeApi.resolutions}
+                            onChange={(event) =>
+                              updateApi({ resolutions: event.target.value })
+                            }
+                            placeholder={ui.generation.resolutionsPlaceholder}
+                            required
+                            disabled={busy}
+                            spellCheck={false}
+                          />
+                        </div>
+                        <div className="api-inline-field">
+                          <span>{ui.generation.defaultSeed}</span>
+                          <input
+                            inputMode="numeric"
+                            value={activeApi.defaultSeed}
+                            onChange={(event) =>
+                              updateApi({
+                                defaultSeed: event.target.value.replace(
+                                  /[^0-9]/g,
+                                  "",
+                                ),
+                              })
+                            }
+                            placeholder={ui.generation.defaultSeedPlaceholder}
+                            disabled={busy}
+                          />
+                        </div>
+                        <div className="api-inline-field">
+                          <span>{ui.generation.authorization}</span>
                           <span className="secret-input">
                             <input
                               type={showApiToken ? "text" : "password"}
-                              value={apiAuthorizations[activeApi.id] ?? ""}
+                              value={activeApiTokenDisplay}
+                              readOnly={activeApiTokenReadOnly}
                               onChange={(event) =>
                                 setApiAuthorizations((values) => ({
                                   ...values,
                                   [activeApi.id]: event.target.value,
                                 }))
                               }
-                              placeholder={
-                                activeApi.hasAuthorization
-                                  ? ui.generation.savedAuthorization
-                                  : ui.generation.authorizationPlaceholder
-                              }
+                              placeholder={ui.generation.authorizationPlaceholder}
                               autoComplete="new-password"
                               disabled={busy}
                             />
-                            <button
-                              type="button"
-                              disabled={busy || !activeApiHasToken}
-                              onClick={toggleApiToken}
-                            >
-                              {showApiToken
-                                ? ui.generation.hideToken
-                                : ui.generation.showToken}
-                            </button>
+                            {activeApiHasToken && (
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={toggleApiToken}
+                              >
+                                {showApiToken
+                                  ? ui.generation.hideToken
+                                  : ui.generation.showToken}
+                              </button>
+                            )}
                           </span>
-                          {activeApi.hasAuthorization && activeApiHasToken && (
-                            <small className="credential-status">
-                              {ui.generation.tokenSaved}
-                            </small>
-                          )}
-                          <small>{ui.generation.authorizationHint}</small>
-                        </label>
+                        </div>
                       </>
                     ) : (
                       <p className="muted">{ui.generation.noProfiles}</p>
@@ -1419,7 +1527,10 @@ export default function App() {
                       (modal === "api" &&
                         apiDraft.profiles.some(
                           (profile) =>
-                            !profile.baseUrl.trim() || !profile.name.trim(),
+                            !profile.submitUrl.trim() ||
+                            !profile.queryUrl.trim() ||
+                            !profile.resolutions.trim() ||
+                            !profile.name.trim(),
                         )) ||
                       ((modal === "project" || modal === "open") &&
                         !parent.trim()) ||

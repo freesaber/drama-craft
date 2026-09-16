@@ -418,11 +418,15 @@ mod tests {
             profiles: vec![settings::ApiProfile {
                 id: "legacy".into(),
                 name: "默认 API".into(),
-                base_url: "https://example.test".into(),
+                platform_type: "autodl".into(),
+                submit_url: "https://example.test/submit".into(),
+                query_url: "https://example.test/result/{task_id}".into(),
+                resolutions: r#"["480p横(864*480)"]"#.into(),
+                default_seed: String::new(),
                 has_authorization: false,
             }],
             active_profile_id: "legacy".into(),
-            default_resolution: "480p横".into(),
+            default_resolution: "480p横(864*480)".into(),
         };
         let mut prefs = Preferences::default();
         update_authorizations(
@@ -439,7 +443,7 @@ mod tests {
         let empty_config = settings::Configuration {
             profiles: Vec::new(),
             active_profile_id: String::new(),
-            default_resolution: "480p横".into(),
+            default_resolution: "480p横(864*480)".into(),
         };
         update_authorizations(&mut prefs, &empty_config, HashMap::new()).unwrap();
         assert_eq!(authorization(&prefs, "legacy"), "");
@@ -465,14 +469,18 @@ fn authorization(prefs: &Preferences, id: &str) -> String {
 fn configuration_from_preferences(prefs: &Preferences) -> settings::Configuration {
     let mut config = prefs.generation_configuration.clone();
     if config.default_resolution.is_empty() {
-        config.default_resolution = "480p横".into();
+        config.default_resolution = "480p横(864*480)".into();
     }
     if config.profiles.is_empty() && !prefs.generation_base_url.is_empty() {
         config.active_profile_id = "legacy".into();
         config.profiles.push(settings::ApiProfile {
             id: "legacy".into(),
             name: "默认 API".into(),
-            base_url: prefs.generation_base_url.clone(),
+            platform_type: "autodl".into(),
+            submit_url: prefs.generation_base_url.clone(),
+            query_url: String::new(),
+            resolutions: String::new(),
+            default_seed: String::new(),
             has_authorization: false,
         });
     }
@@ -496,9 +504,23 @@ fn generation_settings(
         .find(|profile| profile.id == id)
         .ok_or_else(|| AppError::new("config", "请先在视频 API 设置中配置服务和密钥"))?;
     let prefs = read_prefs(app)?;
+    let resolutions: Vec<String> = serde_json::from_str(profile.resolutions.trim())
+        .ok()
+        .and_then(|value: serde_json::Value| {
+            value.as_array().map(|items| {
+                items
+                    .iter()
+                    .filter_map(|item| item.as_str().map(|text| text.trim().to_owned()))
+                    .filter(|text| !text.is_empty())
+                    .collect()
+            })
+        })
+        .unwrap_or_default();
     Ok(generation::GenerationSettings {
         profile_id: profile.id.clone(),
-        base_url: profile.base_url.clone(),
+        submit_url: profile.submit_url.clone(),
+        query_url: profile.query_url.clone(),
+        resolutions,
         authorization: authorization(&prefs, &profile.id),
     })
 }
@@ -589,11 +611,11 @@ async fn poll_generation(
     let root = root_for(&state, &handle)?;
     let binding = generation::task_provider(&root, &task_id)?;
     let settings = generation_settings(&app, binding.as_ref().map(|(id, _)| id.as_str()))?;
-    if let Some((_, base_url)) = binding {
-        if settings.base_url != base_url {
+    if let Some((_, submit_url)) = binding {
+        if settings.submit_url != submit_url {
             return Err(AppError::new(
                 "config",
-                "任务的 API 服务地址已变更，请恢复该配置的原服务地址后查询",
+                "任务的提交任务地址已变更，请恢复该配置的原提交地址后查询",
             ));
         }
     }

@@ -7,15 +7,31 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{fs, io::Write, path::Path};
 
-const DEFAULT_SUBMIT_PATH: &str = "/api/v1/comfyui/comfyui_workflow/minimax_h3_zm_u24";
-const RESULT_PATH: &str = "/api/v1/comfyui/comfyui_workflow/result";
 const DATABASE_NAME: &str = "generations.sqlite3";
+
+fn normalize_resolution(resolution: &str) -> String {
+    match resolution.trim() {
+        "480p横" => "480p横(864*480)".into(),
+        "480p竖" => "480p竖(480*864)".into(),
+        "768p横" => "768p横(1376*768)".into(),
+        "768p竖" => "768p竖(768*1376)".into(),
+        "1080p横" | "1088p横" => "1080p横(1920*1088)".into(),
+        "1080p竖" | "1088p竖" => "1080p竖(1080*1920)".into(),
+        "1440p横" => "1440p横(2560*1440)".into(),
+        "1440p竖" => "1440p竖(1440*2560)".into(),
+        "480p(1:1)" => "480p(1:1)(480*480)".into(),
+        "768p(1:1)" => "768p(1:1)(768*768)".into(),
+        other => other.to_owned(),
+    }
+}
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GenerationSettings {
     pub profile_id: String,
-    pub base_url: String,
+    pub submit_url: String,
+    pub query_url: String,
+    pub resolutions: Vec<String>,
     pub authorization: String,
 }
 
@@ -199,20 +215,26 @@ fn parse_http_url(raw: &str) -> Result<reqwest::Url> {
 }
 
 fn submit_endpoint(settings: &GenerationSettings) -> Result<String> {
-    let url = parse_http_url(&settings.base_url)?;
-    let path = url.path();
-    if path.is_empty() || path == "/" {
-        let base = settings.base_url.trim().trim_end_matches('/');
-        Ok(format!("{base}{DEFAULT_SUBMIT_PATH}"))
-    } else {
-        Ok(url.as_str().trim_end_matches('/').to_owned())
-    }
+    let url = parse_http_url(&settings.submit_url)?;
+    Ok(url.as_str().trim_end_matches('/').to_owned())
 }
 
 fn result_endpoint(settings: &GenerationSettings, task_id: &str) -> Result<String> {
-    let url = parse_http_url(&settings.base_url)?;
-    let origin = url.origin().ascii_serialization();
-    Ok(format!("{origin}{RESULT_PATH}/{task_id}"))
+    let template = settings.query_url.trim();
+    if template.is_empty() {
+        return Err(AppError::new("config", "请先填写查询任务地址"));
+    }
+    if template.contains("{task_id}") {
+        let filled = template.replace("{task_id}", task_id);
+        parse_http_url(&filled)?;
+        return Ok(filled);
+    }
+    let base = parse_http_url(template)?;
+    Ok(format!(
+        "{}/{}",
+        base.as_str().trim_end_matches('/'),
+        task_id
+    ))
 }
 
 fn client(settings: &GenerationSettings) -> Result<Client> {
@@ -226,6 +248,7 @@ fn client(settings: &GenerationSettings) -> Result<Client> {
     }
     Client::builder()
         .default_headers(headers)
+        .no_proxy()
         .build()
         .map_err(|e| AppError::new("network", e.to_string()))
 }
@@ -298,11 +321,19 @@ pub async fn submit(
     if !(1..=15).contains(&input.duration) {
         return Err(AppError::new("input", "视频时长须为 1—15 秒"));
     }
-    if !matches!(
-        input.resolution.as_str(),
-        "480p竖" | "768p竖" | "480p横" | "768p横" | "480p(1:1)" | "768p(1:1)"
-    ) {
-        return Err(AppError::new("input", "视频分辨率不在接口支持范围内"));
+    let resolution = normalize_resolution(&input.resolution);
+    if settings.resolutions.is_empty() {
+        return Err(AppError::new("config", "当前 API 配置未设置 resolution 列表"));
+    }
+    if !settings
+        .resolutions
+        .iter()
+        .any(|item| item == &resolution || normalize_resolution(item) == resolution)
+    {
+        return Err(AppError::new(
+            "input",
+            "视频分辨率不在当前 API 配置的 resolution 列表中",
+        ));
     }
     if input.image_refs.is_empty() || input.image_refs.len() > 9 || input.audio_refs.len() > 3 {
         return Err(AppError::new(
@@ -313,7 +344,7 @@ pub async fn submit(
     let mut body = json!({
         "prompt": input.prompt,
         "duration": input.duration,
-        "resolution": input.resolution,
+        "resolution": resolution,
     });
     if let Some(seed) = input.seed {
         body["seed"] = json!(seed);
@@ -366,7 +397,7 @@ pub async fn submit(
                     status,
                     input.prompt,
                     input.duration,
-                    input.resolution,
+                    resolution,
                     input.seed,
                     serde_json::to_string(&input.image_refs).unwrap_or_default(),
                     serde_json::to_string(&input.audio_refs).unwrap_or_default(),
@@ -377,7 +408,7 @@ pub async fn submit(
             .map_err(|e| AppError::new("database", e.to_string()))?;
         transaction.execute(
         "INSERT OR REPLACE INTO generation_providers (task_id, profile_id, base_url) VALUES (?1, ?2, ?3)",
-        params![task_id, settings.profile_id, settings.base_url],
+        params![task_id, settings.profile_id, settings.submit_url],
     ).map_err(|e| AppError::new("database", e.to_string()))?;
         transaction
             .commit()
@@ -669,7 +700,7 @@ mod tests {
         let server = thread::spawn(move || {
             let (mut submit, _) = listener.accept().unwrap();
             let submitted = request(&mut submit);
-            assert!(submitted.starts_with(&format!("POST {DEFAULT_SUBMIT_PATH} ")));
+            assert!(submitted.starts_with("POST /submit "));
             assert!(submitted
                 .to_ascii_lowercase()
                 .contains("authorization: token fixture"));
@@ -692,7 +723,7 @@ mod tests {
             );
 
             let (mut poll, _) = listener.accept().unwrap();
-            assert!(request(&mut poll).starts_with(&format!("GET {RESULT_PATH}/task-1 ")));
+            assert!(request(&mut poll).starts_with("GET /result/task-1 "));
             let body = format!(
                 "{{\"code\":\"Success\",\"data\":{{\"status\":\"completed\",\"results\":[{{\"url\":\"http://{address}/video.mp4\",\"type\":\"video\",\"file_type\":\"mp4\"}}]}}}}"
             );
@@ -708,9 +739,12 @@ mod tests {
         storage::create_document(&root, "01 测试.md", "# S001 测试\n").unwrap();
         fs::write(root.join("frame.png"), b"synthetic-image").unwrap();
         fs::write(root.join("voice.mp3"), b"synthetic-audio").unwrap();
+        let submit_url = format!("http://{address}/submit");
         let settings = GenerationSettings {
             profile_id: "fixture".into(),
-            base_url: format!("http://{address}"),
+            submit_url: submit_url.clone(),
+            query_url: format!("http://{address}/result/{{task_id}}"),
+            resolutions: vec!["768p横(1376*768)".into()],
             authorization: "Token fixture".into(),
         };
         let record = tauri::async_runtime::block_on(submit(
@@ -721,7 +755,7 @@ mod tests {
                 shot_id: "S001".into(),
                 prompt: "向前走".into(),
                 duration: 5,
-                resolution: "768p横".into(),
+                resolution: "768p横(1376*768)".into(),
                 seed: Some(683072603085674),
                 image_refs: vec!["frame.png".into()],
                 audio_refs: vec!["voice.mp3".into()],
@@ -731,7 +765,7 @@ mod tests {
         assert_eq!(record.status, "queued");
         assert_eq!(
             task_provider(&root, "task-1").unwrap(),
-            Some(("fixture".into(), settings.base_url.clone()))
+            Some(("fixture".into(), submit_url))
         );
         assert_eq!(task_provider(&root, "legacy-task").unwrap(), None);
         let completed =
@@ -766,7 +800,9 @@ mod tests {
         fs::write(root.join("frame.png"), b"synthetic-image").unwrap();
         let settings = GenerationSettings {
             profile_id: "fixture".into(),
-            base_url: format!("http://{address}{workflow}"),
+            submit_url: format!("http://{address}{workflow}"),
+            query_url: format!("http://{address}/result/{{task_id}}"),
+            resolutions: vec!["768p横(1376*768)".into()],
             authorization: String::new(),
         };
         tauri::async_runtime::block_on(submit(
@@ -777,7 +813,7 @@ mod tests {
                 shot_id: "S001".into(),
                 prompt: "向前走".into(),
                 duration: 5,
-                resolution: "768p横".into(),
+                resolution: "768p横(1376*768)".into(),
                 seed: None,
                 image_refs: vec!["frame.png".into()],
                 audio_refs: vec![],

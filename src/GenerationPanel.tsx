@@ -10,6 +10,8 @@ import {
 import { Asset } from "./Preview";
 import VideoPlayerModal from "./VideoPlayerModal";
 import { ui } from "./i18n";
+import type { VideoApiOptions } from "./videoWorkflows";
+import { normalizeResolution } from "./videoWorkflows";
 import type {
   BoardField,
   EpisodeData,
@@ -82,6 +84,7 @@ export default function GenerationPanel({
   refreshKey,
   busy,
   configured,
+  videoWorkflow,
   configure,
   useVideo,
   renderField,
@@ -94,12 +97,13 @@ export default function GenerationPanel({
   refreshKey: number;
   busy: boolean;
   configured: boolean;
+  videoWorkflow: VideoApiOptions;
   configure: () => void;
   useVideo: (reference: string) => Promise<void>;
   renderField: (key: BoardField, multiline?: boolean) => React.ReactNode;
   video: React.ReactNode;
 }) {
-  const [seed, setSeed] = useState("683072603085674");
+  const [seed, setSeed] = useState(videoWorkflow.defaultSeed);
   const [history, setHistory] = useState<GenerationRecord[]>([]);
   const [task, setTask] = useState<GenerationRecord | null>(null);
   const [error, setError] = useState("");
@@ -111,9 +115,13 @@ export default function GenerationPanel({
   const useVideoRef = useRef(useVideo);
   useVideoRef.current = useVideo;
 
+  useEffect(() => {
+    setSeed(videoWorkflow.defaultSeed);
+  }, [videoWorkflow.defaultSeed]);
+
   const imageInputs = useMemo(
-    () => shotImageInputs(card, episode),
-    [card, episode],
+    () => shotImageInputs(card, episode, videoWorkflow.maxImages),
+    [card, episode, videoWorkflow.maxImages],
   );
   const audioInputs = useMemo(
     () => shotAudioInputs(card, episode),
@@ -195,7 +203,9 @@ export default function GenerationPanel({
         shotId: card.id,
         prompt: card.fields.videoPrompt.value,
         duration,
-        resolution: card.fields.resolution.value || "768p竖",
+        resolution: normalizeResolution(
+          card.fields.resolution.value || videoWorkflow.defaultResolution,
+        ),
         seed: parsedSeed,
         imageRefs: imageInputs.map((item) => item.reference),
         audioRefs,
@@ -243,7 +253,9 @@ export default function GenerationPanel({
         <div className="generation-assets">
           <div className="generation-section-title">
             <span>{ui.generation.referenceImages}</span>
-            <small>{imageInputs.length}/9</small>
+            <small>
+              {imageInputs.length}/{videoWorkflow.maxImages}
+            </small>
           </div>
           <div className="generation-thumbs">
             {imageInputs.map((item, index) => (

@@ -136,14 +136,28 @@ export const ui = {
     addProfile: "添加 API 配置",
     deleteProfile: "删除当前配置",
     noProfiles: "尚未添加 API 配置。",
+    platformType: "类型",
+    platformTypeHint: "当前仅支持 AutoDL；后续可扩展即梦等平台。",
     savedAuthorization: "Token 已保存；点击显示查看",
     authorizationPlaceholder: "在这里填写 API Token",
     showToken: "显示",
     hideToken: "隐藏",
     tokenSaved: "✓ 当前配置已有 Token",
-    baseUrl: "提交任务地址",
-    baseUrlHint:
-      "填写服务商文档中的完整提交 URL；不同 workflow 可新建配置切换。仅填域名时会使用默认 minimax_h3_zm_u24 路径。",
+    submitUrl: "提交任务的接口",
+    submitUrlPlaceholder: "https://…/comfyui_workflow/…",
+    submitUrlHint: "填写服务商文档中的完整提交 URL，无默认值。",
+    queryUrl: "查询任务的接口",
+    queryUrlPlaceholder:
+      "https://…/comfyui_workflow/result/{task_id}",
+    queryUrlHint:
+      "填写完整查询 URL；用 {task_id} 表示任务 ID 占位符。",
+    resolutions: "分辨率",
+    resolutionsPlaceholder: '["480p横(864*480)","768p横(1376*768)"]',
+    resolutionsHint:
+      "JSON 字符串数组，供分镜下拉使用；可手改。AutoDL 会根据配置名称或提交地址自动匹配预设。",
+    defaultSeed: "种子",
+    defaultSeedPlaceholder: "可选；留空则生成时不预填",
+    defaultSeedHint: "打开生成面板时预填的随机种子，可再改。",
     authorization: "API Token（Authorization 请求头）",
     authorizationHint:
       "按服务文档填写 Authorization 请求头的完整值，程序不会自动添加 Bearer。Token 保存在本机应用配置中，所有生成任务统一使用这里的配置。",

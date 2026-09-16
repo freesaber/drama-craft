@@ -143,7 +143,7 @@ export function isOverviewDocument(path: string): boolean {
 export function documentTemplate(
   kind: string,
   filename: string,
-  defaultResolution = "480p横",
+  defaultResolution = "480p横(864*480)",
 ): string {
   const title = filename.replace(/\.md$/i, "");
   if (kind === "outline")

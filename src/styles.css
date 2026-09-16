@@ -1800,6 +1800,9 @@ select:focus {
   padding: 28px;
   box-shadow: 0 20px 90px #10271722;
 }
+.api-modal {
+  width: min(720px, 92vw);
+}
 .modal h2 {
   font-size: 20px;
   margin: 0 0 24px;
@@ -1865,7 +1868,44 @@ select:focus {
 }
 .api-profile-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+}
+.api-inline-field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 19px;
+}
+.api-inline-field > span {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6e8062;
+  white-space: nowrap;
+}
+.api-inline-field input {
+  flex: 1;
+  min-width: 0;
+  margin-top: 0;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+.api-inline-field .secret-input {
+  flex: 1;
+  min-width: 0;
+}
+.api-inline-field .secret-input input {
+  font-family: inherit;
+}
+.api-inline-field .secret-input button {
+  margin-top: 0;
+}
+.api-inline-hint {
+  display: block;
+  margin-top: 6px;
+  color: #899384;
+  font-size: 12px;
+  line-height: 1.5;
 }
 .credential-status {
   display: block;

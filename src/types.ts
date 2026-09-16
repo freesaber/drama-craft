@@ -34,10 +34,21 @@ export interface Media {
   exists: boolean;
   kind: "image" | "audio" | "video";
 }
+export type ApiPlatformType = "autodl";
+
 export interface ApiProfile {
   id: string;
   name: string;
-  baseUrl: string;
+  /** 平台类型；当前仅 AutoDL，预留即梦等 */
+  type: ApiPlatformType;
+  /** 提交任务完整 URL，无默认 */
+  submitUrl: string;
+  /** 查询任务 URL，可用 {task_id} 占位；无默认 */
+  queryUrl: string;
+  /** resolution 下拉选项，JSON 字符串数组 */
+  resolutions: string;
+  /** 生成面板 seed 默认值 */
+  defaultSeed: string;
   hasAuthorization: boolean;
 }
 export interface GenerationSettings {

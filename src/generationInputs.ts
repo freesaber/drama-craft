@@ -1,4 +1,5 @@
 import type { EpisodeData, ShotCard } from "./types";
+import { normalizeResolution } from "./videoWorkflows";
 
 export type InputAsset = { reference: string; label: string };
 
@@ -24,6 +25,7 @@ function unique(items: InputAsset[]) {
 export function shotImageInputs(
   card: ShotCard,
   episode: EpisodeData,
+  maxImages = 9,
 ): InputAsset[] {
   if (card.videoInputs.length)
     return card.videoInputs
@@ -54,7 +56,7 @@ export function shotImageInputs(
         reference: entry.reference,
         label: "素材",
       });
-  return unique(items).slice(0, 9);
+  return unique(items).slice(0, maxImages);
 }
 
 export function shotAudioInputs(
@@ -91,6 +93,7 @@ export function hasVideoReference(card: ShotCard): boolean {
 export function shotGenerationPayload(
   card: ShotCard,
   episode: EpisodeData,
+  options: { maxImages?: number; defaultResolution?: string } = {},
 ): {
   shotId: string;
   shotTitle: string;
@@ -102,10 +105,14 @@ export function shotGenerationPayload(
   audioRefs: string[];
 } | null {
   const prompt = card.fields.videoPrompt.value.trim();
-  const images = shotImageInputs(card, episode);
+  const images = shotImageInputs(card, episode, options.maxImages ?? 9);
   const audios = shotAudioInputs(card, episode);
   const duration = Number(card.fields.duration.value || "5");
-  const resolution = card.fields.resolution.value.trim() || "768p竖";
+  const resolution = normalizeResolution(
+    card.fields.resolution.value.trim() ||
+      options.defaultResolution ||
+      "480p横(864*480)",
+  );
   if (!prompt || !images.length) return null;
   if (!Number.isInteger(duration) || duration < 1 || duration > 15) return null;
   return {

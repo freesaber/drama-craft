@@ -207,7 +207,9 @@ export function parseStoryboard(source: string): Storyboard {
       const raw = source.slice(r.start, r.end);
       if (/[\r\n]/.test(raw)) return { value: "", ambiguous: true };
       const matches = [
-        ...raw.matchAll(new RegExp(`\\b${name}=([^，,|｜*\\s]*)`, "g")),
+        ...raw.matchAll(
+          new RegExp(`\\b${name}=([^，,|｜]*?)(?=(?:，|,)|\\*\\*|$)`, "g"),
+        ),
       ];
       if (matches.length > 1) return { value: "", ambiguous: true };
       if (matches.length) {
@@ -409,7 +411,7 @@ export function fieldPatch(
   if (
     (field.syntax === "inline" && /`/.test(value)) ||
     (field.syntax === "angle" && /[<>]/.test(value)) ||
-    (field.syntax === "parameter" && /[，,|｜*\s]/.test(value))
+    (field.syntax === "parameter" && /[，,|｜\s]/.test(value))
   )
     throw new Error(ui.board.invalidReference);
   const eol = eolOf(board.source);
