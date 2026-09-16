@@ -105,6 +105,8 @@ export default function GenerationPanel({
   const [submitting, setSubmitting] = useState(false);
   const [preview, setPreview] = useState<InputAsset | null>(null);
   const applied = useRef(new Set<string>());
+  const useVideoRef = useRef(useVideo);
+  useVideoRef.current = useVideo;
 
   const imageInputs = useMemo(
     () => shotImageInputs(card, episode),
@@ -145,7 +147,7 @@ export default function GenerationPanel({
           setError(next.error ?? "");
           if (next.localFile && !applied.current.has(next.taskId)) {
             applied.current.add(next.taskId);
-            await useVideo(next.localFile);
+            await useVideoRef.current(next.localFile);
           }
         })
         .catch((e) => {
@@ -159,7 +161,7 @@ export default function GenerationPanel({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [task, project.handle, useVideo]);
+  }, [task, project.handle]);
 
   const submit = async () => {
     if (!configured) {

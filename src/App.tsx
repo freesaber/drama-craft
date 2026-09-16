@@ -610,6 +610,15 @@ export default function App() {
     const tick = async () => {
       try {
         const synced = await api.syncBatchJobs(project.handle);
+        const active = synced.some((job) =>
+          ["scheduled", "running"].includes(job.status),
+        );
+        if (!active && synced.length === 0) {
+          if (!cancelled) {
+            setBatchJobs((current) => (current.length ? [] : current));
+          }
+          return;
+        }
         for (const job of synced) {
           for (const item of job.items) {
             if (
@@ -626,7 +635,22 @@ export default function App() {
         }
         const advanced = await api.advanceBatchJobs(project.handle);
         if (cancelled) return;
-        setBatchJobs(advanced.jobs);
+        setBatchJobs((current) => {
+          if (
+            current.length === advanced.jobs.length &&
+            current.every(
+              (job, index) =>
+                job.jobId === advanced.jobs[index]?.jobId &&
+                job.status === advanced.jobs[index]?.status &&
+                job.updatedAt === advanced.jobs[index]?.updatedAt &&
+                job.itemCompleted === advanced.jobs[index]?.itemCompleted &&
+                job.itemCancelled === advanced.jobs[index]?.itemCancelled &&
+                job.itemFailed === advanced.jobs[index]?.itemFailed,
+            )
+          )
+            return current;
+          return advanced.jobs;
+        });
         for (const job of advanced.jobs) {
           for (const item of job.items) {
             if (
