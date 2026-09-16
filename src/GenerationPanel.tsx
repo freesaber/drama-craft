@@ -11,7 +11,10 @@ import {
 import { Asset } from "./Preview";
 import VideoPlayerModal from "./VideoPlayerModal";
 import { ui } from "./i18n";
-import type { VideoApiOptions } from "./videoWorkflows";
+import {
+  matchConfiguredResolution,
+  type VideoApiOptions,
+} from "./videoWorkflows";
 import type {
   BoardField,
   EpisodeData,
@@ -134,8 +137,7 @@ export default function GenerationPanel({
     [card, episode],
   );
   const promptHasNarration = /旁白/.test(card.fields.videoPrompt.value);
-  const showOmitNarrator =
-    promptHasNarration && audioInputs.length > 0;
+  const showOmitNarrator = promptHasNarration && audioInputs.length > 0;
 
   useEffect(() => {
     if (!showOmitNarrator) setOmitNarratorAudio(false);
@@ -209,9 +211,11 @@ export default function GenerationPanel({
         shotId: card.id,
         prompt: card.fields.videoPrompt.value,
         duration,
-        resolution:
-          card.fields.resolution.value.trim() ||
+        resolution: matchConfiguredResolution(
+          card.fields.resolution.value,
+          videoWorkflow.resolutions,
           videoWorkflow.defaultResolution,
+        ),
         seed: parsedSeed,
         imageRefs: imageInputs.map((item) => item.reference),
         audioRefs,
@@ -265,7 +269,10 @@ export default function GenerationPanel({
           </div>
           <div className="generation-thumbs">
             {imageInputs.map((item, index) => (
-              <div className="generation-thumb-wrap" key={`${index}-${item.reference}`}>
+              <div
+                className="generation-thumb-wrap"
+                key={`${index}-${item.reference}`}
+              >
                 <Thumbnail
                   project={project}
                   document={document}
@@ -275,9 +282,7 @@ export default function GenerationPanel({
                 />
               </div>
             ))}
-            {!imageInputs.length && (
-              <p className="muted">{ui.board.noFrame}</p>
-            )}
+            {!imageInputs.length && <p className="muted">{ui.board.noFrame}</p>}
           </div>
           {!!audioInputs.length && (
             <>
@@ -322,7 +327,9 @@ export default function GenerationPanel({
               <input
                 type="checkbox"
                 checked={omitNarratorAudio}
-                disabled={busy || submitting || !!(task && running(task.status))}
+                disabled={
+                  busy || submitting || !!(task && running(task.status))
+                }
                 onChange={(event) => setOmitNarratorAudio(event.target.checked)}
               />
               <span>{ui.generation.omitNarratorAudio}</span>

@@ -6,6 +6,7 @@ import {
   fillEmptyAutodlPreset,
   compactResolutionsJson,
   formatResolutionsJson,
+  matchConfiguredResolution,
   migrateApiProfile,
   migrateGenerationSettings,
   optionsFromProfile,
@@ -14,7 +15,9 @@ import {
 
 describe("videoWorkflows", () => {
   it("parses resolution JSON lists", () => {
-    const compact = formatResolutionsJson(AUTODL_RESOLUTION_PRESETS[0].resolutions);
+    const compact = formatResolutionsJson(
+      AUTODL_RESOLUTION_PRESETS[0].resolutions,
+    );
     expect(parseResolutionsJson(compact)).toEqual([
       ...AUTODL_RESOLUTION_PRESETS[0].resolutions,
     ]);
@@ -49,13 +52,31 @@ describe("videoWorkflows", () => {
       type: "autodl",
       submitUrl:
         "https://autodl.art/api/v1/comfyui/comfyui_workflow/minimax_h3_zm_u24",
-      queryUrl: "https://autodl.art/api/v1/comfyui/comfyui_workflow/result/{task_id}",
+      queryUrl:
+        "https://autodl.art/api/v1/comfyui/comfyui_workflow/result/{task_id}",
       resolutions: '["768p横(1376*768)"]',
       defaultSeed: "999",
       hasAuthorization: true,
     });
     expect(saved.resolutions).toBe('["768p横(1376*768)"]');
     expect(saved.defaultSeed).toBe("999");
+  });
+
+  it("maps document resolution labels onto the active API list", () => {
+    const list = [...AUTODL_RESOLUTION_PRESETS[1].resolutions];
+    expect(matchConfiguredResolution("480p横", list, list[0])).toBe(
+      "480p横(864*480)",
+    );
+    expect(matchConfiguredResolution("480p竖(480*864)", list, list[0])).toBe(
+      "480p竖(480*864)",
+    );
+    expect(matchConfiguredResolution("", list, "480p横(864*480)")).toBe(
+      "480p横(864*480)",
+    );
+    expect(matchConfiguredResolution("1080p横", list, list[0])).toBe(
+      "1080p横(1920*1088)",
+    );
+    expect(matchConfiguredResolution("999p", list, list[0])).toBe(list[0]);
   });
 
   it("builds options from configured profile", () => {

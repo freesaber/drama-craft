@@ -1,9 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api, errorMessage } from "./api";
-import {
-  hasVideoReference,
-  shotGenerationPayload,
-} from "./generationInputs";
+import { hasSelectedVideo, shotGenerationPayload } from "./generationInputs";
 import { ui } from "./i18n";
 import type { VideoApiOptions } from "./videoWorkflows";
 import type { BatchJobItemInput, Project, Storyboard } from "./types";
@@ -42,14 +39,26 @@ export default function BatchGenerateDialog({
       try {
         const next: Candidate[] = [];
         for (const card of board.cards) {
-          if (hasVideoReference(card)) continue;
+          const videoRef = card.fields.videoFile.value.trim();
+          if (videoRef) {
+            try {
+              const video = await api.media(project.handle, document, videoRef);
+              if (hasSelectedVideo(card, video.exists)) continue;
+            } catch {
+              // Unreadable planned names are treated as not yet generated.
+            }
+          }
           const payload = shotGenerationPayload(card, board.episode, {
             maxImages: videoWorkflow.maxImages,
             defaultResolution: videoWorkflow.defaultResolution,
+            resolutions: videoWorkflow.resolutions,
           });
           if (!payload) continue;
           const missing: string[] = [];
-          for (const reference of [...payload.imageRefs, ...payload.audioRefs]) {
+          for (const reference of [
+            ...payload.imageRefs,
+            ...payload.audioRefs,
+          ]) {
             try {
               const media = await api.media(
                 project.handle,
@@ -82,6 +91,16 @@ export default function BatchGenerateDialog({
     () => Array.from({ length: 13 }, (_, hour) => hour),
     [],
   );
+  const allSelected =
+    candidates.length > 0 &&
+    candidates.every((item) => selected.has(item.shotId));
+  const someSelected = candidates.some((item) => selected.has(item.shotId));
+  const selectAllRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (selectAllRef.current)
+      selectAllRef.current.indeterminate = someSelected && !allSelected;
+  }, [allSelected, someSelected]);
 
   const toggle = (shotId: string) =>
     setSelected((current) => {
@@ -90,6 +109,11 @@ export default function BatchGenerateDialog({
       else next.add(shotId);
       return next;
     });
+
+  const toggleAll = () =>
+    setSelected(
+      allSelected ? new Set() : new Set(candidates.map((item) => item.shotId)),
+    );
 
   const submit = async () => {
     const items = candidates.filter((item) => selected.has(item.shotId));
@@ -148,23 +172,74 @@ export default function BatchGenerateDialog({
         {checking ? (
           <p className="muted">{ui.batch.checking}</p>
         ) : candidates.length ? (
-          <div className="batch-shot-list">
-            {candidates.map((item) => (
-              <label key={item.shotId} className="batch-shot-row">
-                <input
-                  type="checkbox"
-                  checked={selected.has(item.shotId)}
-                  disabled={busy || submitting}
-                  onChange={() => toggle(item.shotId)}
-                />
-                <code>{item.shotId}</code>
-                <span>{item.shotTitle || "—"}</span>
-                <small>
-                  {item.duration}s · {item.resolution} · 图
-                  {item.imageRefs.length}
-                </small>
-              </label>
-            ))}
+          <div className="batch-shot-table-wrap">
+            <table className="batch-shot-table is-selectable">
+              <thead>
+                <tr>
+                  <th className="batch-shot-check">
+                    <input
+                      ref={selectAllRef}
+                      type="checkbox"
+                      checked={allSelected}
+                      disabled={busy || submitting}
+                      aria-label={ui.batch.selectAll}
+                      onChange={toggleAll}
+                    />
+                  </th>
+                  <th className="batch-shot-id">{ui.batch.shotId}</th>
+                  <th>{ui.batch.shotTitle}</th>
+                  <th className="batch-shot-duration">{ui.batch.duration}</th>
+                  <th className="batch-shot-resolution">
+                    {ui.batch.resolution}
+                  </th>
+                  <th className="batch-shot-images">{ui.batch.images}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {candidates.map((item) => {
+                  const checked = selected.has(item.shotId);
+                  return (
+                    <tr
+                      key={item.shotId}
+                      className={checked ? "is-selected" : ""}
+                      onClick={() => {
+                        if (!busy && !submitting) toggle(item.shotId);
+                      }}
+                    >
+                      <td className="batch-shot-check">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={busy || submitting}
+                          aria-label={item.shotId}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={() => toggle(item.shotId)}
+                        />
+                      </td>
+                      <td className="batch-shot-id">
+                        <code>{item.shotId}</code>
+                      </td>
+                      <td
+                        className="batch-shot-title"
+                        title={item.shotTitle || undefined}
+                      >
+                        {item.shotTitle || "—"}
+                      </td>
+                      <td className="batch-shot-duration">{item.duration}s</td>
+                      <td
+                        className="batch-shot-resolution"
+                        title={item.resolution}
+                      >
+                        {item.resolution}
+                      </td>
+                      <td className="batch-shot-images">
+                        {item.imageRefs.length}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         ) : (
           <p className="muted">{ui.batch.empty}</p>
@@ -189,9 +264,7 @@ export default function BatchGenerateDialog({
           </p>
         )}
         <div className="modal-actions">
-          <span className="muted">
-            {ui.batch.selected(selected.size)}
-          </span>
+          <span className="muted">{ui.batch.selected(selected.size)}</span>
           <button type="button" disabled={busy || submitting} onClick={onClose}>
             {ui.cancel}
           </button>

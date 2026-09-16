@@ -1,4 +1,5 @@
 import type { EpisodeData, ShotCard } from "./types";
+import { matchConfiguredResolution } from "./videoWorkflows";
 
 export type InputAsset = { reference: string; label: string };
 
@@ -85,14 +86,22 @@ export function shotAudioInputs(
   return unique(items).slice(0, 3);
 }
 
-export function hasVideoReference(card: ShotCard): boolean {
-  return Boolean(card.fields.videoFile.value.trim());
+/** Planned `视频文件名` is always filled in v1 episodes; only an on-disk file counts. */
+export function hasSelectedVideo(
+  card: ShotCard,
+  videoExists: boolean,
+): boolean {
+  return Boolean(card.fields.videoFile.value.trim()) && videoExists;
 }
 
 export function shotGenerationPayload(
   card: ShotCard,
   episode: EpisodeData,
-  options: { maxImages?: number; defaultResolution?: string } = {},
+  options: {
+    maxImages?: number;
+    defaultResolution?: string;
+    resolutions?: readonly string[];
+  } = {},
 ): {
   shotId: string;
   shotTitle: string;
@@ -107,10 +116,11 @@ export function shotGenerationPayload(
   const images = shotImageInputs(card, episode, options.maxImages ?? 9);
   const audios = shotAudioInputs(card, episode);
   const duration = Number(card.fields.duration.value || "5");
-  const resolution =
-    card.fields.resolution.value.trim() ||
-    options.defaultResolution ||
-    "480p横";
+  const resolution = matchConfiguredResolution(
+    card.fields.resolution.value,
+    options.resolutions ?? [],
+    options.defaultResolution || "480p横(864*480)",
+  );
   if (!prompt || !images.length) return null;
   if (!Number.isInteger(duration) || duration < 1 || duration > 15) return null;
   return {

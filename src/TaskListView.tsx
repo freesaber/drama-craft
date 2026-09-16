@@ -5,9 +5,19 @@ import type { BatchJob, Project } from "./types";
 
 function formatTime(value: string) {
   const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? value
-    : date.toLocaleString("zh-CN");
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("zh-CN");
+}
+
+function documentName(path: string) {
+  return path.split(/[/\\]/).at(-1) || path;
+}
+
+function statusTone(status: string) {
+  const key = status.toLowerCase();
+  if (["failed", "error", "download_failed"].includes(key)) return "is-failed";
+  if (["completed", "success", "succeeded"].includes(key)) return "is-done";
+  if (key === "cancelled") return "is-muted";
+  return "";
 }
 
 export default function TaskListView({
@@ -58,18 +68,14 @@ export default function TaskListView({
     void run(async () => {
       if (!window.confirm(ui.batch.cancelConfirm)) return;
       const next = await api.cancelBatchJob(project.handle, jobId);
-      onJobsChange(
-        jobs.map((job) => (job.jobId === next.jobId ? next : job)),
-      );
+      onJobsChange(jobs.map((job) => (job.jobId === next.jobId ? next : job)));
       setDetail(next);
     });
 
   const cancelItem = (itemId: string) =>
     void run(async () => {
       const next = await api.cancelBatchJobItem(project.handle, itemId);
-      onJobsChange(
-        jobs.map((job) => (job.jobId === next.jobId ? next : job)),
-      );
+      onJobsChange(jobs.map((job) => (job.jobId === next.jobId ? next : job)));
       setDetail(next);
     });
 
@@ -85,7 +91,7 @@ export default function TaskListView({
             aria-pressed={filter === "all"}
             onClick={() => setFilter("all")}
           >
-            全部
+            {ui.batch.filterAll}
           </button>
           <button
             aria-pressed={filter === "generation"}
@@ -114,47 +120,66 @@ export default function TaskListView({
           <span>{error}</span>
         </div>
       )}
-      <div className="task-list">
-        {!visible.length && <p className="muted">{ui.batch.emptyJobs}</p>}
-        {visible.map((job) => (
-          <article key={job.jobId} className="task-card">
-            <div className="task-card-main">
-              <button
-                type="button"
-                className="task-name"
-                onClick={() => setDetail(job)}
-              >
-                <strong>{job.name}</strong>
-                <small>
-                  {ui.batch.type(job.jobType)} · {ui.generation.status(job.status)} ·{" "}
+      <div className="batch-shot-table-wrap task-table-wrap">
+        <table className="batch-shot-table task-table is-selectable">
+          <thead>
+            <tr>
+              <th>{ui.batch.jobName}</th>
+              <th className="task-table-type">{ui.batch.typeLabel}</th>
+              <th className="task-table-status">{ui.batch.statusLabel}</th>
+              <th className="task-table-progress">{ui.batch.progressLabel}</th>
+              <th className="task-table-time">{ui.batch.scheduledAt}</th>
+              <th className="task-table-document">{ui.batch.document}</th>
+              <th className="task-table-actions">{ui.batch.actions}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {!visible.length && (
+              <tr className="task-table-empty">
+                <td colSpan={7}>{ui.batch.emptyJobs}</td>
+              </tr>
+            )}
+            {visible.map((job) => (
+              <tr key={job.jobId} onClick={() => setDetail(job)}>
+                <td className="task-table-name" title={job.name}>
+                  {job.name}
+                </td>
+                <td className="task-table-type">
+                  {ui.batch.type(job.jobType)}
+                </td>
+                <td className={`task-table-status ${statusTone(job.status)}`}>
+                  {ui.generation.status(job.status)}
+                </td>
+                <td className="task-table-progress">
                   {ui.batch.progress(job.itemCompleted, job.itemTotal)}
-                </small>
-              </button>
-              <div className="task-meta">
-                <span>
-                  {ui.batch.scheduledAt}：{formatTime(job.scheduledAt)}
-                </span>
-                <span>
-                  {ui.batch.document}：{job.document}
-                </span>
-              </div>
-            </div>
-            <div className="task-card-actions">
-              <button type="button" onClick={() => setDetail(job)}>
-                {ui.batch.openDetail}
-              </button>
-              {["scheduled", "running"].includes(job.status) && (
-                <button
-                  type="button"
-                  disabled={busy || acting}
-                  onClick={() => cancelJob(job.jobId)}
+                </td>
+                <td className="task-table-time">
+                  {formatTime(job.scheduledAt)}
+                </td>
+                <td className="task-table-document" title={job.document}>
+                  {documentName(job.document)}
+                </td>
+                <td
+                  className="task-table-actions"
+                  onClick={(event) => event.stopPropagation()}
                 >
-                  {ui.batch.cancelJob}
-                </button>
-              )}
-            </div>
-          </article>
-        ))}
+                  <button type="button" onClick={() => setDetail(job)}>
+                    {ui.batch.openDetail}
+                  </button>
+                  {["scheduled", "running"].includes(job.status) && (
+                    <button
+                      type="button"
+                      disabled={busy || acting}
+                      onClick={() => cancelJob(job.jobId)}
+                    >
+                      {ui.batch.cancelJob}
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
       {detail && (
         <div className="modal-backdrop" onClick={() => setDetail(null)}>
@@ -174,41 +199,84 @@ export default function TaskListView({
             <p className="muted">
               {ui.batch.document}：{detail.document}
             </p>
-            <div className="batch-shot-list">
-              <div className="generation-section-title">
-                <span>{ui.batch.items}</span>
-                <small>{detail.items.length}</small>
-              </div>
-              {!detail.items.length && (
+            <div className="generation-section-title">
+              <span>{ui.batch.items}</span>
+              <small>{detail.items.length}</small>
+            </div>
+            <div className="batch-shot-table-wrap">
+              {!detail.items.length ? (
                 <p className="muted">{ui.batch.noItems}</p>
+              ) : (
+                <table className="batch-shot-table">
+                  <thead>
+                    <tr>
+                      <th className="batch-shot-id">{ui.batch.shotId}</th>
+                      <th>{ui.batch.shotTitle}</th>
+                      <th className="task-table-status">
+                        {ui.batch.statusLabel}
+                      </th>
+                      <th className="task-table-error">
+                        {ui.batch.errorReason}
+                      </th>
+                      <th>{ui.batch.result}</th>
+                      <th className="task-table-actions">{ui.batch.actions}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detail.items.map((item) => (
+                      <tr key={item.itemId}>
+                        <td className="batch-shot-id">
+                          <code>{item.shotId}</code>
+                        </td>
+                        <td
+                          className="batch-shot-title"
+                          title={item.shotTitle || undefined}
+                        >
+                          {item.shotTitle || "—"}
+                        </td>
+                        <td
+                          className={`task-table-status ${statusTone(item.status)}`}
+                        >
+                          {ui.generation.status(item.status)}
+                        </td>
+                        <td
+                          className="task-table-error"
+                          title={item.error || undefined}
+                        >
+                          {item.error ? (
+                            <span className="generation-error">
+                              {item.error}
+                            </span>
+                          ) : item.status === "cancelled" ? (
+                            <span className="muted">
+                              {ui.batch.itemCancelled}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td
+                          className="task-table-result"
+                          title={item.localFile || undefined}
+                        >
+                          {item.localFile || "—"}
+                        </td>
+                        <td className="task-table-actions">
+                          {item.status === "pending" && (
+                            <button
+                              type="button"
+                              disabled={busy || acting}
+                              onClick={() => cancelItem(item.itemId)}
+                            >
+                              {ui.batch.cancelItem}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
-              {detail.items.map((item) => (
-                <div key={item.itemId} className="batch-shot-row task-item-row">
-                  <div>
-                    <code>{item.shotId}</code>
-                    <span>{item.shotTitle || "—"}</span>
-                    <small>
-                      {ui.generation.status(item.status)}
-                      {item.localFile ? ` · ${item.localFile}` : ""}
-                    </small>
-                    {item.error && (
-                      <small className="generation-error">{item.error}</small>
-                    )}
-                    {item.status === "cancelled" && (
-                      <small className="muted">{ui.batch.itemCancelled}</small>
-                    )}
-                  </div>
-                  {item.status === "pending" && (
-                    <button
-                      type="button"
-                      disabled={busy || acting}
-                      onClick={() => cancelItem(item.itemId)}
-                    >
-                      {ui.batch.cancelItem}
-                    </button>
-                  )}
-                </div>
-              ))}
             </div>
             <div className="modal-actions">
               {["scheduled", "running"].includes(detail.status) && (

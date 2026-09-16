@@ -1974,28 +1974,95 @@ select:focus {
   max-height: 320px;
   overflow: auto;
 }
-.batch-shot-row {
-  display: grid;
-  grid-template-columns: auto auto 1fr auto;
-  gap: 10px;
-  align-items: center;
-  padding: 8px 10px;
+.batch-shot-table-wrap {
+  margin: 14px 0;
+  max-height: 320px;
+  overflow: auto;
   border: 1px solid #d7ddd0;
-  background: #f7f8f4;
+  border-radius: 8px;
+  background: #fff;
+}
+.batch-shot-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
   font-size: 12px;
 }
-.batch-shot-row code {
+.batch-shot-table th,
+.batch-shot-table td {
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid #e7ece1;
+  white-space: nowrap;
+}
+.batch-shot-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #eef3e8;
+  color: #5d6f54;
+  font-size: 11px;
+  font-weight: 500;
+}
+.batch-shot-table tbody tr {
+  user-select: none;
+}
+.batch-shot-table.is-selectable tbody tr {
+  cursor: pointer;
+}
+.batch-shot-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.batch-shot-table tbody tr:hover {
+  background: #f4f7f0;
+}
+.batch-shot-table tbody tr.is-selected {
+  background: #f3f7ef;
+}
+.batch-shot-table .batch-shot-check {
+  width: 40px;
+  padding-left: 12px;
+  padding-right: 4px;
+  text-align: center;
+}
+.batch-shot-table .batch-shot-id {
+  width: 64px;
+}
+.batch-shot-table .batch-shot-id code {
   font-size: 11px;
 }
-.batch-shot-row small {
-  color: #7f8b78;
+.batch-shot-table .batch-shot-title {
+  width: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.task-item-row {
-  grid-template-columns: 1fr auto;
+.batch-shot-table .batch-shot-duration {
+  width: 52px;
+  color: #6d7c68;
 }
-.task-item-row > div {
-  display: grid;
-  gap: 2px;
+.batch-shot-table .batch-shot-images {
+  width: 64px;
+  color: #6d7c68;
+}
+.batch-shot-table .batch-shot-resolution {
+  width: 92px;
+  color: #6d7c68;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.modal .batch-shot-table input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  box-shadow: none;
+  display: inline-block;
+  vertical-align: middle;
+  accent-color: #32563c;
 }
 .task-workspace {
   flex: 1;
@@ -2007,57 +2074,99 @@ select:focus {
 .task-heading {
   margin-bottom: 12px;
 }
-.task-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  overflow: auto;
+.task-table-wrap {
+  flex: 1;
   min-height: 0;
-  flex: 1;
+  max-height: none;
+  margin: 0;
 }
-.task-card {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 16px;
-  border: 1px solid #d7ddd0;
-  background: #fbfcf8;
+.task-table .task-table-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.task-card-main {
-  min-width: 0;
-  flex: 1;
-  display: grid;
-  gap: 8px;
+.task-table .task-table-type {
+  width: 88px;
+  color: #6d7c68;
 }
-.task-name {
-  text-align: left;
+.task-table .task-table-status,
+.batch-shot-table .task-table-status {
+  width: 88px;
+}
+.task-table .task-table-progress {
+  width: 64px;
+  color: #6d7c68;
+}
+.task-table .task-table-time {
+  width: 168px;
+  color: #6d7c68;
+}
+.task-table .task-table-document {
+  width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #6d7c68;
+}
+.task-table-actions {
+  text-align: right;
+  white-space: nowrap;
+}
+.task-table .task-table-actions {
+  width: 196px;
+}
+.task-detail-modal .task-table-actions {
+  width: 80px;
+}
+.task-table-actions button {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+.task-table-actions button + button {
+  margin-left: 6px;
+}
+.task-table-result {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #6d7c68;
+}
+.task-table-status {
+  color: #6d7c68;
+}
+.task-table-status.is-failed {
+  color: #a96045;
+}
+.task-table-status.is-done {
+  color: #316143;
+}
+.task-table-status.is-muted {
+  color: #8a987d;
+}
+.task-table-error {
+  white-space: normal;
+  line-height: 1.45;
+}
+.task-table-error .generation-error {
+  display: block;
+  font-size: 12px;
+}
+.task-table tbody tr.task-table-empty,
+.task-table tbody tr.task-table-empty:hover {
+  cursor: default;
   background: transparent;
-  border: 0;
-  padding: 0;
-  display: grid;
-  gap: 4px;
-  cursor: pointer;
 }
-.task-name strong {
-  font-size: 14px;
-}
-.task-name small,
-.task-meta {
-  color: #7f8b78;
-  font-size: 11px;
-}
-.task-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-.task-card-actions {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
+.task-table-empty td {
+  text-align: center;
+  color: #8a987d;
+  padding: 28px 12px;
+  white-space: normal;
 }
 .task-detail-modal {
-  width: min(720px, 94vw);
+  width: min(820px, 94vw);
+}
+.task-detail-modal .task-table-error {
+  width: 42%;
+}
+.task-detail-modal .task-table-result {
+  width: 18%;
 }
 .candidate-list {
   max-height: 360px;

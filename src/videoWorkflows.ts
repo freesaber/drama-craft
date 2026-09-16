@@ -49,6 +49,36 @@ export function tryParseResolutionsJson(raw: string): string[] {
   }
 }
 
+function resolutionPrefixMatch(shot: string, item: string) {
+  if (!item.startsWith(shot)) return false;
+  const rest = item.slice(shot.length);
+  return (
+    !rest ||
+    rest.startsWith("(") ||
+    rest.startsWith(" ") ||
+    rest.startsWith("（")
+  );
+}
+
+/** Map a document label like `480p横` onto the current API resolution list. */
+export function matchConfiguredResolution(
+  value: string,
+  resolutions: readonly string[],
+  fallback = "",
+): string {
+  const shot = value.trim();
+  const list = resolutions.map((item) => item.trim()).filter(Boolean);
+  if (!list.length) return shot || fallback;
+  if (!shot) return fallback || list[0];
+  const exact = list.find((item) => item === shot);
+  if (exact) return exact;
+  const prefixed = list.filter((item) => resolutionPrefixMatch(shot, item));
+  if (prefixed.length === 1) return prefixed[0];
+  if (prefixed.length > 1)
+    return prefixed.find((item) => item.includes("(")) ?? prefixed[0];
+  return fallback || list[0];
+}
+
 /** AutoDL 两套可一键填入的 resolution / seed 预设（不填接口地址） */
 export const AUTODL_RESOLUTION_PRESETS = [
   {
@@ -153,7 +183,8 @@ export function optionsFromProfile(
   const resolutions = tryParseResolutionsJson(profile.resolutions);
   return {
     resolutions,
-    defaultResolution: resolutions[0] ?? FALLBACK_VIDEO_OPTIONS.defaultResolution,
+    defaultResolution:
+      resolutions[0] ?? FALLBACK_VIDEO_OPTIONS.defaultResolution,
     defaultSeed: profile.defaultSeed.trim(),
     maxImages: 9,
     maxAudios: 3,

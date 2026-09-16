@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  hasVideoReference,
+  hasSelectedVideo,
   shotGenerationPayload,
   shotImageInputs,
 } from "./generationInputs";
@@ -61,11 +61,38 @@ describe("generationInputs", () => {
       videoPrompt: "镜头推进",
       frameFile: "frame.png",
     });
-    expect(hasVideoReference(shot)).toBe(false);
+    expect(hasSelectedVideo(shot, false)).toBe(false);
     expect(shotImageInputs(shot, episode)).toEqual([
       { reference: "frame.png", label: "首帧" },
     ]);
     expect(shotGenerationPayload(shot, episode)?.shotId).toBe("S001");
+  });
+
+  it("does not treat a planned video filename as already generated", () => {
+    const shot = card({
+      id: "S009",
+      videoPrompt: "宿舍夜思",
+      frameFile: "01 首帧_S009.png",
+      videoFile: "01 S009.mp4",
+    });
+    expect(hasSelectedVideo(shot, false)).toBe(false);
+    expect(hasSelectedVideo(shot, true)).toBe(true);
+    expect(shotGenerationPayload(shot, episode)?.shotId).toBe("S009");
+  });
+
+  it("maps short resolution labels onto the current API list", () => {
+    const shot = card({
+      id: "S009",
+      videoPrompt: "宿舍夜思",
+      frameFile: "01 首帧_S009.png",
+      resolution: "480p横",
+    });
+    expect(
+      shotGenerationPayload(shot, episode, {
+        resolutions: ["480p竖(480*864)", "480p横(864*480)"],
+        defaultResolution: "480p竖(480*864)",
+      })?.resolution,
+    ).toBe("480p横(864*480)");
   });
 
   it("rejects cards without prompt or images", () => {

@@ -294,6 +294,53 @@ async fn envelope(response: reqwest::Response) -> Result<Value> {
     Ok(value)
 }
 
+fn resolution_prefix_match(shot: &str, item: &str) -> bool {
+    match item.strip_prefix(shot) {
+        Some(rest) => {
+            rest.is_empty()
+                || rest.starts_with('(')
+                || rest.starts_with(' ')
+                || rest.starts_with('（')
+        }
+        None => false,
+    }
+}
+
+fn resolve_resolution(value: &str, resolutions: &[String]) -> Result<String> {
+    if resolutions.is_empty() {
+        return Err(AppError::new(
+            "config",
+            "当前 API 配置未设置 resolution 列表",
+        ));
+    }
+    let shot = value.trim();
+    if shot.is_empty() {
+        return Ok(resolutions[0].clone());
+    }
+    if let Some(exact) = resolutions.iter().find(|item| item.as_str() == shot) {
+        return Ok(exact.clone());
+    }
+    let prefixed: Vec<&String> = resolutions
+        .iter()
+        .filter(|item| resolution_prefix_match(shot, item))
+        .collect();
+    if prefixed.len() == 1 {
+        return Ok(prefixed[0].clone());
+    }
+    if prefixed.len() > 1 {
+        return Ok(prefixed
+            .iter()
+            .find(|item| item.contains('('))
+            .copied()
+            .unwrap_or(prefixed[0])
+            .clone());
+    }
+    Err(AppError::new(
+        "input",
+        "视频分辨率不在当前 API 配置的 resolution 列表中",
+    ))
+}
+
 pub async fn submit(
     root: &Path,
     settings: &GenerationSettings,
@@ -305,19 +352,7 @@ pub async fn submit(
     if !(1..=15).contains(&input.duration) {
         return Err(AppError::new("input", "视频时长须为 1—15 秒"));
     }
-    let resolution = input.resolution.trim().to_owned();
-    if settings.resolutions.is_empty() {
-        return Err(AppError::new(
-            "config",
-            "当前 API 配置未设置 resolution 列表",
-        ));
-    }
-    if !settings.resolutions.iter().any(|item| item == &resolution) {
-        return Err(AppError::new(
-            "input",
-            "视频分辨率不在当前 API 配置的 resolution 列表中",
-        ));
-    }
+    let resolution = resolve_resolution(&input.resolution, &settings.resolutions)?;
     if input.image_refs.is_empty() || input.image_refs.len() > 9 || input.audio_refs.len() > 3 {
         return Err(AppError::new(
             "input",
@@ -622,6 +657,21 @@ mod tests {
         net::{TcpListener, TcpStream},
         thread,
     };
+
+    #[test]
+    fn resolves_short_resolution_labels_against_current_list() {
+        let list = vec!["480p竖(480*864)".into(), "480p横(864*480)".into()];
+        assert_eq!(
+            resolve_resolution("480p横", &list).unwrap(),
+            "480p横(864*480)"
+        );
+        assert_eq!(
+            resolve_resolution("480p横(864*480)", &list).unwrap(),
+            "480p横(864*480)"
+        );
+        assert_eq!(resolve_resolution("", &list).unwrap(), "480p竖(480*864)");
+        assert!(resolve_resolution("999p", &list).is_err());
+    }
 
     fn request(stream: &mut TcpStream) -> String {
         let mut bytes = Vec::new();
