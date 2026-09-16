@@ -15,27 +15,6 @@ const RES_1440P_H = "1440p横(2560*1440)";
 const RES_480P_11 = "480p(1:1)(480*480)";
 const RES_768P_11 = "768p(1:1)(768*768)";
 
-/** 旧 Markdown / 短名 → API 完整枚举值 */
-export const RESOLUTION_ALIASES: Record<string, string> = {
-  "480p横": RES_480P_H,
-  "480p竖": RES_480P_V,
-  "768p横": RES_768P_H,
-  "768p竖": RES_768P_V,
-  "1080p横": RES_1080P_H,
-  "1080p竖": RES_1080P_V,
-  "1088p横": RES_1080P_H,
-  "1088p竖": RES_1080P_V,
-  "1440p横": RES_1440P_H,
-  "1440p竖": RES_1440P_V,
-  "480p(1:1)": RES_480P_11,
-  "768p(1:1)": RES_768P_11,
-};
-
-export function normalizeResolution(value: string): string {
-  const trimmed = value.trim();
-  return RESOLUTION_ALIASES[trimmed] ?? trimmed;
-}
-
 export function formatResolutionsJson(values: readonly string[]): string {
   return JSON.stringify([...values]);
 }
@@ -128,15 +107,27 @@ export function detectAutodlPreset(
 }
 
 export function autodlPresetValues(
-  profile: Pick<ApiProfile, "name" | "submitUrl" | "type">,
-): Pick<ApiProfile, "resolutions" | "defaultSeed"> | null {
+  profile: Pick<
+    ApiProfile,
+    "name" | "submitUrl" | "type" | "resolutions" | "defaultSeed"
+  >,
+): Partial<Pick<ApiProfile, "resolutions" | "defaultSeed">> | null {
   if (profile.type !== "autodl") return null;
   const preset = detectAutodlPreset(profile);
   if (!preset) return null;
-  return {
-    resolutions: formatResolutionsJson(preset.resolutions),
-    defaultSeed: preset.defaultSeed,
-  };
+  const updates: Partial<Pick<ApiProfile, "resolutions" | "defaultSeed">> = {};
+  if (!profile.resolutions.trim()) {
+    updates.resolutions = formatResolutionsJson(preset.resolutions);
+  }
+  if (!profile.defaultSeed.trim()) {
+    updates.defaultSeed = preset.defaultSeed;
+  }
+  return Object.keys(updates).length ? updates : null;
+}
+
+export function fillEmptyAutodlPreset(profile: ApiProfile): ApiProfile {
+  const preset = autodlPresetValues(profile);
+  return preset ? { ...profile, ...preset } : profile;
 }
 
 export function emptyApiProfile(

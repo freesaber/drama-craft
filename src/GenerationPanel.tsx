@@ -11,7 +11,6 @@ import { Asset } from "./Preview";
 import VideoPlayerModal from "./VideoPlayerModal";
 import { ui } from "./i18n";
 import type { VideoApiOptions } from "./videoWorkflows";
-import { normalizeResolution } from "./videoWorkflows";
 import type {
   BoardField,
   EpisodeData,
@@ -203,9 +202,9 @@ export default function GenerationPanel({
         shotId: card.id,
         prompt: card.fields.videoPrompt.value,
         duration,
-        resolution: normalizeResolution(
-          card.fields.resolution.value || videoWorkflow.defaultResolution,
-        ),
+        resolution:
+          card.fields.resolution.value.trim() ||
+          videoWorkflow.defaultResolution,
         seed: parsedSeed,
         imageRefs: imageInputs.map((item) => item.reference),
         audioRefs,

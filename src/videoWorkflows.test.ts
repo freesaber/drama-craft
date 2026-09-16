@@ -3,11 +3,11 @@ import {
   AUTODL_RESOLUTION_PRESETS,
   autodlPresetValues,
   detectAutodlPreset,
+  fillEmptyAutodlPreset,
   compactResolutionsJson,
   formatResolutionsJson,
   migrateApiProfile,
   migrateGenerationSettings,
-  normalizeResolution,
   optionsFromProfile,
   parseResolutionsJson,
 } from "./videoWorkflows";
@@ -36,13 +36,26 @@ describe("videoWorkflows", () => {
         name: "A",
         submitUrl:
           "https://autodl.art/api/v1/comfyui/comfyui_workflow/minimax_h3_zm_u24",
+        resolutions: "",
+        defaultSeed: "",
       })?.defaultSeed,
     ).toBe("683072603085674");
   });
 
-  it("normalizes legacy short resolution names", () => {
-    expect(normalizeResolution("768p横")).toBe("768p横(1376*768)");
-    expect(normalizeResolution("768p横(1376*768)")).toBe("768p横(1376*768)");
+  it("does not overwrite saved autodl preset fields", () => {
+    const saved = fillEmptyAutodlPreset({
+      id: "1",
+      name: "minimax_h3_zm_u24",
+      type: "autodl",
+      submitUrl:
+        "https://autodl.art/api/v1/comfyui/comfyui_workflow/minimax_h3_zm_u24",
+      queryUrl: "https://autodl.art/api/v1/comfyui/comfyui_workflow/result/{task_id}",
+      resolutions: '["768p横(1376*768)"]',
+      defaultSeed: "999",
+      hasAuthorization: true,
+    });
+    expect(saved.resolutions).toBe('["768p横(1376*768)"]');
+    expect(saved.defaultSeed).toBe("999");
   });
 
   it("builds options from configured profile", () => {

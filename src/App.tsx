@@ -26,9 +26,9 @@ import type {
 } from "./types";
 import {
   API_PLATFORM_TYPES,
-  autodlPresetValues,
   compactResolutionsJson,
   emptyApiProfile,
+  fillEmptyAutodlPreset,
   migrateGenerationSettings,
   optionsFromProfile,
 } from "./videoWorkflows";
@@ -116,10 +116,6 @@ export default function App() {
         ),
       ],
     }));
-  };
-  const syncAutodlPreset = (profile: ApiProfile): ApiProfile => {
-    const preset = autodlPresetValues(profile);
-    return preset ? { ...profile, ...preset } : profile;
   };
   const deleteApi = () => {
     if (!activeApi) return;
@@ -536,12 +532,10 @@ export default function App() {
       const migrated = migrateGenerationSettings(generationSettings);
       setApiDraft({
         ...migrated,
-        profiles: migrated.profiles.map((profile) =>
-          syncAutodlPreset({
-            ...profile,
-            resolutions: compactResolutionsJson(profile.resolutions),
-          }),
-        ),
+        profiles: migrated.profiles.map((profile) => ({
+          ...profile,
+          resolutions: compactResolutionsJson(profile.resolutions),
+        })),
       });
     }
     setModal("api");
@@ -1228,11 +1222,6 @@ export default function App() {
                           setApiDraft((draft) => ({
                             ...draft,
                             activeProfileId: nextId,
-                            profiles: draft.profiles.map((profile) =>
-                              profile.id === nextId
-                                ? syncAutodlPreset(profile)
-                                : profile,
-                            ),
                           }));
                         }}
                       >
@@ -1287,14 +1276,18 @@ export default function App() {
                             required
                             disabled={busy}
                             onChange={(event) => {
-                              const next = syncAutodlPreset({
+                              const next = fillEmptyAutodlPreset({
                                 ...activeApi,
                                 name: event.target.value,
                               });
                               updateApi({
                                 name: next.name,
-                                resolutions: next.resolutions,
-                                defaultSeed: next.defaultSeed,
+                                ...(next.resolutions !== activeApi.resolutions
+                                  ? { resolutions: next.resolutions }
+                                  : {}),
+                                ...(next.defaultSeed !== activeApi.defaultSeed
+                                  ? { defaultSeed: next.defaultSeed }
+                                  : {}),
                               });
                             }}
                           />
@@ -1305,14 +1298,18 @@ export default function App() {
                             autoFocus
                             value={activeApi.submitUrl}
                             onChange={(event) => {
-                              const next = syncAutodlPreset({
+                              const next = fillEmptyAutodlPreset({
                                 ...activeApi,
                                 submitUrl: event.target.value,
                               });
                               updateApi({
                                 submitUrl: next.submitUrl,
-                                resolutions: next.resolutions,
-                                defaultSeed: next.defaultSeed,
+                                ...(next.resolutions !== activeApi.resolutions
+                                  ? { resolutions: next.resolutions }
+                                  : {}),
+                                ...(next.defaultSeed !== activeApi.defaultSeed
+                                  ? { defaultSeed: next.defaultSeed }
+                                  : {}),
                               });
                             }}
                             placeholder={ui.generation.submitUrlPlaceholder}

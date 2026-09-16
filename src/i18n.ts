@@ -154,7 +154,7 @@ export const ui = {
     resolutions: "分辨率",
     resolutionsPlaceholder: '["480p横(864*480)","768p横(1376*768)"]',
     resolutionsHint:
-      "JSON 字符串数组，供分镜下拉使用；可手改。AutoDL 会根据配置名称或提交地址自动匹配预设。",
+      "JSON 字符串数组，供分镜下拉使用；提交时原样发送，不会自动补全像素后缀。",
     defaultSeed: "种子",
     defaultSeedPlaceholder: "可选；留空则生成时不预填",
     defaultSeedHint: "打开生成面板时预填的随机种子，可再改。",

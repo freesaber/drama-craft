@@ -1,5 +1,4 @@
 import type { EpisodeData, ShotCard } from "./types";
-import { normalizeResolution } from "./videoWorkflows";
 
 export type InputAsset = { reference: string; label: string };
 
@@ -108,11 +107,10 @@ export function shotGenerationPayload(
   const images = shotImageInputs(card, episode, options.maxImages ?? 9);
   const audios = shotAudioInputs(card, episode);
   const duration = Number(card.fields.duration.value || "5");
-  const resolution = normalizeResolution(
+  const resolution =
     card.fields.resolution.value.trim() ||
-      options.defaultResolution ||
-      "480p横(864*480)",
-  );
+    options.defaultResolution ||
+    "480p横";
   if (!prompt || !images.length) return null;
   if (!Number.isInteger(duration) || duration < 1 || duration > 15) return null;
   return {

@@ -9,22 +9,6 @@ use std::{fs, io::Write, path::Path};
 
 const DATABASE_NAME: &str = "generations.sqlite3";
 
-fn normalize_resolution(resolution: &str) -> String {
-    match resolution.trim() {
-        "480p横" => "480p横(864*480)".into(),
-        "480p竖" => "480p竖(480*864)".into(),
-        "768p横" => "768p横(1376*768)".into(),
-        "768p竖" => "768p竖(768*1376)".into(),
-        "1080p横" | "1088p横" => "1080p横(1920*1088)".into(),
-        "1080p竖" | "1088p竖" => "1080p竖(1080*1920)".into(),
-        "1440p横" => "1440p横(2560*1440)".into(),
-        "1440p竖" => "1440p竖(1440*2560)".into(),
-        "480p(1:1)" => "480p(1:1)(480*480)".into(),
-        "768p(1:1)" => "768p(1:1)(768*768)".into(),
-        other => other.to_owned(),
-    }
-}
-
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GenerationSettings {
@@ -321,15 +305,11 @@ pub async fn submit(
     if !(1..=15).contains(&input.duration) {
         return Err(AppError::new("input", "视频时长须为 1—15 秒"));
     }
-    let resolution = normalize_resolution(&input.resolution);
+    let resolution = input.resolution.trim().to_owned();
     if settings.resolutions.is_empty() {
         return Err(AppError::new("config", "当前 API 配置未设置 resolution 列表"));
     }
-    if !settings
-        .resolutions
-        .iter()
-        .any(|item| item == &resolution || normalize_resolution(item) == resolution)
-    {
+    if !settings.resolutions.iter().any(|item| item == &resolution) {
         return Err(AppError::new(
             "input",
             "视频分辨率不在当前 API 配置的 resolution 列表中",
