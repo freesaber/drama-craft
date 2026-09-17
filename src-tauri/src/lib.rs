@@ -660,6 +660,14 @@ fn trim_media(
     })
 }
 #[tauri::command]
+fn merge_episode(
+    state: State<Sessions>,
+    handle: String,
+    input: batch::MergeEpisodeInput,
+) -> Result<batch::BatchJob> {
+    with_root(&state, &handle, |root| batch::merge_episode(root, input))
+}
+#[tauri::command]
 fn create_batch_job(
     state: State<Sessions>,
     handle: String,
@@ -739,6 +747,7 @@ pub fn run() {
             generation_history,
             import_generation_media,
             trim_media,
+            merge_episode,
             create_batch_job,
             list_batch_jobs,
             get_batch_job,

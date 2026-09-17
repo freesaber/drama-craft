@@ -93,6 +93,18 @@ export interface BatchJobItemInput {
   imageRefs: string[];
   audioRefs: string[];
 }
+export interface MergeShotInput {
+  shotId: string;
+  shotTitle: string;
+  localFile: string;
+  duration: number;
+  resolution: string;
+}
+export interface MergeEpisodeInput {
+  document: string;
+  name: string;
+  items: MergeShotInput[];
+}
 export interface CreateBatchJobInput {
   jobType: BatchJobType;
   name: string;
@@ -133,6 +145,7 @@ export interface BatchJob {
   itemCancelled: number;
   itemFailed: number;
   items: BatchJobItem[];
+  resultFile?: string | null;
 }
 export interface BatchAdvanceResult {
   submitted: BatchJobItem | null;

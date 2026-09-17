@@ -2290,6 +2290,13 @@ select:focus {
 .batch-shot-table tbody tr.is-selected {
   background: #f3f7ef;
 }
+.batch-shot-table tbody tr.is-disabled {
+  cursor: default;
+  color: #8b9786;
+}
+.batch-shot-table tbody tr.is-disabled:hover {
+  background: transparent;
+}
 .batch-shot-table .batch-shot-check {
   width: 40px;
   padding-left: 12px;

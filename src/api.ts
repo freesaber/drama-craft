@@ -5,6 +5,7 @@ import type {
   BatchJob,
   Candidate,
   CreateBatchJobInput,
+  MergeEpisodeInput,
   DocumentEntry,
   GenerationInput,
   GenerationRecord,
@@ -122,6 +123,8 @@ export const api = {
     }),
   createBatchJob: (handle: string, input: CreateBatchJobInput) =>
     invoke<BatchJob>("create_batch_job", { handle, input }),
+  mergeEpisode: (handle: string, input: MergeEpisodeInput) =>
+    invoke<BatchJob>("merge_episode", { handle, input }),
   listBatchJobs: (handle: string) =>
     invoke<BatchJob[]>("list_batch_jobs", { handle }),
   getBatchJob: (handle: string, jobId: string) =>

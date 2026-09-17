@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api, errorMessage } from "./api";
 import { ui } from "./i18n";
 import type { BatchJob, Project } from "./types";
+import VideoPlayerModal from "./VideoPlayerModal";
 
 function formatTime(value: string) {
   const date = new Date(value);
@@ -37,6 +38,7 @@ export default function TaskListView({
 }) {
   const [filter, setFilter] = useState<"all" | "generation" | "merge">("all");
   const [detail, setDetail] = useState<BatchJob | null>(null);
+  const [playing, setPlaying] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [acting, setActing] = useState(false);
 
@@ -199,6 +201,11 @@ export default function TaskListView({
             <p className="muted">
               {ui.batch.document}：{detail.document}
             </p>
+            {detail.jobType === "merge" && detail.resultFile && (
+              <p className="muted">
+                {ui.batch.result}：{detail.resultFile}
+              </p>
+            )}
             <div className="generation-section-title">
               <span>{ui.batch.items}</span>
               <small>{detail.items.length}</small>
@@ -279,6 +286,15 @@ export default function TaskListView({
               )}
             </div>
             <div className="modal-actions">
+              {detail.jobType === "merge" && detail.resultFile && (
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => setPlaying(detail.resultFile!)}
+                >
+                  {ui.batch.playResult}
+                </button>
+              )}
               {["scheduled", "running"].includes(detail.status) && (
                 <button
                   type="button"
@@ -294,6 +310,15 @@ export default function TaskListView({
             </div>
           </div>
         </div>
+      )}
+      {playing && detail && (
+        <VideoPlayerModal
+          project={project}
+          document={detail.document}
+          reference={playing}
+          title={playing.replace(/.*[/\\]/, "")}
+          onClose={() => setPlaying(null)}
+        />
       )}
     </main>
   );

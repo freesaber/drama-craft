@@ -1,4 +1,5 @@
 use crate::storage::{self, AppError, Result};
+use chrono::Local;
 use serde_json::Value;
 use std::{
     env, fs,
@@ -51,7 +52,7 @@ pub fn trim_video(
     start: f64,
     end: f64,
 ) -> Result<storage::Media> {
-    let path = writable_project_video(root, document, reference)?;
+    let path = resolve_project_video(root, document, reference)?;
     let duration = probe_duration(&path)?;
     let (start, end) = validate_trim(start, end, duration)?;
     let parent = path
@@ -111,7 +112,116 @@ pub fn trim_video(
     storage::resolve_media(root, document, reference)
 }
 
-fn writable_project_video(root: &Path, document: &str, reference: &str) -> Result<PathBuf> {
+pub fn merge_output_name(document: &Path, timestamp: &str) -> String {
+    let name = document
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    let number: String = name
+        .trim_start()
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect();
+    if number.is_empty() {
+        format!("merge_{timestamp}.mp4")
+    } else {
+        format!("{number:0>2} merge_{timestamp}.mp4")
+    }
+}
+
+pub fn concat_videos(root: &Path, document: &str, references: &[String]) -> Result<String> {
+    if references.is_empty() {
+        return Err(AppError::new("input", "请至少选择一个分镜视频"));
+    }
+    let mut sources = Vec::with_capacity(references.len());
+    for reference in references {
+        sources.push(resolve_project_video(root, document, reference)?);
+    }
+    let doc = storage::document_path(root, document, true)?;
+    let parent = doc
+        .parent()
+        .ok_or_else(|| AppError::new("path", "文档缺少父目录"))?;
+    let timestamp = Local::now().format("%Y%m%d-%H%M%S").to_string();
+    let mut filename = merge_output_name(&doc, &timestamp);
+    if parent.join(&filename).exists() {
+        filename = merge_output_name(
+            &doc,
+            &format!("{}-{}", timestamp, Local::now().format("%3f")),
+        );
+    }
+    let destination = parent.join(&filename);
+    storage::validate_name(&filename)?;
+    let list = parent.join(format!(
+        ".~dc-concat-{}-{}.txt",
+        timestamp,
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or(Duration::from_secs(0))
+            .as_millis()
+    ));
+    let temp = parent.join(format!(".~dc-merge-{timestamp}.mp4"));
+    let list_body = sources
+        .iter()
+        .map(|path| {
+            let utf = path_arg(path)?.replace('\\', "/");
+            let escaped = utf.replace('\'', r"'\''");
+            Ok(format!("file '{escaped}'"))
+        })
+        .collect::<Result<Vec<_>>>()?
+        .join("\n");
+    fs::write(&list, list_body)?;
+    let copy_failed = run_concat(&list, &temp, true).is_err();
+    if copy_failed {
+        let _ = fs::remove_file(&temp);
+        if let Err(error) = run_concat(&list, &temp, false) {
+            let _ = fs::remove_file(&temp);
+            let _ = fs::remove_file(&list);
+            return Err(error);
+        }
+    }
+    let _ = fs::remove_file(&list);
+    if !temp.is_file() {
+        return Err(AppError::new("ffmpeg", "合并未写出文件"));
+    }
+    storage::replace_file_from(&destination, &temp)?;
+    let _ = fs::remove_file(&temp);
+    Ok(filename)
+}
+
+fn run_concat(list: &Path, output: &Path, copy: bool) -> Result<String> {
+    let mut args = vec![
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        path_arg(list)?,
+    ];
+    if copy {
+        args.extend(["-c", "copy", "-movflags", "+faststart"]);
+    } else {
+        args.extend([
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "18",
+            "-c:a",
+            "aac",
+            "-movflags",
+            "+faststart",
+        ]);
+    }
+    args.push(path_arg(output)?);
+    run(&ffmpeg_binary()?, &args)
+}
+
+fn resolve_project_video(root: &Path, document: &str, reference: &str) -> Result<PathBuf> {
     let doc = storage::document_path(root, document, true)?;
     let value = reference
         .trim()
@@ -128,7 +238,7 @@ fn writable_project_video(root: &Path, document: &str, reference: &str) -> Resul
     {
         return Err(AppError::new(
             "path",
-            "只能裁切文档旁的项目内视频，不会改写 Markdown",
+            "只能处理文档旁的项目内视频，不会改写 Markdown",
         ));
     }
     for part in rel.components() {
@@ -141,7 +251,7 @@ fn writable_project_video(root: &Path, document: &str, reference: &str) -> Resul
         .unwrap_or("")
         .to_ascii_lowercase();
     if extension != "mp4" {
-        return Err(AppError::new("media", "目前仅支持裁切 MP4"));
+        return Err(AppError::new("media", "目前仅支持处理 MP4"));
     }
     let destination = doc
         .parent()
@@ -268,6 +378,40 @@ fn run(binary: &Path, args: &[&str]) -> Result<String> {
 }
 
 #[cfg(test)]
+pub(crate) fn write_test_clip(path: &Path, seconds: u8) -> bool {
+    let Ok(ffmpeg) = ffmpeg_binary() else {
+        return false;
+    };
+    let duration = seconds.to_string();
+    run(
+        &ffmpeg,
+        &[
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            &format!("color=c=black:s=320x240:d={duration}"),
+            "-f",
+            "lavfi",
+            "-i",
+            &format!("sine=f=440:d={duration}"),
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-c:a",
+            "aac",
+            "-shortest",
+            path_arg(path).unwrap(),
+        ],
+    )
+    .is_ok()
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -280,39 +424,6 @@ mod tests {
         assert!((end - 5.0).abs() < 1e-9);
     }
 
-    fn generate_clip(path: &Path, seconds: u8) -> bool {
-        let Ok(ffmpeg) = ffmpeg_binary() else {
-            return false;
-        };
-        let duration = seconds.to_string();
-        run(
-            &ffmpeg,
-            &[
-                "-hide_banner",
-                "-loglevel",
-                "error",
-                "-y",
-                "-f",
-                "lavfi",
-                "-i",
-                &format!("color=c=black:s=320x240:d={duration}"),
-                "-f",
-                "lavfi",
-                "-i",
-                &format!("sine=f=440:d={duration}"),
-                "-c:v",
-                "libx264",
-                "-preset",
-                "veryfast",
-                "-c:a",
-                "aac",
-                "-shortest",
-                path_arg(path).unwrap(),
-            ],
-        )
-        .is_ok()
-    }
-
     #[test]
     fn overwrites_mp4_keeps_name_and_leaves_markdown_untouched() {
         let temp = tempfile::tempdir().unwrap();
@@ -321,7 +432,7 @@ mod tests {
         let video = root.join("S001_测试.mp4");
         let original_md = "# 一集\n\n视频文件名：S001_测试.mp4\n";
         fs::write(&markdown, original_md).unwrap();
-        if !generate_clip(&video, 3) {
+        if !write_test_clip(&video, 3) {
             panic!("未找到打包的 FFmpeg，请先运行 npm run ffmpeg:download");
         }
         let before = fs::metadata(&video).unwrap().len();
@@ -370,5 +481,49 @@ mod tests {
     fn parse_duration_reads_json_string() {
         let duration = parse_duration(r#"{"format":{"duration":"4.800"}}"#).unwrap();
         assert!((duration - 4.8).abs() < 1e-9);
+    }
+
+    #[test]
+    fn merge_output_uses_episode_number() {
+        assert_eq!(
+            merge_output_name(Path::new("01 重生归来.md"), "20260917-123045"),
+            "01 merge_20260917-123045.mp4"
+        );
+        assert_eq!(
+            merge_output_name(Path::new("大纲.md"), "20260917-123045"),
+            "merge_20260917-123045.mp4"
+        );
+    }
+
+    #[test]
+    fn concatenates_selected_clips_without_touching_markdown() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(temp.path()).unwrap();
+        let markdown = root.join("01 中文.md");
+        let original_md = "# 一集\n";
+        fs::write(&markdown, original_md).unwrap();
+        let first = root.join("S001.mp4");
+        let second = root.join("S002.mp4");
+        if !write_test_clip(&first, 1) || !write_test_clip(&second, 1) {
+            panic!("未找到打包的 FFmpeg，请先运行 npm run ffmpeg:download");
+        }
+        let filename =
+            concat_videos(&root, "01 中文.md", &["S001.mp4".into(), "S002.mp4".into()]).unwrap();
+        assert!(filename.starts_with("01 merge_"));
+        assert!(filename.ends_with(".mp4"));
+        let output = root.join(&filename);
+        assert!(output.is_file());
+        assert_eq!(fs::read_to_string(markdown).unwrap(), original_md);
+        let duration = probe_duration(&output).unwrap();
+        assert!(duration > 1.5 && duration < 2.8, "{duration}");
+        let leftovers: Vec<_> = fs::read_dir(&root)
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                name.ends_with(".mp4") || name.contains("concat")
+            })
+            .collect();
+        assert_eq!(leftovers.len(), 3, "{leftovers:?}");
     }
 }

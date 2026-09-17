@@ -1,0 +1,2 @@
+# Sidecar downloads and extracted binaries must not retrigger `tauri dev`.
+binaries/

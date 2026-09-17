@@ -115,6 +115,7 @@ pub(crate) fn open_database(root: &Path) -> Result<Connection> {
                ON batch_job_items(job_id, sort_order);",
         )
         .map_err(|e| AppError::new("database", e.to_string()))?;
+    let _ = connection.execute("ALTER TABLE batch_jobs ADD COLUMN result_file TEXT", []);
     Ok(connection)
 }
 

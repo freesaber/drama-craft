@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { api, chooseDirectory, desktop, errorMessage } from "./api";
 import BatchGenerateDialog from "./BatchGenerateDialog";
+import MergeDialog from "./MergeDialog";
 import { isOverviewDocument, sortDocuments } from "./markdown";
 import {
   filterAndSortProjects,
@@ -56,6 +57,7 @@ export default function App() {
   );
   const [batchJobs, setBatchJobs] = useState<BatchJob[]>([]);
   const [showBatchDialog, setShowBatchDialog] = useState(false);
+  const [showMergeDialog, setShowMergeDialog] = useState(false);
   const appliedBatchItems = useRef(new Set<string>());
   const [activeShot, setActiveShot] = useState(0);
   const pendingJump = useRef<number | null>(null);
@@ -1079,6 +1081,18 @@ export default function App() {
                   >
                     {ui.batch.generate}
                   </button>
+                  <button
+                    type="button"
+                    disabled={
+                      busy ||
+                      !board.cards.length ||
+                      isOverviewDocument(path) ||
+                      snapshot?.readonly
+                    }
+                    onClick={() => setShowMergeDialog(true)}
+                  >
+                    {ui.batch.merge}
+                  </button>
                 </div>
               </div>
               {snapshot && mode === "source" ? (
@@ -1150,6 +1164,19 @@ export default function App() {
           onClose={() => setShowBatchDialog(false)}
           onCreated={(message) => {
             setNotice(message);
+            void refreshBatchJobs().catch((e) => setError(errorMessage(e)));
+          }}
+        />
+      )}
+      {showMergeDialog && project && snapshot && (
+        <MergeDialog
+          project={project}
+          document={path}
+          board={board}
+          busy={busy}
+          onClose={() => setShowMergeDialog(false)}
+          onCreated={(message) => {
+            if (message) setNotice(message);
             void refreshBatchJobs().catch((e) => setError(errorMessage(e)));
           }}
         />

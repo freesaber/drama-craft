@@ -13,6 +13,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { Readable } from "node:stream";
 
@@ -32,13 +33,14 @@ if (
   existsSync(stampPath) &&
   readFileSync(stampPath, "utf8").trim() === stamp
 ) {
+  rmSync(path.join(binaries, "ffmpeg-essentials.zip"), { force: true });
   console.log(`FFmpeg ${lock.version} already present.`);
   process.exit(0);
 }
 
 const urls = [lock.url, ...(lock.mirrors ?? [])].filter(Boolean);
 mkdirSync(binaries, { recursive: true });
-const zipPath = path.join(binaries, "ffmpeg-essentials.zip");
+const zipPath = path.join(tmpdir(), "dramacraft-ffmpeg-essentials.zip");
 const extractDir = path.join(binaries, ".extract");
 let lastError = null;
 for (const url of urls) {

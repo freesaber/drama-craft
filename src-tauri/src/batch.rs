@@ -29,6 +29,24 @@ pub struct CreateBatchJobInput {
     pub items: Vec<BatchJobItemInput>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MergeShotInput {
+    pub shot_id: String,
+    pub shot_title: String,
+    pub local_file: String,
+    pub duration: u8,
+    pub resolution: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MergeEpisodeInput {
+    pub document: String,
+    pub name: String,
+    pub items: Vec<MergeShotInput>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BatchJobItem {
@@ -67,6 +85,8 @@ pub struct BatchJob {
     pub item_cancelled: i64,
     pub item_failed: i64,
     pub items: Vec<BatchJobItem>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result_file: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -186,6 +206,7 @@ fn job_from_parts(
     created_at: String,
     updated_at: String,
     items: Vec<BatchJobItem>,
+    result_file: Option<String>,
 ) -> BatchJob {
     let (item_total, item_completed, item_cancelled, item_failed) = summarize(&items);
     BatchJob {
@@ -202,28 +223,32 @@ fn job_from_parts(
         item_cancelled,
         item_failed,
         items,
+        result_file,
     }
 }
 
 fn load_job(connection: &rusqlite::Connection, job_id: &str) -> Result<BatchJob> {
-    let (job_type, name, document, status, scheduled_at, created_at, updated_at) = connection
-        .query_row(
-            "SELECT job_type, name, document, status, scheduled_at, created_at, updated_at
-               FROM batch_jobs WHERE job_id = ?1",
-            [job_id],
-            |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, String>(3)?,
-                    row.get::<_, String>(4)?,
-                    row.get::<_, String>(5)?,
-                    row.get::<_, String>(6)?,
-                ))
-            },
-        )
-        .map_err(|e| AppError::new("database", e.to_string()))?;
+    let (job_type, name, document, status, scheduled_at, created_at, updated_at, result_file) =
+        connection
+            .query_row(
+                "SELECT job_type, name, document, status, scheduled_at, created_at, updated_at,
+                        result_file
+                   FROM batch_jobs WHERE job_id = ?1",
+                [job_id],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, String>(4)?,
+                        row.get::<_, String>(5)?,
+                        row.get::<_, String>(6)?,
+                        row.get::<_, Option<String>>(7)?,
+                    ))
+                },
+            )
+            .map_err(|e| AppError::new("database", e.to_string()))?;
     let items = load_items(connection, job_id)?;
     Ok(job_from_parts(
         job_id.to_owned(),
@@ -235,6 +260,7 @@ fn load_job(connection: &rusqlite::Connection, job_id: &str) -> Result<BatchJob>
         created_at,
         updated_at,
         items,
+        result_file.filter(|value| !value.is_empty()),
     ))
 }
 
@@ -314,7 +340,7 @@ fn sync_item_from_generation(
 }
 
 pub fn create_job(root: &Path, input: CreateBatchJobInput) -> Result<BatchJob> {
-    if !matches!(input.job_type.as_str(), "generation" | "merge") {
+    if input.job_type != "generation" {
         return Err(AppError::new("input", "不支持的任务类型"));
     }
     if input.delay_hours > 12 {
@@ -412,6 +438,114 @@ pub fn create_job(root: &Path, input: CreateBatchJobInput) -> Result<BatchJob> {
     load_job(&generation::open_database(root)?, &job_id)
 }
 
+pub fn merge_episode(root: &Path, input: MergeEpisodeInput) -> Result<BatchJob> {
+    if input.items.is_empty() {
+        return Err(AppError::new("input", "请至少选择一个分镜"));
+    }
+    if input.name.trim().is_empty() {
+        return Err(AppError::new("input", "任务名称不能为空"));
+    }
+    if input.document.trim().is_empty() {
+        return Err(AppError::new("input", "缺少文档路径"));
+    }
+    for item in &input.items {
+        if item.shot_id.trim().is_empty() {
+            return Err(AppError::new("input", "分镜编号不能为空"));
+        }
+        if item.local_file.trim().is_empty() {
+            return Err(AppError::new(
+                "input",
+                format!("{} 没有当前视频，无法合并", item.shot_id),
+            ));
+        }
+    }
+    let stamp = now();
+    let job_id = Uuid::new_v4().to_string();
+    let mut connection = generation::open_database(root)?;
+    let transaction = connection
+        .transaction()
+        .map_err(|e| AppError::new("database", e.to_string()))?;
+    transaction
+        .execute(
+            "INSERT INTO batch_jobs
+             (job_id, job_type, name, document, status, scheduled_at, created_at, updated_at)
+             VALUES (?1, 'merge', ?2, ?3, 'running', ?4, ?4, ?4)",
+            params![job_id, input.name.trim(), input.document, stamp],
+        )
+        .map_err(|e| AppError::new("database", e.to_string()))?;
+    for (index, item) in input.items.iter().enumerate() {
+        transaction
+            .execute(
+                "INSERT INTO batch_job_items
+                 (item_id, job_id, shot_id, shot_title, status, prompt, duration, resolution,
+                  seed, image_refs, audio_refs, local_file, sort_order, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, 'running', '', ?5, ?6, NULL, '[]', '[]', ?7, ?8, ?9, ?9)",
+                params![
+                    Uuid::new_v4().to_string(),
+                    job_id,
+                    item.shot_id,
+                    item.shot_title,
+                    item.duration.max(1),
+                    item.resolution,
+                    item.local_file,
+                    index as i64,
+                    stamp,
+                ],
+            )
+            .map_err(|e| AppError::new("database", e.to_string()))?;
+    }
+    transaction
+        .commit()
+        .map_err(|e| AppError::new("database", e.to_string()))?;
+    drop(connection);
+
+    let references: Vec<String> = input
+        .items
+        .iter()
+        .map(|item| item.local_file.clone())
+        .collect();
+    let outcome = crate::ffmpeg::concat_videos(root, &input.document, &references);
+    let connection = generation::open_database(root)?;
+    let updated = now();
+    match outcome {
+        Ok(filename) => {
+            connection
+                .execute(
+                    "UPDATE batch_jobs
+                        SET status = 'completed', result_file = ?2, updated_at = ?3
+                      WHERE job_id = ?1",
+                    params![job_id, filename, updated],
+                )
+                .map_err(|e| AppError::new("database", e.to_string()))?;
+            connection
+                .execute(
+                    "UPDATE batch_job_items
+                        SET status = 'completed', updated_at = ?2
+                      WHERE job_id = ?1",
+                    params![job_id, updated],
+                )
+                .map_err(|e| AppError::new("database", e.to_string()))?;
+        }
+        Err(error) => {
+            connection
+                .execute(
+                    "UPDATE batch_jobs SET status = 'failed', updated_at = ?2 WHERE job_id = ?1",
+                    params![job_id, updated],
+                )
+                .map_err(|e| AppError::new("database", e.to_string()))?;
+            connection
+                .execute(
+                    "UPDATE batch_job_items
+                        SET status = 'failed', error = ?2, updated_at = ?3
+                      WHERE job_id = ?1",
+                    params![job_id, error.message, updated],
+                )
+                .map_err(|e| AppError::new("database", e.to_string()))?;
+        }
+    }
+    load_job(&connection, &job_id)
+}
+
 pub fn list_jobs(root: &Path) -> Result<Vec<BatchJob>> {
     if !root
         .join(".drama-craft")
@@ -501,7 +635,7 @@ pub fn sync_jobs(root: &Path) -> Result<Vec<BatchJob>> {
     let mut statement = connection
         .prepare(
             "SELECT job_id FROM batch_jobs
-              WHERE status IN ('scheduled', 'running')
+              WHERE status IN ('scheduled', 'running') AND job_type = 'generation'
               ORDER BY created_at ASC",
         )
         .map_err(|e| AppError::new("database", e.to_string()))?;
@@ -534,7 +668,7 @@ pub async fn advance(root: &Path, settings: &GenerationSettings) -> Result<Batch
         let mut statement = connection
             .prepare(
                 "SELECT job_id, status, scheduled_at FROM batch_jobs
-                  WHERE status IN ('scheduled', 'running')
+                  WHERE status IN ('scheduled', 'running') AND job_type = 'generation'
                   ORDER BY scheduled_at ASC, created_at ASC",
             )
             .map_err(|e| AppError::new("database", e.to_string()))?;
@@ -689,6 +823,7 @@ pub async fn advance(root: &Path, settings: &GenerationSettings) -> Result<Batch
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use tempfile::tempdir;
 
     fn sample_item(shot: &str) -> BatchJobItemInput {
@@ -752,5 +887,50 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(error.code, "input");
+    }
+
+    #[test]
+    fn merge_episode_writes_result_and_task_record() {
+        let dir = tempdir().unwrap();
+        let root = fs::canonicalize(dir.path()).unwrap();
+        fs::write(root.join("01.md"), "# 一集\n").unwrap();
+        let first = root.join("S001.mp4");
+        let second = root.join("S002.mp4");
+        if !crate::ffmpeg::write_test_clip(&first, 1) || !crate::ffmpeg::write_test_clip(&second, 1)
+        {
+            panic!("未找到打包的 FFmpeg，请先运行 npm run ffmpeg:download");
+        }
+        let job = merge_episode(
+            &root,
+            MergeEpisodeInput {
+                document: "01.md".into(),
+                name: "合并任务 · 01.md · 2".into(),
+                items: vec![
+                    MergeShotInput {
+                        shot_id: "S001".into(),
+                        shot_title: "一".into(),
+                        local_file: "S001.mp4".into(),
+                        duration: 5,
+                        resolution: "480p横".into(),
+                    },
+                    MergeShotInput {
+                        shot_id: "S002".into(),
+                        shot_title: "二".into(),
+                        local_file: "S002.mp4".into(),
+                        duration: 5,
+                        resolution: "480p横".into(),
+                    },
+                ],
+            },
+        )
+        .unwrap();
+        assert_eq!(job.job_type, "merge");
+        assert_eq!(job.status, "completed");
+        assert_eq!(job.item_completed, 2);
+        let filename = job.result_file.expect("result");
+        assert!(filename.starts_with("01 merge_"));
+        assert!(root.join(&filename).is_file());
+        assert_eq!(job.items[0].local_file.as_deref(), Some("S001.mp4"));
+        assert_eq!(fs::read_to_string(root.join("01.md")).unwrap(), "# 一集\n");
     }
 }
