@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join, dirname, resolve } from "node:path";
-import { formatDialogueScript } from "./episodeFormat";
+import {
+  dialogueCharacterName,
+  formatDialogueColumn,
+  formatDialogueScript,
+} from "./episodeFormat";
 import { documentTemplate } from "./markdown";
 import { parseStoryboard } from "./storyboard";
 
@@ -24,6 +28,27 @@ describe("episode domain adapters", () => {
     expect(board.episode.title).toBe("第03集 夜航");
     expect(board.diagnostics).toEqual([]);
     expect(board.cards[0].fields.videoFile.value).toBe("03 S001.mp4");
+  });
+  it("resolves dialogue character names for the board table", () => {
+    expect(
+      dialogueCharacterName("C003", [
+        { id: "C001", name: "林逸" },
+        { id: "C003", name: "赵天磊" },
+      ]),
+    ).toBe("赵天磊");
+    expect(dialogueCharacterName("N001", [])).toBe("N001");
+  });
+  it("copies dialogue column lines in table order", () => {
+    expect(
+      formatDialogueColumn([
+        { text: "废物，死在这里就是你的宿命！" },
+        { text: "好纯粹的灵体……归我了。" },
+        { text: "啊——！" },
+        { text: "—" },
+      ]),
+    ).toBe(
+      "废物，死在这里就是你的宿命！\n好纯粹的灵体……归我了。\n啊——！\n—",
+    );
   });
   it("formats dialogue script lines for subtitle tools", () => {
     expect(

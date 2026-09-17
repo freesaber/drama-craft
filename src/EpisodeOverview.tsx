@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { api, chooseMedia, desktop, errorMessage } from "./api";
-import { formatDialogueScript } from "./episodeFormat";
+import { dialogueCharacterName, formatDialogueColumn } from "./episodeFormat";
 import { ui } from "./i18n";
 import { isProjectRelativeImage } from "./markdown";
 import type { EpisodeData, Project } from "./types";
@@ -31,6 +31,7 @@ export default function EpisodeOverview({
     null,
   );
   const [promptCopied, setPromptCopied] = useState(false);
+  const [dialogueCopied, setDialogueCopied] = useState(false);
   const [placingKey, setPlacingKey] = useState<string | null>(null);
   const [placeError, setPlaceError] = useState("");
   const materialAssets = episode.assets.filter(
@@ -226,16 +227,77 @@ export default function EpisodeOverview({
         ) : (
           <div role="tabpanel" className="episode-dialogue-panel">
             {episode.dialogues.length ? (
-              <textarea
-                className="episode-dialogue-script"
-                readOnly
-                spellCheck={false}
-                value={formatDialogueScript(
-                  episode.dialogues,
-                  episode.characters,
-                )}
-                aria-label={ui.episodeData.dialogueTab}
-              />
+              <div className="episode-dialogue-table-wrap">
+                <table
+                  className="episode-dialogue-table"
+                  aria-label={ui.episodeData.dialogueTab}
+                >
+                  <thead>
+                    <tr>
+                      <th className="episode-dialogue-shot">
+                        {ui.episodeData.dialogueShot}
+                      </th>
+                      <th className="episode-dialogue-role">
+                        {ui.episodeData.dialogueRole}
+                      </th>
+                      <th className="episode-dialogue-delivery">
+                        {ui.episodeData.dialogueDelivery}
+                      </th>
+                      <th className="episode-dialogue-line">
+                        <span className="episode-dialogue-line-head">
+                          {ui.episodeData.dialogueLine}
+                          <button
+                            type="button"
+                            className="episode-dialogue-copy"
+                            title={ui.episodeData.copyDialogueColumn}
+                            aria-label={ui.episodeData.copyDialogueColumn}
+                            onClick={() => {
+                              void navigator.clipboard
+                                .writeText(
+                                  formatDialogueColumn(episode.dialogues),
+                                )
+                                .then(() => {
+                                  setDialogueCopied(true);
+                                  window.setTimeout(
+                                    () => setDialogueCopied(false),
+                                    1500,
+                                  );
+                                });
+                            }}
+                          >
+                            {dialogueCopied
+                              ? ui.episodeData.promptCopied
+                              : ui.episodeData.copyPrompt}
+                          </button>
+                        </span>
+                      </th>
+                      <th className="episode-dialogue-interval">
+                        {ui.episodeData.dialogueInterval}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {episode.dialogues.map((line, index) => (
+                      <tr key={`${line.shotId}-${line.characterId}-${index}`}>
+                        <td className="episode-dialogue-shot">{line.shotId}</td>
+                        <td className="episode-dialogue-role">
+                          {dialogueCharacterName(
+                            line.characterId,
+                            episode.characters,
+                          )}
+                        </td>
+                        <td className="episode-dialogue-delivery">
+                          {line.delivery}
+                        </td>
+                        <td className="episode-dialogue-line">{line.text}</td>
+                        <td className="episode-dialogue-interval">
+                          {line.interval}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <p className="muted">{ui.episodeData.noDialogues}</p>
             )}

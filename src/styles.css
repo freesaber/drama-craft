@@ -145,21 +145,82 @@
 }
 .episode-dialogue-panel {
   min-height: 0;
+  padding: 16px 1px 5px;
 }
-.episode-dialogue-script {
-  width: 100%;
-  min-height: 180px;
+.episode-dialogue-table-wrap {
   max-height: 320px;
-  resize: vertical;
-  font: inherit;
-  font-size: 13px;
-  line-height: 1.6;
-  padding: 12px 14px;
+  overflow: auto;
   border: 1px solid #d7dfd6;
   border-radius: 7px;
   background: #fff;
-  color: #20372b;
-  white-space: pre-wrap;
+}
+.episode-dialogue-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 13px;
+}
+.episode-dialogue-table th,
+.episode-dialogue-table td {
+  padding: 9px 12px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid #e7ece1;
+}
+.episode-dialogue-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #eef3e8;
+  color: #5d6f54;
+  font-size: 12px;
+  font-weight: 500;
+}
+.episode-dialogue-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.episode-dialogue-table tbody tr:hover {
+  background: #f7f9f4;
+}
+.episode-dialogue-shot {
+  width: 72px;
+  color: #3f5348;
+  white-space: nowrap;
+}
+.episode-dialogue-role {
+  width: 88px;
+  white-space: nowrap;
+}
+.episode-dialogue-delivery {
+  width: 148px;
+  color: #6d7c68;
+  white-space: nowrap;
+}
+.episode-dialogue-line {
+  width: auto;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.episode-dialogue-table thead th.episode-dialogue-line {
+  vertical-align: middle;
+}
+.episode-dialogue-line-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.episode-dialogue-copy {
+  padding: 1px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: #456c4f;
+}
+.episode-dialogue-interval {
+  width: 118px;
+  color: #6d7c68;
+  white-space: nowrap;
 }
 .generation-prompt-modal {
   position: relative;
