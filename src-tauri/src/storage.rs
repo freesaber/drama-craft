@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     fs,
-    io::Write,
+    io::{self, Write},
     path::{Component, Path, PathBuf},
     time::UNIX_EPOCH,
 };
@@ -1051,7 +1051,7 @@ GPT附件：**图片1＝场景母版（`01 素材_场景.png`）；图片2＝角
     )
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct Media {
     pub reference: String,
     pub path: Option<String>,
@@ -1238,4 +1238,55 @@ fn replace_file(path: &Path, bytes: &[u8]) -> Result<()> {
         return written;
     }
     overwrite_in_place(path, bytes)
+}
+
+pub(crate) fn replace_file_from(path: &Path, source: &Path) -> Result<()> {
+    if source == path {
+        return Ok(());
+    }
+    if !source.is_file() {
+        return Err(AppError::new("io", "裁切结果未生成"));
+    }
+    if !path.exists() {
+        return persist_as(source, path);
+    }
+    let displaced = displaced_sibling(path);
+    if fs::rename(path, &displaced).is_ok() {
+        let written = persist_as(source, path);
+        if written.is_ok() {
+            let _ = fs::remove_file(&displaced);
+        } else {
+            let _ = fs::rename(&displaced, path);
+        }
+        return written;
+    }
+    overwrite_in_place_from(path, source)?;
+    let _ = fs::remove_file(source);
+    Ok(())
+}
+
+fn persist_as(source: &Path, dest: &Path) -> Result<()> {
+    match fs::rename(source, dest) {
+        Ok(()) => Ok(()),
+        Err(_) => {
+            fs::copy(source, dest)?;
+            fs::remove_file(source)?;
+            Ok(())
+        }
+    }
+}
+
+fn overwrite_in_place_from(path: &Path, source: &Path) -> Result<()> {
+    let mut options = fs::OpenOptions::new();
+    options.write(true).truncate(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options.share_mode(0x00000007);
+    }
+    let mut dest = options.open(path)?;
+    let mut src = fs::File::open(source)?;
+    io::copy(&mut src, &mut dest)?;
+    dest.sync_all()?;
+    Ok(())
 }

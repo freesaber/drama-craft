@@ -1,0 +1,12 @@
+{
+  "version": "8.1.2",
+  "triple": "x86_64-pc-windows-msvc",
+  "url": "https://github.com/GyanD/codexffmpeg/releases/download/8.1.2/ffmpeg-8.1.2-essentials_build.zip",
+  "mirrors": [
+    "https://ghfast.top/https://github.com/GyanD/codexffmpeg/releases/download/8.1.2/ffmpeg-8.1.2-essentials_build.zip",
+    "https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-8.1.2-essentials_build.zip"
+  ],
+  "sha256": "db580001caa24ac104c8cb856cd113a87b0a443f7bdf47d8c12b1d740584a2ec",
+  "license": "GPL-3.0-or-later",
+  "source": "Gyan essentials (x264); sidecar process, not linked"
+}

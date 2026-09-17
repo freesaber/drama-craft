@@ -10,6 +10,7 @@ import {
 } from "./generationInputs";
 import { Asset } from "./Preview";
 import VideoPlayerModal from "./VideoPlayerModal";
+import VideoTrimModal from "./VideoTrimModal";
 import { ui } from "./i18n";
 import {
   matchConfiguredResolution,
@@ -98,6 +99,7 @@ export default function GenerationPanel({
   useVideo,
   renderField,
   video,
+  onMediaChanged,
 }: {
   card: ShotCard;
   episode: EpisodeData;
@@ -111,6 +113,7 @@ export default function GenerationPanel({
   useVideo: (reference: string) => Promise<void>;
   renderField: (key: BoardField, multiline?: boolean) => React.ReactNode;
   video: React.ReactNode;
+  onMediaChanged?: () => void;
 }) {
   const [seed, setSeed] = useState(videoWorkflow.defaultSeed);
   const [history, setHistory] = useState<GenerationRecord[]>([]);
@@ -120,6 +123,7 @@ export default function GenerationPanel({
   const [preview, setPreview] = useState<InputAsset | null>(null);
   const [omitNarratorAudio, setOmitNarratorAudio] = useState(false);
   const [playingVideo, setPlayingVideo] = useState<string | null>(null);
+  const [trimmingVideo, setTrimmingVideo] = useState<string | null>(null);
   const applied = useRef(new Set<string>());
   const useVideoRef = useRef(useVideo);
   useVideoRef.current = useVideo;
@@ -259,7 +263,13 @@ export default function GenerationPanel({
         </div>
       </div>
       <div className="generation-media">
-        {video}
+        {trimmingVideo ? (
+          <div className="shot-media">
+            <div className="video-placeholder">{ui.generation.trimming}</div>
+          </div>
+        ) : (
+          video
+        )}
         <div className="generation-assets">
           <div className="generation-section-title">
             <span>{ui.generation.referenceImages}</span>
@@ -393,6 +403,16 @@ export default function GenerationPanel({
                       </button>
                       <button
                         type="button"
+                        disabled={busy}
+                        onClick={() => {
+                          setPlayingVideo(null);
+                          setTrimmingVideo(record.localFile!);
+                        }}
+                      >
+                        {ui.generation.edit}
+                      </button>
+                      <button
+                        type="button"
                         disabled={
                           busy ||
                           record.localFile === card.fields.videoFile.value
@@ -411,6 +431,19 @@ export default function GenerationPanel({
           </details>
         )}
       </div>
+      {trimmingVideo && (
+        <VideoTrimModal
+          project={project}
+          document={document}
+          reference={trimmingVideo}
+          refreshKey={refreshKey}
+          onClose={() => setTrimmingVideo(null)}
+          onSaved={() => {
+            setTrimmingVideo(null);
+            onMediaChanged?.();
+          }}
+        />
+      )}
       {playingVideo && (
         <VideoPlayerModal
           project={project}

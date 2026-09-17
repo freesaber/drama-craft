@@ -106,6 +106,20 @@ export const api = {
       shotId,
       slot,
     }),
+  trimMedia: (
+    handle: string,
+    document: string,
+    reference: string,
+    start: number,
+    end: number,
+  ) =>
+    invoke<Media>("trim_media", {
+      handle,
+      document,
+      reference,
+      start,
+      end,
+    }),
   createBatchJob: (handle: string, input: CreateBatchJobInput) =>
     invoke<BatchJob>("create_batch_job", { handle, input }),
   listBatchJobs: (handle: string) =>

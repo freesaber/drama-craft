@@ -776,6 +776,8 @@
   display: flex;
   gap: 6px;
   flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 .generation-history article button {
   padding: 5px 8px;
@@ -801,6 +803,213 @@
   max-height: min(70vh, 720px);
   border-radius: 8px;
   background: #000;
+}
+.video-trim-backdrop {
+  z-index: 26;
+  padding: 18px;
+  background: #0e1410cc;
+}
+.video-trim-studio {
+  width: min(1080px, 96vw);
+  max-height: min(92vh, 920px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #2b3830;
+  border-radius: 10px;
+  background: #151c18;
+  color: #d7e0d4;
+  box-shadow: 0 28px 80px #05080588;
+  user-select: none;
+}
+.video-trim-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 44px 12px 18px;
+  border-bottom: 1px solid #27332c;
+  position: relative;
+}
+.video-trim-kicker {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #8aa07a;
+}
+.video-trim-toolbar h2 {
+  margin: 2px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #e8eee4;
+}
+.video-trim-clock {
+  margin-left: auto;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-family: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+}
+.video-trim-clock strong {
+  display: block;
+  font-size: 18px;
+  color: #f0d48a;
+}
+.video-trim-clock span {
+  color: #8b9786;
+  font-size: 11px;
+}
+.video-trim-studio .modal-close {
+  color: #c5d0c0;
+  background: transparent;
+}
+.video-trim-stage {
+  min-height: 280px;
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 12px 16px 8px;
+  background:
+    linear-gradient(#0000, #0006),
+    repeating-conic-gradient(#1a221c 0% 25%, #121814 0% 50%) 0 0 / 28px 28px;
+}
+.video-trim-player {
+  width: 100%;
+  max-height: min(52vh, 520px);
+  background: #000;
+  border-radius: 4px;
+}
+.video-trim-empty {
+  color: #7d8b78;
+  font-size: 13px;
+}
+.video-trim-deck {
+  padding: 8px 18px 4px;
+  background: #101610;
+  border-top: 1px solid #243028;
+}
+.video-trim-transport {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.video-trim-play {
+  width: 36px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #3d4f42;
+  border-radius: 4px;
+  background: #1d2821;
+  color: #e9f0e4;
+  font-size: 11px;
+}
+.video-trim-now {
+  font-family: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  color: #f0d48a;
+  font-size: 13px;
+  min-width: 64px;
+}
+.video-trim-hint {
+  color: #7a8776;
+  font-size: 11px;
+}
+.video-trim-track {
+  position: relative;
+  height: 44px;
+  border-radius: 4px;
+  background: #2a332c;
+  overflow: hidden;
+  cursor: ew-resize;
+  touch-action: none;
+  overflow: visible;
+}
+.video-trim-discard {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: #0c100eaa;
+  pointer-events: none;
+}
+.video-trim-keep {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(#8fb56a55, #6d935233);
+  box-shadow: inset 0 0 0 1px #c4dc9a88;
+  pointer-events: none;
+}
+.video-trim-handle {
+  position: absolute;
+  top: 0;
+  width: 10px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  margin-left: -5px;
+  background: #e7c56a;
+  cursor: ew-resize;
+  z-index: 2;
+  touch-action: none;
+}
+.video-trim-handle:hover:not(:disabled),
+.video-trim-handle:focus-visible {
+  background: #f3d98a;
+  border: 0;
+}
+.video-trim-handle.in {
+  border-radius: 3px 0 0 3px;
+}
+.video-trim-handle.out {
+  border-radius: 0 3px 3px 0;
+}
+.video-trim-handle::after {
+  content: "";
+  position: absolute;
+  inset: 10px 3px;
+  border-left: 1px solid #5b4314;
+  border-right: 1px solid #5b4314;
+}
+.video-trim-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: #fff6d8;
+  box-shadow: 0 0 8px #fff2;
+  pointer-events: none;
+  z-index: 3;
+}
+.video-trim-marks {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  color: #8b9786;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  font-family: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+}
+.video-trim-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 18px 16px;
+  border-top: 1px solid #243028;
+}
+.video-trim-actions p {
+  margin: 0;
+  color: #8b9786;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.video-trim-actions .primary-button {
+  background: #d7b25c;
+  border-color: #d7b25c;
+  color: #241c08;
+}
+.video-trim-studio .generation-error {
+  margin: 0 0 8px;
 }
 .generation-preview {
   z-index: 20;

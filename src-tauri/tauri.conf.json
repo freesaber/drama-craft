@@ -4,8 +4,10 @@
   "version": "0.1.0",
   "identifier": "io.dramacraft.desktop",
   "build": {
-    "beforeDevCommand": "npm run dev", "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build", "frontendDist": "../dist"
+    "beforeDevCommand": "npm run ffmpeg:download && npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run ffmpeg:download && npm run build",
+    "frontendDist": "../dist"
   },
   "app": {
     "windows": [{ "label": "main", "title": "DramaCraft · 剧匠", "width": 1500, "height": 940, "minWidth": 1024, "minHeight": 680 }],
@@ -18,6 +20,7 @@
     "active": true,
     "targets": ["nsis"],
     "icon": ["icons/icon.ico"],
-    "resources": { "../resources/voices/": "voices/" }
+    "resources": { "../resources/voices/": "voices/" },
+    "externalBin": ["binaries/ffmpeg", "binaries/ffprobe"]
   }
 }

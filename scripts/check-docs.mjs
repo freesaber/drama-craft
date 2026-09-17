@@ -8,7 +8,7 @@ import { visit } from "unist-util-visit";
 const docs = readdirSync("doc").sort();
 assert.deepEqual(
   docs.map((name) => name.slice(0, 2)),
-  ["01", "02", "03", "04", "05", "06", "07", "08"],
+  ["01", "02", "03", "04", "05", "06", "07", "08", "09"],
 );
 
 const files = [
@@ -30,4 +30,4 @@ for (const file of files) {
     );
   }
 }
-console.log("Document files 01–08 and README links verified.");
+console.log("Document files 01–09 and README links verified.");

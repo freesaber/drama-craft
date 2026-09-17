@@ -66,6 +66,7 @@ export default function BoardView({
   useVideo,
   showSourceActions = true,
   onMediaPlaced,
+  onMediaChanged,
 }: {
   board: Board;
   project: Project;
@@ -82,6 +83,7 @@ export default function BoardView({
   useVideo: (index: number, reference: string) => Promise<void>;
   showSourceActions?: boolean;
   onMediaPlaced?: () => void;
+  onMediaChanged?: () => void;
 }) {
   const asset = (
     reference: string,
@@ -240,6 +242,7 @@ export default function BoardView({
               configure={configureGeneration}
               useVideo={(reference) => useVideo(index, reference)}
               renderField={(key, multiline) => field(card, key, multiline)}
+              onMediaChanged={onMediaChanged}
             />
             <section className="shot-details shot-frame-area">
               <h3>{ui.board.frameImage}</h3>

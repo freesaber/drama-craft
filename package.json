@@ -11,6 +11,7 @@
     "test:desktop": "node scripts/desktop-smoke.mjs",
     "format": "prettier --write src scripts *.json vite.config.ts index.html",
     "tauri": "tauri",
+    "ffmpeg:download": "node scripts/download-ffmpeg.mjs",
     "docs:check": "node scripts/check-docs.mjs"
   },
   "dependencies": {

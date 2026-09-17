@@ -3,7 +3,7 @@
 ## Scope and architecture
 - Windows-first Tauri 2 desktop application; React/TypeScript renders UI, Rust owns filesystem access. No separately deployed backend.
 - `src/` contains the default storyboard, optional source editor, source-range Markdown parsing and centralized Chinese UI strings. `src-tauri/src/` contains project storage and IPC adapters. Keep filesystem business logic testable without launching Tauri.
-- The local storyboard workbench treats each S-numbered card as one video generation unit, potentially containing multiple cuts. H3 submission/query, project-local SQLite task history, result download and Markdown version selection are implemented; actual provider behavior remains unverified without a real validation record. Text-model calls, global libraries and FFmpeg are planned.
+- The local storyboard workbench treats each S-numbered card as one video generation unit, potentially containing multiple cuts. H3 submission/query, project-local SQLite task history, result download and Markdown version selection are implemented; actual provider behavior remains unverified without a real validation record. History videos can be trimmed in-place with a bundled FFmpeg sidecar. Text-model calls, global libraries and clip merging remain planned.
 - The versioned episode contract is documented in `doc/08-剧集数据格式v1.md`. `episodeFormat.ts` shares v1 constants between parser and template; `episode.ts` adapts fixed-format and legacy documents to domain objects. Episode boards/navigation consume these objects, not rendered Markdown tables. Character images and voices form one named binding; project AGENTS.md never dynamically defines executable parser rules.
 
 ## Storage invariants
@@ -24,7 +24,7 @@
 - Video-prompt rules already follow this: the generated AGENTS.md must stand alone and must not rely on repository or chat context.
 
 ## Commands
-- `npm ci`, `npm run dev`, `npm run tauri dev`
+- `npm ci`, `npm run ffmpeg:download`, `npm run dev`, `npm run tauri dev`
 - `npm run check`, `npm test`, `npm run build`
 - `cargo test --manifest-path src-tauri/Cargo.toml`
 - `cargo check --manifest-path src-tauri/Cargo.toml`

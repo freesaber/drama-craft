@@ -1,4 +1,5 @@
 pub mod batch;
+pub mod ffmpeg;
 pub mod generation;
 pub mod settings;
 pub mod storage;
@@ -646,6 +647,19 @@ fn import_generation_media(
     })
 }
 #[tauri::command]
+fn trim_media(
+    state: State<Sessions>,
+    handle: String,
+    document: String,
+    reference: String,
+    start: f64,
+    end: f64,
+) -> Result<storage::Media> {
+    with_root(&state, &handle, |root| {
+        ffmpeg::trim_video(root, &document, &reference, start, end)
+    })
+}
+#[tauri::command]
 fn create_batch_job(
     state: State<Sessions>,
     handle: String,
@@ -724,6 +738,7 @@ pub fn run() {
             poll_generation,
             generation_history,
             import_generation_media,
+            trim_media,
             create_batch_job,
             list_batch_jobs,
             get_batch_job,

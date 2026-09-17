@@ -18,3 +18,8 @@ test-results/
 *.wav
 *.flac
 *.webm
+src-tauri/binaries/*.exe
+src-tauri/binaries/.lock-id
+src-tauri/binaries/.extract/
+src-tauri/binaries/*.zip
+src-tauri/binaries/LICENSE.ffmpeg

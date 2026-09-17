@@ -1119,6 +1119,10 @@ export default function App() {
                     setRefreshKey((key) => key + 1);
                     setNotice(ui.episodeData.mediaPlaced);
                   }}
+                  onMediaChanged={() => {
+                    setRefreshKey((key) => key + 1);
+                    setNotice(ui.generation.videoTrimmed);
+                  }}
                 />
               ) : (
                 <div className="empty-editor">
