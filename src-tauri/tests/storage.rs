@@ -112,6 +112,11 @@ fn rejects_traversal_reserved_names_and_overwrites() {
     let project = create_project(&root, "中文 项目", None, &voices).unwrap();
     assert!(create_project(&root, "中文 项目", None, &voices).is_err());
     assert!(project.join("剧本大纲.md").exists());
+    let agents = fs::read_to_string(project.join("AGENTS.md")).unwrap();
+    assert!(agents.contains("视频提示词画面与发声规则"));
+    assert!(agents.contains("删掉破折号不够"));
+    assert!(agents.contains("需要交代的信息必须有发声主体"));
+    assert!(agents.contains("时间线无小说说明"));
 }
 #[test]
 fn project_identity_moves_while_external_library_configuration_is_preserved() {
