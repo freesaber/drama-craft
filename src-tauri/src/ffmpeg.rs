@@ -93,6 +93,8 @@ pub fn trim_video(
             "veryfast",
             "-crf",
             "18",
+            "-pix_fmt",
+            "yuv420p",
             "-c:a",
             "aac",
             "-movflags",
@@ -151,35 +153,24 @@ pub fn concat_videos(root: &Path, document: &str, references: &[String]) -> Resu
     }
     let destination = parent.join(&filename);
     storage::validate_name(&filename)?;
-    let list = parent.join(format!(
-        ".~dc-concat-{}-{}.txt",
-        timestamp,
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or(Duration::from_secs(0))
-            .as_millis()
-    ));
-    let temp = parent.join(format!(".~dc-merge-{timestamp}.mp4"));
-    let list_body = sources
-        .iter()
-        .map(|path| {
-            let utf = path_arg(path)?.replace('\\', "/");
-            let escaped = utf.replace('\'', r"'\''");
-            Ok(format!("file '{escaped}'"))
-        })
-        .collect::<Result<Vec<_>>>()?
-        .join("\n");
-    fs::write(&list, list_body)?;
-    let copy_failed = run_concat(&list, &temp, true).is_err();
-    if copy_failed {
-        let _ = fs::remove_file(&temp);
-        if let Err(error) = run_concat(&list, &temp, false) {
-            let _ = fs::remove_file(&temp);
-            let _ = fs::remove_file(&list);
-            return Err(error);
-        }
+    let mut clips = Vec::with_capacity(sources.len());
+    for path in &sources {
+        clips.push(probe_clip(path)?);
     }
-    let _ = fs::remove_file(&list);
+    let width = even_dim(clips.iter().map(|clip| clip.width).max().unwrap_or(0));
+    let height = even_dim(clips.iter().map(|clip| clip.height).max().unwrap_or(0));
+    if width < 2 || height < 2 {
+        return Err(AppError::new("media", "无法读取视频尺寸"));
+    }
+    let fps = clips
+        .first()
+        .map(|clip| clip.fps.clone())
+        .unwrap_or_else(|| "24".into());
+    let temp = parent.join(format!(".~dc-merge-{timestamp}.mp4"));
+    if let Err(error) = run_concat_filter(&sources, &clips, width, height, &fps, &temp) {
+        let _ = fs::remove_file(&temp);
+        return Err(error);
+    }
     if !temp.is_file() {
         return Err(AppError::new("ffmpeg", "合并未写出文件"));
     }
@@ -188,37 +179,163 @@ pub fn concat_videos(root: &Path, document: &str, references: &[String]) -> Resu
     Ok(filename)
 }
 
-fn run_concat(list: &Path, output: &Path, copy: bool) -> Result<String> {
-    let mut args = vec![
-        "-hide_banner",
-        "-loglevel",
-        "error",
-        "-y",
-        "-f",
-        "concat",
-        "-safe",
-        "0",
-        "-i",
-        path_arg(list)?,
-    ];
-    if copy {
-        args.extend(["-c", "copy", "-movflags", "+faststart"]);
-    } else {
-        args.extend([
-            "-c:v",
-            "libx264",
-            "-preset",
-            "veryfast",
-            "-crf",
-            "18",
-            "-c:a",
-            "aac",
-            "-movflags",
-            "+faststart",
-        ]);
+#[derive(Clone, Debug)]
+struct ClipInfo {
+    width: i64,
+    height: i64,
+    fps: String,
+    has_audio: bool,
+    duration: f64,
+}
+
+fn probe_clip(path: &Path) -> Result<ClipInfo> {
+    let output = run(
+        &ffprobe_binary()?,
+        &[
+            "-v",
+            "error",
+            "-show_streams",
+            "-show_format",
+            "-of",
+            "json",
+            path_arg(path)?,
+        ],
+    )?;
+    parse_clip(&output)
+}
+
+fn parse_clip(json: &str) -> Result<ClipInfo> {
+    let value: Value =
+        serde_json::from_str(json).map_err(|_| AppError::new("ffmpeg", "无法读取视频信息"))?;
+    let streams = value
+        .get("streams")
+        .and_then(Value::as_array)
+        .ok_or_else(|| AppError::new("ffmpeg", "无法读取视频信息"))?;
+    let video = streams
+        .iter()
+        .find(|stream| stream.get("codec_type").and_then(Value::as_str) == Some("video"))
+        .ok_or_else(|| AppError::new("media", "文件没有视频轨"))?;
+    let width = video.get("width").and_then(Value::as_i64).unwrap_or(0);
+    let height = video.get("height").and_then(Value::as_i64).unwrap_or(0);
+    let fps = sanitize_fps(
+        video
+            .get("avg_frame_rate")
+            .and_then(Value::as_str)
+            .unwrap_or(""),
+    );
+    let has_audio = streams
+        .iter()
+        .any(|stream| stream.get("codec_type").and_then(Value::as_str) == Some("audio"));
+    let duration = parse_duration(json).unwrap_or(0.1);
+    if width < 2 || height < 2 {
+        return Err(AppError::new("media", "无法读取视频尺寸"));
     }
-    args.push(path_arg(output)?);
-    run(&ffmpeg_binary()?, &args)
+    Ok(ClipInfo {
+        width,
+        height,
+        fps,
+        has_audio,
+        duration,
+    })
+}
+
+fn sanitize_fps(value: &str) -> String {
+    if !value.is_empty() && value != "0/0" && value.chars().all(|c| c.is_ascii_digit() || c == '/')
+    {
+        value.to_string()
+    } else {
+        "24".into()
+    }
+}
+
+fn even_dim(value: i64) -> i64 {
+    let value = value.max(2);
+    value - (value % 2)
+}
+
+fn build_concat_filter(clips: &[ClipInfo], width: i64, height: i64, fps: &str) -> String {
+    let n = clips.len();
+    let mut parts = Vec::with_capacity(n * 2 + 1);
+    let mut concat_in = String::new();
+    for (index, clip) in clips.iter().enumerate() {
+        parts.push(format!(
+            "[{index}:v]fps={fps},scale={width}:{height}:force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,format=yuv420p,setsar=1,setpts=PTS-STARTPTS[v{index}]"
+        ));
+        if clip.has_audio {
+            parts.push(format!(
+                "[{index}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,asetpts=PTS-STARTPTS[a{index}]"
+            ));
+        } else {
+            parts.push(format!(
+                "anullsrc=r=48000:cl=stereo,atrim=duration={},asetpts=PTS-STARTPTS[a{index}]",
+                format_seconds(clip.duration.max(0.1))
+            ));
+        }
+        concat_in.push_str(&format!("[v{index}][a{index}]"));
+    }
+    parts.push(format!("{concat_in}concat=n={n}:v=1:a=1[vout][aout]"));
+    parts.join(";")
+}
+
+fn run_concat_filter(
+    sources: &[PathBuf],
+    clips: &[ClipInfo],
+    width: i64,
+    height: i64,
+    fps: &str,
+    output: &Path,
+) -> Result<String> {
+    let mut args = vec![
+        "-hide_banner".into(),
+        "-loglevel".into(),
+        "error".into(),
+        "-y".into(),
+    ];
+    for path in sources {
+        args.push("-i".into());
+        args.push(path_arg(path)?.to_string());
+    }
+    args.extend([
+        "-filter_complex".into(),
+        build_concat_filter(clips, width, height, fps),
+        "-map".into(),
+        "[vout]".into(),
+        "-map".into(),
+        "[aout]".into(),
+        "-c:v".into(),
+        "libx264".into(),
+        "-preset".into(),
+        "slow".into(),
+        "-crf".into(),
+        "18".into(),
+        "-pix_fmt".into(),
+        "yuv420p".into(),
+        "-profile:v".into(),
+        "high".into(),
+        "-colorspace".into(),
+        "bt709".into(),
+        "-color_primaries".into(),
+        "bt709".into(),
+        "-color_trc".into(),
+        "bt709".into(),
+        "-c:a".into(),
+        "aac".into(),
+        "-ar".into(),
+        "48000".into(),
+        "-ac".into(),
+        "2".into(),
+        "-b:a".into(),
+        "192k".into(),
+        "-movflags".into(),
+        "+faststart".into(),
+        path_arg(output)?.to_string(),
+    ]);
+    run_strings(&ffmpeg_binary()?, &args)
+}
+
+fn run_strings(binary: &Path, args: &[String]) -> Result<String> {
+    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    run(binary, &refs)
 }
 
 fn resolve_project_video(root: &Path, document: &str, reference: &str) -> Result<PathBuf> {
@@ -379,36 +496,48 @@ fn run(binary: &Path, args: &[&str]) -> Result<String> {
 
 #[cfg(test)]
 pub(crate) fn write_test_clip(path: &Path, seconds: u8) -> bool {
+    write_test_clip_with(path, seconds, "yuv420p", None)
+}
+
+#[cfg(test)]
+fn write_test_clip_with(path: &Path, seconds: u8, pix_fmt: &str, profile: Option<&str>) -> bool {
     let Ok(ffmpeg) = ffmpeg_binary() else {
         return false;
     };
     let duration = seconds.to_string();
-    run(
-        &ffmpeg,
-        &[
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-y",
-            "-f",
-            "lavfi",
-            "-i",
-            &format!("color=c=black:s=320x240:d={duration}"),
-            "-f",
-            "lavfi",
-            "-i",
-            &format!("sine=f=440:d={duration}"),
-            "-c:v",
-            "libx264",
-            "-preset",
-            "veryfast",
-            "-c:a",
-            "aac",
-            "-shortest",
-            path_arg(path).unwrap(),
-        ],
-    )
-    .is_ok()
+    let video = format!("color=c=black:s=320x240:d={duration}");
+    let audio = format!("sine=f=440:d={duration}");
+    let mut args = vec![
+        "-hide_banner".into(),
+        "-loglevel".into(),
+        "error".into(),
+        "-y".into(),
+        "-f".into(),
+        "lavfi".into(),
+        "-i".into(),
+        video,
+        "-f".into(),
+        "lavfi".into(),
+        "-i".into(),
+        audio,
+        "-c:v".into(),
+        "libx264".into(),
+        "-preset".into(),
+        "veryfast".into(),
+        "-pix_fmt".into(),
+        pix_fmt.to_string(),
+    ];
+    if let Some(profile) = profile {
+        args.push("-profile:v".into());
+        args.push(profile.to_string());
+    }
+    args.extend([
+        "-c:a".into(),
+        "aac".into(),
+        "-shortest".into(),
+        path_arg(path).unwrap().to_string(),
+    ]);
+    run_strings(&ffmpeg, &args).is_ok()
 }
 
 #[cfg(test)]
@@ -484,6 +613,50 @@ mod tests {
     }
 
     #[test]
+    fn concat_filter_normalizes_mixed_audio_and_pixel_format() {
+        let clips = [
+            ClipInfo {
+                width: 864,
+                height: 480,
+                fps: "24/1".into(),
+                has_audio: true,
+                duration: 6.5,
+            },
+            ClipInfo {
+                width: 864,
+                height: 480,
+                fps: "24/1".into(),
+                has_audio: false,
+                duration: 5.0,
+            },
+        ];
+        let filter = build_concat_filter(&clips, 864, 480, "24/1");
+        assert!(filter.contains("format=yuv420p"));
+        assert!(filter.contains("anullsrc"));
+        assert!(filter.contains("concat=n=2:v=1:a=1[vout][aout]"));
+        assert!(!filter.contains("-c copy"));
+    }
+
+    #[test]
+    fn parse_clip_reads_10bit_and_audio() {
+        let clip = parse_clip(
+            r#"{
+              "streams":[
+                {"codec_type":"video","width":864,"height":480,"avg_frame_rate":"24/1","pix_fmt":"yuv420p10le"},
+                {"codec_type":"audio","codec_name":"aac"}
+              ],
+              "format":{"duration":"6.583"}
+            }"#,
+        )
+        .unwrap();
+        assert_eq!(clip.width, 864);
+        assert_eq!(clip.height, 480);
+        assert_eq!(clip.fps, "24/1");
+        assert!(clip.has_audio);
+        assert!((clip.duration - 6.583).abs() < 1e-9);
+    }
+
+    #[test]
     fn merge_output_uses_episode_number() {
         assert_eq!(
             merge_output_name(Path::new("01 重生归来.md"), "20260917-123045"),
@@ -516,6 +689,9 @@ mod tests {
         assert_eq!(fs::read_to_string(markdown).unwrap(), original_md);
         let duration = probe_duration(&output).unwrap();
         assert!(duration > 1.5 && duration < 2.8, "{duration}");
+        let info = probe_video_csv(&output, "stream=pix_fmt,profile");
+        assert!(info.contains("yuv420p"), "{info}");
+        assert!(!info.contains("10"), "{info}");
         let leftovers: Vec<_> = fs::read_dir(&root)
             .unwrap()
             .filter_map(|entry| entry.ok())
@@ -525,5 +701,47 @@ mod tests {
             })
             .collect();
         assert_eq!(leftovers.len(), 3, "{leftovers:?}");
+    }
+
+    #[test]
+    fn concatenates_mixed_8bit_and_10bit_to_yuv420p() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(temp.path()).unwrap();
+        let markdown = root.join("01 中文.md");
+        fs::write(&markdown, "# 一集\n").unwrap();
+        let first = root.join("S001.mp4");
+        let second = root.join("S002.mp4");
+        if !write_test_clip_with(&first, 1, "yuv420p10le", Some("high10")) {
+            panic!("无法写出 10-bit 测试片，请确认打包的 FFmpeg 支持 libx264 10-bit");
+        }
+        if !write_test_clip(&second, 1) {
+            panic!("未找到打包的 FFmpeg，请先运行 npm run ffmpeg:download");
+        }
+        let filename =
+            concat_videos(&root, "01 中文.md", &["S001.mp4".into(), "S002.mp4".into()]).unwrap();
+        let output = root.join(&filename);
+        let info = probe_video_csv(&output, "stream=pix_fmt,profile");
+        assert!(info.contains("yuv420p"), "{info}");
+        assert!(!info.contains("yuv420p10"), "{info}");
+        let duration = probe_duration(&output).unwrap();
+        assert!(duration > 1.5 && duration < 2.8, "{duration}");
+    }
+
+    fn probe_video_csv(path: &Path, entries: &str) -> String {
+        run(
+            &ffprobe_binary().unwrap(),
+            &[
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                entries,
+                "-of",
+                "csv=p=0",
+                path_arg(path).unwrap(),
+            ],
+        )
+        .unwrap()
     }
 }

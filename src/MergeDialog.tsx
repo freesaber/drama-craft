@@ -109,6 +109,7 @@ export default function MergeDialog({
   document,
   board,
   busy,
+  mergeRunning,
   onClose,
   onCreated,
 }: {
@@ -116,6 +117,7 @@ export default function MergeDialog({
   document: string;
   board: Storyboard;
   busy: boolean;
+  mergeRunning: boolean;
   onClose: () => void;
   onCreated: (notice: string) => void;
 }) {
@@ -125,6 +127,7 @@ export default function MergeDialog({
   const [activeId, setActiveId] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const selectable = rows.filter((row) => row.exists);
   const allSelected =
     selectable.length > 0 && selectable.every((row) => selected.has(row.shotId));
@@ -195,13 +198,15 @@ export default function MergeDialog({
     );
 
   const submit = async () => {
+    if (submittingRef.current || busy || mergeRunning) return;
     const items = rows.filter((row) => row.exists && selected.has(row.shotId));
     if (!items.length) return;
+    submittingRef.current = true;
     setSubmitting(true);
     setError("");
     try {
       const name = `${ui.batch.typeMerge} · ${document.split(/[/\\]/).at(-1) ?? document} · ${items.length}`;
-      const job = await api.mergeEpisode(project.handle, {
+      await api.mergeEpisode(project.handle, {
         document,
         name,
         items: items.map((item) => ({
@@ -212,18 +217,12 @@ export default function MergeDialog({
           resolution: item.resolution,
         })),
       });
-      if (job.status === "failed") {
-        onCreated("");
-        throw new Error(
-          job.items.find((item) => item.error)?.error || ui.errors.unknown,
-        );
-      }
-      onCreated(ui.batch.mergeCreated);
+      onCreated(ui.batch.mergeQueued);
       onClose();
     } catch (e) {
-      setError(errorMessage(e));
-    } finally {
+      submittingRef.current = false;
       setSubmitting(false);
+      setError(errorMessage(e));
     }
   };
 
@@ -334,6 +333,11 @@ export default function MergeDialog({
         ) : (
           <p className="muted">{ui.batch.mergeEmpty}</p>
         )}
+        {mergeRunning && (
+          <p className="muted" role="status">
+            {ui.batch.mergeBusy}
+          </p>
+        )}
         {error && (
           <p className="generation-error" role="alert">
             {error}
@@ -347,7 +351,7 @@ export default function MergeDialog({
           <button
             type="button"
             className="primary-button"
-            disabled={busy || submitting || !selected.size}
+            disabled={busy || submitting || mergeRunning || !selected.size}
             onClick={() => void submit()}
           >
             {submitting ? ui.batch.merging : ui.batch.mergeConfirm}

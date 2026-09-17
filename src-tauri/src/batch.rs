@@ -3,7 +3,7 @@ use crate::storage::{AppError, Result};
 use chrono::{DateTime, Local, SecondsFormat};
 use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::{path::Path, thread};
 use uuid::Uuid;
 
 #[derive(Clone, Deserialize)]
@@ -465,6 +465,12 @@ pub fn merge_episode(root: &Path, input: MergeEpisodeInput) -> Result<BatchJob> 
     let transaction = connection
         .transaction()
         .map_err(|e| AppError::new("database", e.to_string()))?;
+    if has_active_merge(&transaction, &input.document)? {
+        return Err(AppError::new(
+            "busy",
+            "当前集已有合并任务进行中，请到任务列表查看",
+        ));
+    }
     transaction
         .execute(
             "INSERT INTO batch_jobs
@@ -479,7 +485,7 @@ pub fn merge_episode(root: &Path, input: MergeEpisodeInput) -> Result<BatchJob> 
                 "INSERT INTO batch_job_items
                  (item_id, job_id, shot_id, shot_title, status, prompt, duration, resolution,
                   seed, image_refs, audio_refs, local_file, sort_order, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, 'running', '', ?5, ?6, NULL, '[]', '[]', ?7, ?8, ?9, ?9)",
+                 VALUES (?1, ?2, ?3, ?4, 'pending', '', ?5, ?6, NULL, '[]', '[]', ?7, ?8, ?9, ?9)",
                 params![
                     Uuid::new_v4().to_string(),
                     job_id,
@@ -497,15 +503,93 @@ pub fn merge_episode(root: &Path, input: MergeEpisodeInput) -> Result<BatchJob> 
     transaction
         .commit()
         .map_err(|e| AppError::new("database", e.to_string()))?;
+    let job = load_job(&connection, &job_id)?;
     drop(connection);
 
+    let root_buf = root.to_path_buf();
+    let document = input.document.clone();
     let references: Vec<String> = input
         .items
         .iter()
         .map(|item| item.local_file.clone())
         .collect();
-    let outcome = crate::ffmpeg::concat_videos(root, &input.document, &references);
+    let worker_id = job_id.clone();
+    if let Err(error) = thread::Builder::new()
+        .name("drama-craft-merge".into())
+        .spawn(move || run_merge_job(&root_buf, &worker_id, &document, &references))
+    {
+        let _ = finish_merge_job(
+            root,
+            &job_id,
+            Err(AppError::new(
+                "ffmpeg",
+                format!("无法启动合并任务：{error}"),
+            )),
+        );
+        return Err(AppError::new(
+            "ffmpeg",
+            format!("无法启动合并任务：{error}"),
+        ));
+    }
+    Ok(job)
+}
+
+fn normalize_document(value: &str) -> String {
+    value.replace('\\', "/")
+}
+
+fn has_active_merge(connection: &rusqlite::Connection, document: &str) -> Result<bool> {
+    let mut statement = connection
+        .prepare(
+            "SELECT document FROM batch_jobs
+              WHERE job_type = 'merge' AND status IN ('scheduled', 'running')",
+        )
+        .map_err(|e| AppError::new("database", e.to_string()))?;
+    let documents = statement
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|e| AppError::new("database", e.to_string()))?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(|e| AppError::new("database", e.to_string()))?;
+    let needle = normalize_document(document);
+    Ok(documents
+        .iter()
+        .any(|value| normalize_document(value) == needle))
+}
+
+fn run_merge_job(root: &Path, job_id: &str, document: &str, references: &[String]) {
+    let claimed = (|| -> Result<usize> {
+        let connection = generation::open_database(root)?;
+        let stamp = now();
+        connection
+            .execute(
+                "UPDATE batch_job_items
+                    SET status = 'running', updated_at = ?2
+                  WHERE job_id = ?1 AND status = 'pending'",
+                params![job_id, stamp],
+            )
+            .map_err(|e| AppError::new("database", e.to_string()))
+            .map(|changed| changed as usize)
+    })();
+    match claimed {
+        Ok(0) | Err(_) => return,
+        Ok(_) => {}
+    }
+    let outcome = crate::ffmpeg::concat_videos(root, document, references);
+    let _ = finish_merge_job(root, job_id, outcome);
+}
+
+fn finish_merge_job(root: &Path, job_id: &str, outcome: Result<String>) -> Result<()> {
     let connection = generation::open_database(root)?;
+    let status: String = connection
+        .query_row(
+            "SELECT status FROM batch_jobs WHERE job_id = ?1",
+            [job_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| AppError::new("database", e.to_string()))?;
+    if status != "running" {
+        return Ok(());
+    }
     let updated = now();
     match outcome {
         Ok(filename) => {
@@ -513,7 +597,7 @@ pub fn merge_episode(root: &Path, input: MergeEpisodeInput) -> Result<BatchJob> 
                 .execute(
                     "UPDATE batch_jobs
                         SET status = 'completed', result_file = ?2, updated_at = ?3
-                      WHERE job_id = ?1",
+                      WHERE job_id = ?1 AND status = 'running'",
                     params![job_id, filename, updated],
                 )
                 .map_err(|e| AppError::new("database", e.to_string()))?;
@@ -521,7 +605,7 @@ pub fn merge_episode(root: &Path, input: MergeEpisodeInput) -> Result<BatchJob> 
                 .execute(
                     "UPDATE batch_job_items
                         SET status = 'completed', updated_at = ?2
-                      WHERE job_id = ?1",
+                      WHERE job_id = ?1 AND status = 'running'",
                     params![job_id, updated],
                 )
                 .map_err(|e| AppError::new("database", e.to_string()))?;
@@ -529,7 +613,9 @@ pub fn merge_episode(root: &Path, input: MergeEpisodeInput) -> Result<BatchJob> 
         Err(error) => {
             connection
                 .execute(
-                    "UPDATE batch_jobs SET status = 'failed', updated_at = ?2 WHERE job_id = ?1",
+                    "UPDATE batch_jobs
+                        SET status = 'failed', updated_at = ?2
+                      WHERE job_id = ?1 AND status = 'running'",
                     params![job_id, updated],
                 )
                 .map_err(|e| AppError::new("database", e.to_string()))?;
@@ -537,13 +623,13 @@ pub fn merge_episode(root: &Path, input: MergeEpisodeInput) -> Result<BatchJob> 
                 .execute(
                     "UPDATE batch_job_items
                         SET status = 'failed', error = ?2, updated_at = ?3
-                      WHERE job_id = ?1",
+                      WHERE job_id = ?1 AND status IN ('pending', 'running')",
                     params![job_id, error.message, updated],
                 )
                 .map_err(|e| AppError::new("database", e.to_string()))?;
         }
     }
-    load_job(&connection, &job_id)
+    Ok(())
 }
 
 pub fn list_jobs(root: &Path) -> Result<Vec<BatchJob>> {
@@ -925,6 +1011,9 @@ mod tests {
         )
         .unwrap();
         assert_eq!(job.job_type, "merge");
+        assert_eq!(job.status, "running");
+        assert!(job.result_file.is_none());
+        let job = wait_merge_job(&root, &job.job_id);
         assert_eq!(job.status, "completed");
         assert_eq!(job.item_completed, 2);
         let filename = job.result_file.expect("result");
@@ -932,5 +1021,54 @@ mod tests {
         assert!(root.join(&filename).is_file());
         assert_eq!(job.items[0].local_file.as_deref(), Some("S001.mp4"));
         assert_eq!(fs::read_to_string(root.join("01.md")).unwrap(), "# 一集\n");
+    }
+
+    #[test]
+    fn rejects_second_merge_while_episode_busy() {
+        let dir = tempdir().unwrap();
+        let root = fs::canonicalize(dir.path()).unwrap();
+        fs::write(root.join("01.md"), "# 一集\n").unwrap();
+        let clip = root.join("S001.mp4");
+        if !crate::ffmpeg::write_test_clip(&clip, 1) {
+            panic!("未找到打包的 FFmpeg，请先运行 npm run ffmpeg:download");
+        }
+        let connection = generation::open_database(&root).unwrap();
+        let stamp = now();
+        connection
+            .execute(
+                "INSERT INTO batch_jobs
+                 (job_id, job_type, name, document, status, scheduled_at, created_at, updated_at)
+                 VALUES ('job-busy', 'merge', '占用', '01.md', 'running', ?1, ?1, ?1)",
+                params![stamp],
+            )
+            .unwrap();
+        drop(connection);
+        let error = merge_episode(
+            &root,
+            MergeEpisodeInput {
+                document: "01.md".into(),
+                name: "第二次".into(),
+                items: vec![MergeShotInput {
+                    shot_id: "S001".into(),
+                    shot_title: "一".into(),
+                    local_file: "S001.mp4".into(),
+                    duration: 5,
+                    resolution: "480p横".into(),
+                }],
+            },
+        )
+        .unwrap_err();
+        assert_eq!(error.code, "busy");
+    }
+
+    fn wait_merge_job(root: &std::path::Path, job_id: &str) -> BatchJob {
+        for _ in 0..400 {
+            let job = get_job(root, job_id).unwrap();
+            if !matches!(job.status.as_str(), "running" | "scheduled") {
+                return job;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        panic!("merge job did not finish");
     }
 }

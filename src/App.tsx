@@ -162,6 +162,16 @@ export default function App() {
   dirtyRef.current = dirty;
 
   const board = useMemo(() => parseStoryboard(text), [text]);
+  const episodeMergeRunning = useMemo(
+    () =>
+      batchJobs.some(
+        (job) =>
+          job.jobType === "merge" &&
+          ["scheduled", "running"].includes(job.status) &&
+          job.document.replace(/\\/g, "/") === path.replace(/\\/g, "/"),
+      ),
+    [batchJobs, path],
+  );
   useEffect(() => {
     if (!notice) return;
     const timer = window.setTimeout(() => setNotice(""), 2800);
@@ -1174,6 +1184,7 @@ export default function App() {
           document={path}
           board={board}
           busy={busy}
+          mergeRunning={episodeMergeRunning}
           onClose={() => setShowMergeDialog(false)}
           onCreated={(message) => {
             if (message) setNotice(message);

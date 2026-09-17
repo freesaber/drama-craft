@@ -150,7 +150,10 @@ export default function TaskListView({
                   {ui.batch.type(job.jobType)}
                 </td>
                 <td className={`task-table-status ${statusTone(job.status)}`}>
-                  {ui.generation.status(job.status)}
+                  {job.jobType === "merge" &&
+                  ["scheduled", "running"].includes(job.status)
+                    ? ui.batch.merging
+                    : ui.generation.status(job.status)}
                 </td>
                 <td className="task-table-progress">
                   {ui.batch.progress(job.itemCompleted, job.itemTotal)}
@@ -195,7 +198,11 @@ export default function TaskListView({
             <h2 id="task-detail-title">{detail.name}</h2>
             <p className="muted">
               {ui.batch.type(detail.jobType)} ·{" "}
-              {ui.generation.status(detail.status)} · {ui.batch.scheduledAt}{" "}
+              {detail.jobType === "merge" &&
+              ["scheduled", "running"].includes(detail.status)
+                ? ui.batch.merging
+                : ui.generation.status(detail.status)}{" "}
+              · {ui.batch.scheduledAt}{" "}
               {formatTime(detail.scheduledAt)}
             </p>
             <p className="muted">
@@ -269,7 +276,8 @@ export default function TaskListView({
                           {item.localFile || "—"}
                         </td>
                         <td className="task-table-actions">
-                          {item.status === "pending" && (
+                          {detail.jobType !== "merge" &&
+                            item.status === "pending" && (
                             <button
                               type="button"
                               disabled={busy || acting}
