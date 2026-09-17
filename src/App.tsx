@@ -656,7 +656,35 @@ export default function App() {
   useEffect(() => {
     if (!project) return;
     let cancelled = false;
+    let running = false;
+    const sameJobs = (left: BatchJob[], right: BatchJob[]) =>
+      left.length === right.length &&
+      left.every(
+        (job, index) =>
+          job.jobId === right[index]?.jobId &&
+          job.status === right[index]?.status &&
+          job.updatedAt === right[index]?.updatedAt &&
+          job.itemCompleted === right[index]?.itemCompleted &&
+          job.itemCancelled === right[index]?.itemCancelled &&
+          job.itemFailed === right[index]?.itemFailed,
+      );
+    const applyCompletedVideos = async (jobs: BatchJob[]) => {
+      for (const job of jobs) {
+        for (const item of job.items) {
+          if (
+            item.status !== "completed" ||
+            !item.localFile ||
+            appliedBatchItems.current.has(item.itemId)
+          )
+            continue;
+          appliedBatchItems.current.add(item.itemId);
+          await applyBatchVideo(job.document, item.shotId, item.localFile);
+        }
+      }
+    };
     const tick = async () => {
+      if (running) return;
+      running = true;
       try {
         const synced = await api.syncBatchJobs(project.handle);
         const active = synced.some((job) =>
@@ -682,38 +710,19 @@ export default function App() {
             }
           }
         }
+        const afterPoll = await api.syncBatchJobs(project.handle);
+        if (cancelled) return;
+        await applyCompletedVideos(afterPoll);
+        if (cancelled) return;
         const advanced = await api.advanceBatchJobs(project.handle);
         if (cancelled) return;
-        setBatchJobs((current) => {
-          if (
-            current.length === advanced.jobs.length &&
-            current.every(
-              (job, index) =>
-                job.jobId === advanced.jobs[index]?.jobId &&
-                job.status === advanced.jobs[index]?.status &&
-                job.updatedAt === advanced.jobs[index]?.updatedAt &&
-                job.itemCompleted === advanced.jobs[index]?.itemCompleted &&
-                job.itemCancelled === advanced.jobs[index]?.itemCancelled &&
-                job.itemFailed === advanced.jobs[index]?.itemFailed,
-            )
-          )
-            return current;
-          return advanced.jobs;
-        });
-        for (const job of advanced.jobs) {
-          for (const item of job.items) {
-            if (
-              item.status !== "completed" ||
-              !item.localFile ||
-              appliedBatchItems.current.has(item.itemId)
-            )
-              continue;
-            appliedBatchItems.current.add(item.itemId);
-            await applyBatchVideo(job.document, item.shotId, item.localFile);
-          }
-        }
+        setBatchJobs((current) =>
+          sameJobs(current, advanced.jobs) ? current : advanced.jobs,
+        );
       } catch {
         /* batch runner is best-effort while the project stays open */
+      } finally {
+        running = false;
       }
     };
     void tick();

@@ -264,6 +264,20 @@ fn load_job(connection: &rusqlite::Connection, job_id: &str) -> Result<BatchJob>
     ))
 }
 
+fn has_in_flight_generation(connection: &rusqlite::Connection) -> Result<bool> {
+    let count: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM batch_job_items AS items
+               JOIN batch_jobs AS jobs ON jobs.job_id = items.job_id
+              WHERE jobs.job_type = 'generation'
+                AND items.status IN ('submitted', 'running')",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|e| AppError::new("database", e.to_string()))?;
+    Ok(count > 0)
+}
+
 fn refresh_job_status(connection: &rusqlite::Connection, job_id: &str) -> Result<BatchJob> {
     let mut job = load_job(connection, job_id)?;
     let next = derive_job_status(&job.status, &job.items);
@@ -773,6 +787,7 @@ pub async fn advance(root: &Path, settings: &GenerationSettings) -> Result<Batch
 
         let stamp = now();
         let current = Local::now();
+        let wait_for_result = has_in_flight_generation(&connection)?;
         let mut chosen: Option<PendingSubmit> = None;
         for (job_id, status, scheduled_at) in candidates {
             if parse_time(&scheduled_at)? > current {
@@ -785,6 +800,10 @@ pub async fn advance(root: &Path, settings: &GenerationSettings) -> Result<Batch
                         params![job_id, stamp],
                     )
                     .map_err(|e| AppError::new("database", e.to_string()))?;
+            }
+            if wait_for_result {
+                refresh_job_status(&connection, &job_id)?;
+                continue;
             }
             let pending = connection
                 .query_row(
@@ -973,6 +992,132 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(error.code, "input");
+    }
+
+    fn two_shot_job(root: &std::path::Path) -> BatchJob {
+        create_job(
+            root,
+            CreateBatchJobInput {
+                job_type: "generation".into(),
+                name: "本集批量生成".into(),
+                document: "01.md".into(),
+                delay_hours: 0,
+                items: vec![sample_item("S001"), sample_item("S002")],
+            },
+        )
+        .unwrap()
+    }
+
+    fn set_item_status(root: &std::path::Path, shot_id: &str, status: &str) {
+        let connection = generation::open_database(root).unwrap();
+        connection
+            .execute(
+                "UPDATE batch_job_items SET status = ?2 WHERE shot_id = ?1",
+                params![shot_id, status],
+            )
+            .unwrap();
+    }
+
+    fn dummy_settings() -> GenerationSettings {
+        GenerationSettings {
+            profile_id: "fixture".into(),
+            submit_url: "http://127.0.0.1:1/submit".into(),
+            query_url: "http://127.0.0.1:1/result/{task_id}".into(),
+            resolutions: vec!["768p竖(768*1376)".into()],
+            authorization: String::new(),
+        }
+    }
+
+    #[test]
+    fn advance_does_not_submit_next_while_previous_in_flight() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+        let job = two_shot_job(root);
+        set_item_status(root, "S001", "submitted");
+        let advanced = tauri::async_runtime::block_on(advance(root, &dummy_settings())).unwrap();
+        assert!(advanced.submitted.is_none());
+        let items = get_job(root, &job.job_id).unwrap().items;
+        assert_eq!(items[0].status, "submitted");
+        assert_eq!(items[1].status, "pending");
+    }
+
+    #[test]
+    fn advance_submits_next_after_previous_result() {
+        use std::{
+            io::{Read, Write},
+            net::{TcpListener, TcpStream},
+        };
+
+        fn read_request(stream: &mut TcpStream) -> String {
+            let mut bytes = Vec::new();
+            let mut buffer = [0_u8; 4096];
+            loop {
+                let count = stream.read(&mut buffer).unwrap();
+                if count == 0 {
+                    break;
+                }
+                bytes.extend_from_slice(&buffer[..count]);
+                if let Some(split) = bytes.windows(4).position(|part| part == b"\r\n\r\n") {
+                    let headers = String::from_utf8_lossy(&bytes[..split + 4]);
+                    let length = headers
+                        .lines()
+                        .find_map(|line| {
+                            line.to_ascii_lowercase()
+                                .strip_prefix("content-length: ")
+                                .map(str::to_owned)
+                        })
+                        .and_then(|value| value.parse::<usize>().ok())
+                        .unwrap_or(0);
+                    if bytes.len() >= split + 4 + length {
+                        break;
+                    }
+                }
+            }
+            String::from_utf8(bytes).unwrap()
+        }
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            let (mut submit, _) = listener.accept().unwrap();
+            let submitted = read_request(&mut submit);
+            assert!(submitted.starts_with("POST /submit "));
+            let body = br#"{"code":"Success","data":{"task_id":"task-2","status":"queued"}}"#;
+            write!(
+                submit,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            )
+            .unwrap();
+            submit.write_all(body).unwrap();
+        });
+
+        let dir = tempdir().unwrap();
+        let root = crate::storage::canonical_directory(dir.path()).unwrap();
+        crate::storage::create_document(&root, "01.md", "# S001\n").unwrap();
+        fs::write(root.join("frame.png"), b"synthetic-image").unwrap();
+        let job = two_shot_job(&root);
+        set_item_status(&root, "S001", "failed");
+        let settings = GenerationSettings {
+            profile_id: "fixture".into(),
+            submit_url: format!("http://{address}/submit"),
+            query_url: format!("http://{address}/result/{{task_id}}"),
+            resolutions: vec!["768p竖(768*1376)".into()],
+            authorization: String::new(),
+        };
+        let advanced = tauri::async_runtime::block_on(advance(&root, &settings)).unwrap();
+        assert_eq!(
+            advanced
+                .submitted
+                .as_ref()
+                .map(|item| item.shot_id.as_str()),
+            Some("S002")
+        );
+        let items = get_job(&root, &job.job_id).unwrap().items;
+        assert_eq!(items[0].status, "failed");
+        assert_eq!(items[1].status, "submitted");
+        assert_eq!(items[1].generation_task_id.as_deref(), Some("task-2"));
+        server.join().unwrap();
     }
 
     #[test]
