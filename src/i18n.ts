@@ -226,6 +226,8 @@ export const ui = {
     mergeConfirm: "开始合并",
     mergeCreated: "合并任务已完成",
     merging: "正在合并…",
+    mergePreview: "预览",
+    mergePreviewEmpty: "这一镜还没有可播放的视频",
     currentVideo: "当前版本",
     missingVideo: "未生成",
     playResult: "播放成片",

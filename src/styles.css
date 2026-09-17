@@ -2236,6 +2236,96 @@ select:focus {
   max-height: min(80vh, 720px);
   overflow: visible;
 }
+.merge-modal {
+  width: min(1180px, 96vw);
+  height: min(82vh, 860px);
+  max-height: min(90vh, 900px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.merge-modal h2 {
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+.merge-modal > .muted {
+  flex-shrink: 0;
+  margin: 0 0 4px;
+}
+.merge-layout {
+  display: grid;
+  grid-template-columns: minmax(360px, 1fr) minmax(400px, 1.1fr);
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+  margin: 12px 0;
+}
+.merge-modal .merge-list {
+  margin: 0;
+  max-height: none;
+  height: 100%;
+}
+.merge-preview {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #d7ddd0;
+  border-radius: 8px;
+  background: #121916;
+}
+.merge-preview-stage {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+.merge-preview-meta {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  background: #1c2620;
+  color: #d7e3d4;
+}
+.merge-preview-meta span {
+  font-size: 12px;
+  color: #8aa08a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.merge-preview-player {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  background: #000;
+  object-fit: contain;
+}
+.merge-preview-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: #8aa08a;
+  text-align: center;
+}
+.merge-modal .generation-error,
+.merge-modal .modal-actions {
+  flex-shrink: 0;
+}
+.merge-modal .modal-actions {
+  margin-top: 12px;
+}
+@media (max-width: 900px) {
+  .merge-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(180px, 42%) minmax(220px, 1fr);
+  }
+}
 .batch-shot-list {
   display: flex;
   flex-direction: column;
@@ -2296,6 +2386,19 @@ select:focus {
 }
 .batch-shot-table tbody tr.is-disabled:hover {
   background: transparent;
+}
+.merge-modal .batch-shot-table tbody tr,
+.merge-modal .batch-shot-table tbody tr.is-disabled {
+  cursor: pointer;
+}
+.merge-modal .batch-shot-table tbody tr.is-disabled:hover {
+  background: #f4f7f0;
+}
+.merge-modal .batch-shot-table tbody tr.is-active,
+.merge-modal .batch-shot-table tbody tr.is-active:hover,
+.merge-modal .batch-shot-table tbody tr.is-disabled.is-active {
+  background: #e7efe2;
+  box-shadow: inset 3px 0 0 #32563c;
 }
 .batch-shot-table .batch-shot-check {
   width: 40px;

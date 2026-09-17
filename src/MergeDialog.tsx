@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { api, errorMessage } from "./api";
 import { ui } from "./i18n";
+import { withMediaRevision } from "./mediaUrl";
 import type { Project, ShotCard, Storyboard } from "./types";
 
 type Row = {
@@ -16,6 +18,90 @@ function durationOf(card: ShotCard) {
   const value = Number(card.fields.duration.value || "5");
   if (!Number.isInteger(value) || value < 1 || value > 15) return 5;
   return value;
+}
+
+function MergePreview({
+  project,
+  document,
+  row,
+}: {
+  project: Project;
+  document: string;
+  row: Row | undefined;
+}) {
+  const [src, setSrc] = useState("");
+  const [error, setError] = useState("");
+  const [failed, setFailed] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    setSrc("");
+    setError("");
+    setFailed(false);
+    if (!row?.exists || !row.localFile) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    void api
+      .media(project.handle, document, row.localFile)
+      .then((media) => {
+        if (!alive) return;
+        if (!media.exists || !media.path || media.kind !== "video") return;
+        setSrc(withMediaRevision(convertFileSrc(media.path), media.revision));
+      })
+      .catch((e) => {
+        if (alive) setError(errorMessage(e));
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [project.handle, document, row?.shotId, row?.localFile, row?.exists]);
+
+  if (!row) {
+    return <div className="merge-preview-empty">{ui.batch.mergePreviewEmpty}</div>;
+  }
+
+  return (
+    <div className="merge-preview-stage">
+      <div className="merge-preview-meta">
+        <strong>
+          {row.shotId}
+          {row.shotTitle ? ` · ${row.shotTitle}` : ""}
+        </strong>
+        <span title={row.localFile || undefined}>
+          {row.exists ? row.localFile : ui.batch.missingVideo}
+        </span>
+      </div>
+      {error && (
+        <p className="generation-error" role="alert">
+          {error}
+        </p>
+      )}
+      {src && !failed ? (
+        <video
+          key={src}
+          className="merge-preview-player"
+          src={src}
+          controls
+          playsInline
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <div className="merge-preview-empty">
+          {loading
+            ? ui.batch.checking
+            : failed
+              ? ui.decodeError
+              : ui.batch.mergePreviewEmpty}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function MergeDialog({
@@ -36,6 +122,7 @@ export default function MergeDialog({
   const [checking, setChecking] = useState(true);
   const [rows, setRows] = useState<Row[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [activeId, setActiveId] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const selectable = rows.filter((row) => row.exists);
@@ -43,6 +130,7 @@ export default function MergeDialog({
     selectable.length > 0 && selectable.every((row) => selected.has(row.shotId));
   const someSelected = selectable.some((row) => selected.has(row.shotId));
   const selectAllRef = useRef<HTMLInputElement>(null);
+  const active = rows.find((row) => row.shotId === activeId) ?? rows[0];
 
   useEffect(() => {
     let alive = true;
@@ -76,6 +164,7 @@ export default function MergeDialog({
         if (!alive) return;
         setRows(next);
         setSelected(checked);
+        setActiveId(next[0]?.shotId ?? "");
       } catch (e) {
         if (alive) setError(errorMessage(e));
       } finally {
@@ -146,7 +235,7 @@ export default function MergeDialog({
       }}
     >
       <div
-        className="modal batch-modal"
+        className="modal batch-modal merge-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="batch-merge-title"
@@ -157,76 +246,90 @@ export default function MergeDialog({
         {checking ? (
           <p className="muted">{ui.batch.checking}</p>
         ) : rows.length ? (
-          <div className="batch-shot-table-wrap">
-            <table className="batch-shot-table is-selectable">
-              <thead>
-                <tr>
-                  <th className="batch-shot-check">
-                    <input
-                      ref={selectAllRef}
-                      type="checkbox"
-                      checked={allSelected}
-                      disabled={busy || submitting || !selectable.length}
-                      aria-label={ui.batch.selectAll}
-                      onChange={toggleAll}
-                    />
-                  </th>
-                  <th className="batch-shot-id">{ui.batch.shotId}</th>
-                  <th>{ui.batch.shotTitle}</th>
-                  <th>{ui.batch.currentVideo}</th>
-                  <th className="batch-shot-duration">{ui.batch.duration}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => {
-                  const checked = selected.has(row.shotId);
-                  return (
-                    <tr
-                      key={row.shotId}
-                      className={
-                        !row.exists ? "is-disabled" : checked ? "is-selected" : ""
-                      }
-                      onClick={() => {
-                        if (!busy && !submitting && row.exists) toggle(row.shotId);
-                      }}
-                    >
-                      <td className="batch-shot-check">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          disabled={busy || submitting || !row.exists}
-                          aria-label={row.shotId}
-                          onClick={(event) => event.stopPropagation()}
-                          onChange={() => {
-                            if (row.exists) toggle(row.shotId);
-                          }}
-                        />
-                      </td>
-                      <td className="batch-shot-id">
-                        <code>{row.shotId}</code>
-                      </td>
-                      <td
-                        className="batch-shot-title"
-                        title={row.shotTitle || undefined}
+          <div className="merge-layout">
+            <div className="batch-shot-table-wrap merge-list">
+              <table className="batch-shot-table is-selectable">
+                <thead>
+                  <tr>
+                    <th className="batch-shot-check">
+                      <input
+                        ref={selectAllRef}
+                        type="checkbox"
+                        checked={allSelected}
+                        disabled={busy || submitting || !selectable.length}
+                        aria-label={ui.batch.selectAll}
+                        onChange={toggleAll}
+                      />
+                    </th>
+                    <th className="batch-shot-id">{ui.batch.shotId}</th>
+                    <th>{ui.batch.shotTitle}</th>
+                    <th>{ui.batch.currentVideo}</th>
+                    <th className="batch-shot-duration">{ui.batch.duration}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => {
+                    const checked = selected.has(row.shotId);
+                    const current = row.shotId === active?.shotId;
+                    return (
+                      <tr
+                        key={row.shotId}
+                        className={[
+                          !row.exists ? "is-disabled" : "",
+                          current ? "is-active" : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        onClick={() => setActiveId(row.shotId)}
                       >
-                        {row.shotTitle || "—"}
-                      </td>
-                      <td
-                        className="batch-shot-title"
-                        title={row.localFile || undefined}
-                      >
-                        {row.exists
-                          ? row.localFile
-                          : row.localFile
-                            ? `${row.localFile}（${ui.batch.missingVideo}）`
-                            : ui.batch.missingVideo}
-                      </td>
-                      <td className="batch-shot-duration">{row.duration}s</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        <td className="batch-shot-check">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={busy || submitting || !row.exists}
+                            aria-label={row.shotId}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setActiveId(row.shotId);
+                            }}
+                            onChange={() => {
+                              if (row.exists) toggle(row.shotId);
+                            }}
+                          />
+                        </td>
+                        <td className="batch-shot-id">
+                          <code>{row.shotId}</code>
+                        </td>
+                        <td
+                          className="batch-shot-title"
+                          title={row.shotTitle || undefined}
+                        >
+                          {row.shotTitle || "—"}
+                        </td>
+                        <td
+                          className="batch-shot-title"
+                          title={row.localFile || undefined}
+                        >
+                          {row.exists
+                            ? row.localFile
+                            : row.localFile
+                              ? `${row.localFile}（${ui.batch.missingVideo}）`
+                              : ui.batch.missingVideo}
+                        </td>
+                        <td className="batch-shot-duration">{row.duration}s</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <aside className="merge-preview" aria-label={ui.batch.mergePreview}>
+              <MergePreview
+                project={project}
+                document={document}
+                row={active}
+              />
+            </aside>
           </div>
         ) : (
           <p className="muted">{ui.batch.mergeEmpty}</p>
