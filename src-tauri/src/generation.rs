@@ -8,6 +8,8 @@ use serde_json::{json, Value};
 use std::{fs, io::Write, path::Path};
 
 const DATABASE_NAME: &str = "generations.sqlite3";
+const AUDIO_REQUIRED_WORKFLOW: &str = "minimax_h3_z0903";
+const AUDIO_OPTIONAL_WORKFLOW: &str = "minimax_h3_z0902";
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -199,9 +201,13 @@ fn parse_http_url(raw: &str) -> Result<reqwest::Url> {
     Ok(url)
 }
 
-fn submit_endpoint(settings: &GenerationSettings) -> Result<String> {
+fn submit_endpoint(settings: &GenerationSettings, has_ref_audio: bool) -> Result<String> {
     let url = parse_http_url(&settings.submit_url)?;
-    Ok(url.as_str().trim_end_matches('/').to_owned())
+    let mut endpoint = url.as_str().trim_end_matches('/').to_owned();
+    if !has_ref_audio && endpoint.contains(AUDIO_REQUIRED_WORKFLOW) {
+        endpoint = endpoint.replace(AUDIO_REQUIRED_WORKFLOW, AUDIO_OPTIONAL_WORKFLOW);
+    }
+    Ok(endpoint)
 }
 
 fn result_endpoint(settings: &GenerationSettings, task_id: &str) -> Result<String> {
@@ -374,9 +380,10 @@ pub async fn submit(
     for (index, reference) in input.audio_refs.iter().enumerate() {
         body[format!("ref_audio_{index}")] = json!(api_media(root, &input.document, reference)?);
     }
+    let has_ref_audio = body.get("ref_audio_0").is_some();
     let value = envelope(
         client(settings)?
-            .post(submit_endpoint(settings)?)
+            .post(submit_endpoint(settings, has_ref_audio)?)
             .json(&body)
             .send()
             .await
@@ -712,6 +719,34 @@ mod tests {
         stream.write_all(body).unwrap();
     }
 
+    fn fixture_settings(submit_url: &str) -> GenerationSettings {
+        GenerationSettings {
+            profile_id: "fixture".into(),
+            submit_url: submit_url.into(),
+            query_url: "https://example.test/result/{task_id}".into(),
+            resolutions: vec!["768p横(1376*768)".into()],
+            authorization: String::new(),
+        }
+    }
+
+    #[test]
+    fn z0903_without_audio_rewrites_to_z0902() {
+        let z0903 =
+            fixture_settings("https://autodl.art/api/v1/comfyui/comfyui_workflow/minimax_h3_z0903");
+        assert_eq!(
+            submit_endpoint(&z0903, false).unwrap(),
+            "https://autodl.art/api/v1/comfyui/comfyui_workflow/minimax_h3_z0902"
+        );
+        assert_eq!(
+            submit_endpoint(&z0903, true).unwrap(),
+            "https://autodl.art/api/v1/comfyui/comfyui_workflow/minimax_h3_z0903"
+        );
+        assert_eq!(
+            submit_endpoint(&fixture_settings("https://example.test/submit"), false).unwrap(),
+            "https://example.test/submit"
+        );
+    }
+
     #[test]
     fn video_names_use_the_episode_document_number() {
         for (document, expected) in [
@@ -813,14 +848,13 @@ mod tests {
         server.join().unwrap();
     }
 
-    #[test]
-    fn submit_endpoint_uses_configured_workflow_url() {
+    fn post_to_workflow(workflow: &str, audio_refs: Vec<String>) {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let address = listener.local_addr().unwrap();
-        let workflow = "/api/v1/comfyui/comfyui_workflow/minimax_h3_z0903";
+        let expected = workflow.to_owned();
         let server = thread::spawn(move || {
             let (mut submit, _) = listener.accept().unwrap();
-            assert!(request(&mut submit).starts_with(&format!("POST {workflow} ")));
+            assert!(request(&mut submit).starts_with(&format!("POST {expected} ")));
             respond(
                 &mut submit,
                 "application/json",
@@ -832,9 +866,14 @@ mod tests {
         let root = storage::canonical_directory(project.path()).unwrap();
         storage::create_document(&root, "01 测试.md", "# S001 测试\n").unwrap();
         fs::write(root.join("frame.png"), b"synthetic-image").unwrap();
+        if !audio_refs.is_empty() {
+            fs::write(root.join("voice.mp3"), b"synthetic-audio").unwrap();
+        }
         let settings = GenerationSettings {
             profile_id: "fixture".into(),
-            submit_url: format!("http://{address}{workflow}"),
+            submit_url: format!(
+                "http://{address}/api/v1/comfyui/comfyui_workflow/minimax_h3_z0903"
+            ),
             query_url: format!("http://{address}/result/{{task_id}}"),
             resolutions: vec!["768p横(1376*768)".into()],
             authorization: String::new(),
@@ -850,11 +889,24 @@ mod tests {
                 resolution: "768p横(1376*768)".into(),
                 seed: None,
                 image_refs: vec!["frame.png".into()],
-                audio_refs: vec![],
+                audio_refs,
             },
         ))
         .unwrap();
         server.join().unwrap();
+    }
+
+    #[test]
+    fn submit_z0903_without_audio_posts_to_z0902() {
+        post_to_workflow("/api/v1/comfyui/comfyui_workflow/minimax_h3_z0902", vec![]);
+    }
+
+    #[test]
+    fn submit_z0903_with_audio_keeps_z0903() {
+        post_to_workflow(
+            "/api/v1/comfyui/comfyui_workflow/minimax_h3_z0903",
+            vec!["voice.mp3".into()],
+        );
     }
 
     #[test]
