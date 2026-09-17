@@ -4,6 +4,8 @@ import { ui } from "./i18n";
 import type { BatchJob, Project } from "./types";
 import VideoPlayerModal from "./VideoPlayerModal";
 
+const TASKS_PER_PAGE = 10;
+
 function formatTime(value: string) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString("zh-CN");
@@ -37,6 +39,7 @@ export default function TaskListView({
   onJobsChange: (jobs: BatchJob[]) => void;
 }) {
   const [filter, setFilter] = useState<"all" | "generation" | "merge">("all");
+  const [page, setPage] = useState(1);
   const [detail, setDetail] = useState<BatchJob | null>(null);
   const [playing, setPlaying] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -47,6 +50,15 @@ export default function TaskListView({
       filter === "all" ? jobs : jobs.filter((job) => job.jobType === filter),
     [filter, jobs],
   );
+  const totalPages = Math.max(1, Math.ceil(visible.length / TASKS_PER_PAGE));
+  const paged = visible.slice(
+    (page - 1) * TASKS_PER_PAGE,
+    page * TASKS_PER_PAGE,
+  );
+
+  useEffect(() => {
+    setPage((current) => Math.min(Math.max(1, current), totalPages));
+  }, [totalPages]);
 
   useEffect(() => {
     if (!detail) return;
@@ -91,19 +103,28 @@ export default function TaskListView({
         <div className="mode-switch" aria-label={ui.batch.tasks}>
           <button
             aria-pressed={filter === "all"}
-            onClick={() => setFilter("all")}
+            onClick={() => {
+              setFilter("all");
+              setPage(1);
+            }}
           >
             {ui.batch.filterAll}
           </button>
           <button
             aria-pressed={filter === "generation"}
-            onClick={() => setFilter("generation")}
+            onClick={() => {
+              setFilter("generation");
+              setPage(1);
+            }}
           >
             {ui.batch.typeGeneration}
           </button>
           <button
             aria-pressed={filter === "merge"}
-            onClick={() => setFilter("merge")}
+            onClick={() => {
+              setFilter("merge");
+              setPage(1);
+            }}
           >
             {ui.batch.typeMerge}
           </button>
@@ -141,7 +162,7 @@ export default function TaskListView({
                 <td colSpan={7}>{ui.batch.emptyJobs}</td>
               </tr>
             )}
-            {visible.map((job) => (
+            {paged.map((job) => (
               <tr key={job.jobId} onClick={() => setDetail(job)}>
                 <td className="task-table-name" title={job.name}>
                   {job.name}
@@ -186,6 +207,29 @@ export default function TaskListView({
           </tbody>
         </table>
       </div>
+      {visible.length > 0 && (
+        <nav className="project-pagination" aria-label={ui.batch.pagination}>
+          <button
+            type="button"
+            disabled={busy || acting || page <= 1}
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+          >
+            {ui.previousPage}
+          </button>
+          <span>
+            {page} / {totalPages}
+          </span>
+          <button
+            type="button"
+            disabled={busy || acting || page >= totalPages}
+            onClick={() =>
+              setPage((current) => Math.min(totalPages, current + 1))
+            }
+          >
+            {ui.nextPage}
+          </button>
+        </nav>
+      )}
       {detail && (
         <div className="modal-backdrop" onClick={() => setDetail(null)}>
           <div

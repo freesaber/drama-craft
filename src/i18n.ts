@@ -257,6 +257,7 @@ export const ui = {
     type: (type: string) =>
       ({ generation: "生成任务", merge: "合并任务" })[type] ?? type,
     filterAll: "全部",
+    pagination: "任务列表分页",
     jobName: "任务",
     typeLabel: "类型",
     statusLabel: "状态",

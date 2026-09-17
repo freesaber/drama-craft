@@ -934,6 +934,7 @@ export default function App() {
         </main>
       ) : (
         <>
+          {workspaceView !== "tasks" && (
           <div className="project-toolbar">
             <div className="project-location" title={project.root}>
               ▱ {project.root.replace(/^\\\\\?\\/, "")}
@@ -954,6 +955,7 @@ export default function App() {
               {ui.batch.tasks}
             </button>
           </div>
+          )}
           {conflict && (
             <div className="banner conflict" role="alert">
               <span>{ui.conflict}</span>
