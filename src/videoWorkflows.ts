@@ -49,15 +49,33 @@ export function tryParseResolutionsJson(raw: string): string[] {
   }
 }
 
-function resolutionPrefixMatch(shot: string, item: string) {
-  if (!item.startsWith(shot)) return false;
-  const rest = item.slice(shot.length);
-  return (
-    !rest ||
-    rest.startsWith("(") ||
-    rest.startsWith(" ") ||
-    rest.startsWith("（")
-  );
+/** Strip pixel suffix so `480p横` and `480p横(864*480)` share a key. */
+export function resolutionLabelKey(value: string): string {
+  const shot = value.trim();
+  const index = shot.search(/[(（]/);
+  return (index >= 0 ? shot.slice(0, index) : shot).trim();
+}
+
+/**
+ * Map a stored label onto the current API list when they share a key.
+ * Returns null when the value cannot be uniquely aligned.
+ */
+export function alignResolutionOption(
+  value: string,
+  resolutions: readonly string[],
+): string | null {
+  const shot = value.trim();
+  const list = resolutions.map((item) => item.trim()).filter(Boolean);
+  if (!shot || !list.length) return null;
+  const exact = list.find((item) => item === shot);
+  if (exact) return exact;
+  const key = resolutionLabelKey(shot);
+  if (!key) return null;
+  const keyed = list.filter((item) => resolutionLabelKey(item) === key);
+  if (keyed.length === 1) return keyed[0];
+  if (keyed.length > 1)
+    return keyed.find((item) => /[(（]/.test(item)) ?? keyed[0];
+  return null;
 }
 
 /** Map a document label like `480p横` onto the current API resolution list. */
@@ -70,13 +88,7 @@ export function matchConfiguredResolution(
   const list = resolutions.map((item) => item.trim()).filter(Boolean);
   if (!list.length) return shot || fallback;
   if (!shot) return fallback || list[0];
-  const exact = list.find((item) => item === shot);
-  if (exact) return exact;
-  const prefixed = list.filter((item) => resolutionPrefixMatch(shot, item));
-  if (prefixed.length === 1) return prefixed[0];
-  if (prefixed.length > 1)
-    return prefixed.find((item) => item.includes("(")) ?? prefixed[0];
-  return fallback || list[0];
+  return alignResolutionOption(shot, list) ?? (fallback || list[0]);
 }
 
 /** AutoDL 两套可一键填入的 resolution / seed 预设（不填接口地址） */

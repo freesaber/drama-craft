@@ -6,11 +6,13 @@ import {
   fillEmptyAutodlPreset,
   compactResolutionsJson,
   formatResolutionsJson,
+  alignResolutionOption,
   matchConfiguredResolution,
   migrateApiProfile,
   migrateGenerationSettings,
   optionsFromProfile,
   parseResolutionsJson,
+  resolutionLabelKey,
 } from "./videoWorkflows";
 
 describe("videoWorkflows", () => {
@@ -64,6 +66,10 @@ describe("videoWorkflows", () => {
 
   it("maps document resolution labels onto the active API list", () => {
     const list = [...AUTODL_RESOLUTION_PRESETS[1].resolutions];
+    expect(resolutionLabelKey("480p横(864*480)")).toBe("480p横");
+    expect(alignResolutionOption("480p横", list)).toBe("480p横(864*480)");
+    expect(alignResolutionOption("480p横(864*480)", ["480p横"])).toBe("480p横");
+    expect(alignResolutionOption("999p", list)).toBeNull();
     expect(matchConfiguredResolution("480p横", list, list[0])).toBe(
       "480p横(864*480)",
     );
@@ -76,6 +82,9 @@ describe("videoWorkflows", () => {
     expect(matchConfiguredResolution("1080p横", list, list[0])).toBe(
       "1080p横(1920*1088)",
     );
+    expect(
+      matchConfiguredResolution("480p横(864*480)", ["480p横"], "x"),
+    ).toBe("480p横");
     expect(matchConfiguredResolution("999p", list, list[0])).toBe(list[0]);
   });
 

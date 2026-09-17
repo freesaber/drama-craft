@@ -6,7 +6,10 @@ import { ui } from "./i18n";
 import { api, chooseMedia, desktop, errorMessage } from "./api";
 import EpisodeOverview from "./EpisodeOverview";
 import GenerationPanel from "./GenerationPanel";
-import type { VideoApiOptions } from "./videoWorkflows";
+import {
+  alignResolutionOption,
+  type VideoApiOptions,
+} from "./videoWorkflows";
 import type {
   BoardField,
   Project,
@@ -110,6 +113,7 @@ export default function BoardView({
               ? Array.from({ length: 15 }, (_, i) => String(i + 1))
               : undefined
         }
+        alignOptions={key === "resolution"}
         change={(value) => apply(fieldPatch(board, f, value))}
         source={
           showSourceActions
@@ -470,6 +474,7 @@ function Field({
   change,
   source,
   options,
+  alignOptions,
 }: {
   label: string;
   field: SourceField;
@@ -479,6 +484,7 @@ function Field({
   change: (value: string) => boolean | void;
   source?: () => void;
   options?: string[];
+  alignOptions?: boolean;
 }) {
   const [error, setError] = useState("");
   const [draft, setDraft] = useState(field.value);
@@ -504,6 +510,10 @@ function Field({
     lastSubmitted.current = null;
     setDraft(field.value);
   };
+  const selectValue =
+    options && alignOptions
+      ? (alignResolutionOption(draft, options) ?? draft)
+      : draft;
   return (
     <label className="board-field">
       <span>{label}</span>
@@ -518,12 +528,12 @@ function Field({
       ) : options ? (
         <select
           aria-label={label}
-          value={draft}
+          value={selectValue}
           disabled={disabled}
           onChange={(event) => edit(event.target.value)}
           onBlur={blur}
         >
-          {!options.includes(draft) && (
+          {!options.includes(selectValue) && (
             <option value={draft}>{draft || "—"}</option>
           )}
           {options.map((option) => (
