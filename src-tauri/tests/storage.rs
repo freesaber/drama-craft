@@ -117,6 +117,10 @@ fn rejects_traversal_reserved_names_and_overwrites() {
     assert!(agents.contains("删掉破折号不够"));
     assert!(agents.contains("需要交代的信息必须有发声主体"));
     assert!(agents.contains("时间线无小说说明"));
+    assert!(agents.contains("先样片、再一次写完剩余集"));
+    assert!(agents.contains("到目前为止的全部角色/素材登记"));
+    assert!(agents.contains("全剧验收（所有集写完后必须做）"));
+    assert!(agents.contains("跨集同一素材 ID / 同一名称，文件名必须逐字相同"));
 }
 #[test]
 fn project_identity_moves_while_external_library_configuration_is_preserved() {
