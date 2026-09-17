@@ -3,6 +3,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { api, errorMessage } from "./api";
 import { ui } from "./i18n";
 import { withMediaRevision } from "./mediaUrl";
+import { defaultMergeSelectedIds } from "./shotFlags";
 import type { Project, ShotCard, Storyboard } from "./types";
 
 type Row = {
@@ -12,6 +13,7 @@ type Row = {
   duration: number;
   resolution: string;
   exists: boolean;
+  discarded: boolean;
 };
 
 function durationOf(card: ShotCard) {
@@ -110,6 +112,7 @@ export default function MergeDialog({
   board,
   busy,
   mergeRunning,
+  discardedShotIds,
   onClose,
   onCreated,
 }: {
@@ -118,6 +121,7 @@ export default function MergeDialog({
   board: Storyboard;
   busy: boolean;
   mergeRunning: boolean;
+  discardedShotIds: readonly string[];
   onClose: () => void;
   onCreated: (notice: string) => void;
 }) {
@@ -128,10 +132,10 @@ export default function MergeDialog({
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
-  const selectable = rows.filter((row) => row.exists);
+  const preferred = rows.filter((row) => row.exists && !row.discarded);
   const allSelected =
-    selectable.length > 0 && selectable.every((row) => selected.has(row.shotId));
-  const someSelected = selectable.some((row) => selected.has(row.shotId));
+    preferred.length > 0 && preferred.every((row) => selected.has(row.shotId));
+  const someSelected = rows.some((row) => row.exists && selected.has(row.shotId));
   const selectAllRef = useRef<HTMLInputElement>(null);
   const active = rows.find((row) => row.shotId === activeId) ?? rows[0];
 
@@ -142,7 +146,6 @@ export default function MergeDialog({
     void (async () => {
       try {
         const next: Row[] = [];
-        const checked = new Set<string>();
         for (const card of board.cards) {
           const localFile = card.fields.videoFile.value.trim();
           let exists = false;
@@ -161,12 +164,12 @@ export default function MergeDialog({
             duration: durationOf(card),
             resolution: card.fields.resolution.value || "—",
             exists,
+            discarded: discardedShotIds.includes(card.id),
           });
-          if (exists) checked.add(card.id);
         }
         if (!alive) return;
         setRows(next);
-        setSelected(checked);
+        setSelected(new Set(defaultMergeSelectedIds(next, discardedShotIds)));
         setActiveId(next[0]?.shotId ?? "");
       } catch (e) {
         if (alive) setError(errorMessage(e));
@@ -177,7 +180,7 @@ export default function MergeDialog({
     return () => {
       alive = false;
     };
-  }, [board, document, project.handle]);
+  }, [board, discardedShotIds, document, project.handle]);
 
   useEffect(() => {
     if (selectAllRef.current)
@@ -194,7 +197,7 @@ export default function MergeDialog({
 
   const toggleAll = () =>
     setSelected(
-      allSelected ? new Set() : new Set(selectable.map((row) => row.shotId)),
+      allSelected ? new Set() : new Set(preferred.map((row) => row.shotId)),
     );
 
   const submit = async () => {
@@ -255,7 +258,7 @@ export default function MergeDialog({
                         ref={selectAllRef}
                         type="checkbox"
                         checked={allSelected}
-                        disabled={busy || submitting || !selectable.length}
+                        disabled={busy || submitting || !preferred.length}
                         aria-label={ui.batch.selectAll}
                         onChange={toggleAll}
                       />
@@ -275,6 +278,7 @@ export default function MergeDialog({
                         key={row.shotId}
                         className={[
                           !row.exists ? "is-disabled" : "",
+                          row.discarded ? "is-discarded" : "",
                           current ? "is-active" : "",
                         ]
                           .filter(Boolean)
@@ -304,6 +308,11 @@ export default function MergeDialog({
                           title={row.shotTitle || undefined}
                         >
                           {row.shotTitle || "—"}
+                          {row.discarded ? (
+                            <span className="merge-discarded-tag">
+                              {ui.board.discardedShot}
+                            </span>
+                          ) : null}
                         </td>
                         <td
                           className="batch-shot-title"

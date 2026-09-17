@@ -443,3 +443,32 @@ fn external_workspace_readonly_check() {
         .collect();
     assert_eq!(before, after);
 }
+
+#[test]
+fn shot_discard_flags_do_not_rewrite_markdown() {
+    let temp = workspace();
+    let root = root(&temp);
+    create_document(&root, "01 示例.md", "# S001 测试\n").unwrap();
+    let before = fs::read(root.join("01 示例.md")).unwrap();
+    assert!(list_discarded_shots(&root, "01 示例.md")
+        .unwrap()
+        .is_empty());
+    assert_eq!(
+        set_shot_discarded(&root, "01 示例.md", "S002", true).unwrap(),
+        vec!["S002".to_string()]
+    );
+    assert_eq!(
+        list_discarded_shots(&root, "01 示例.md").unwrap(),
+        vec!["S002".to_string()]
+    );
+    assert_eq!(
+        set_shot_discarded(&root, "01 示例.md", "S002", false).unwrap(),
+        Vec::<String>::new()
+    );
+    assert!(list_discarded_shots(&root, "01 示例.md")
+        .unwrap()
+        .is_empty());
+    assert_eq!(fs::read(root.join("01 示例.md")).unwrap(), before);
+    assert!(set_shot_discarded(&root, "../outside.md", "S001", true).is_err());
+    assert!(set_shot_discarded(&root, "01 示例.md", "../S001", true).is_err());
+}

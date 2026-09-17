@@ -65,6 +65,8 @@ export default function BoardView({
   configureGeneration,
   useVideo,
   showSourceActions = true,
+  discardedShotIds = [],
+  onToggleDiscarded,
   onMediaPlaced,
   onMediaChanged,
 }: {
@@ -82,6 +84,8 @@ export default function BoardView({
   configureGeneration: () => void;
   useVideo: (index: number, reference: string) => Promise<void>;
   showSourceActions?: boolean;
+  discardedShotIds?: readonly string[];
+  onToggleDiscarded?: (shotId: string, discarded: boolean) => void;
   onMediaPlaced?: () => void;
   onMediaChanged?: () => void;
 }) {
@@ -189,28 +193,38 @@ export default function BoardView({
         const index = section.index,
           card = board.cards[index];
         const video = normalizeReference(card.fields.videoFile.value);
+        const discarded = discardedShotIds.includes(card.id);
         return (
           <article
             id={`shot-card-${index}`}
             key={`shot-${index}`}
             data-shot-id={card.id}
-            className={`shot-card ${active === index ? "is-selected" : ""}`}
+            className={`shot-card ${active === index ? "is-selected" : ""} ${discarded ? "is-discarded" : ""}`}
             onFocusCapture={() => select(index)}
             onClick={() => select(index)}
           >
             <header className="shot-card-heading">
               <span className="shot-number">{card.id}</span>
               <div className="shot-title">{field(card, "title")}</div>
-              {showSourceActions && (
-                <div
-                  className="shot-actions"
-                  onClick={(event) => event.stopPropagation()}
+              <div
+                className="shot-actions"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  className={discarded ? "is-discarded" : undefined}
+                  aria-pressed={discarded}
+                  disabled={busy}
+                  onClick={() => onToggleDiscarded?.(card.id, !discarded)}
                 >
+                  {discarded ? ui.board.undiscardShot : ui.board.discardShot}
+                </button>
+                {showSourceActions && (
                   <button disabled={busy} onClick={() => source(card.offset)}>
                     {ui.board.source}
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </header>
             <GenerationPanel
               video={

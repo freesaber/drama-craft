@@ -58,6 +58,7 @@ export default function App() {
   const [batchJobs, setBatchJobs] = useState<BatchJob[]>([]);
   const [showBatchDialog, setShowBatchDialog] = useState(false);
   const [showMergeDialog, setShowMergeDialog] = useState(false);
+  const [discardedShots, setDiscardedShots] = useState<string[]>([]);
   const appliedBatchItems = useRef(new Set<string>());
   const [activeShot, setActiveShot] = useState(0);
   const pendingJump = useRef<number | null>(null);
@@ -234,6 +235,34 @@ export default function App() {
         .catch((e) => setError(errorMessage(e)));
     }
   }, [loadPreferences]);
+  useEffect(() => {
+    if (!project || !path) {
+      setDiscardedShots([]);
+      return;
+    }
+    let cancelled = false;
+    void api
+      .listDiscardedShots(project.handle, path)
+      .then((ids) => {
+        if (!cancelled) setDiscardedShots(ids);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(errorMessage(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [project, path]);
+  const toggleDiscardedShot = async (shotId: string, discarded: boolean) => {
+    if (!project) return;
+    try {
+      setDiscardedShots(
+        await api.setShotDiscarded(project.handle, path, shotId, discarded),
+      );
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  };
   const replaceDocument = (nextPath: string, next: Snapshot) => {
     if (nextPath !== path) {
       setMode("board");
@@ -258,6 +287,7 @@ export default function App() {
     setWorkspaceView("storyboard");
     setBatchJobs([]);
     appliedBatchItems.current.clear();
+    setDiscardedShots([]);
     setActiveShot(0);
     setPath("");
     setSnapshot(null);
@@ -1150,6 +1180,10 @@ export default function App() {
                   configureGeneration={configureGeneration}
                   useVideo={useGeneratedVideo}
                   showSourceActions={!isOverviewDocument(path)}
+                  discardedShotIds={discardedShots}
+                  onToggleDiscarded={(shotId, discarded) => {
+                    void toggleDiscardedShot(shotId, discarded);
+                  }}
                   onMediaPlaced={() => {
                     setRefreshKey((key) => key + 1);
                     setNotice(ui.episodeData.mediaPlaced);
@@ -1196,6 +1230,7 @@ export default function App() {
           board={board}
           busy={busy}
           mergeRunning={episodeMergeRunning}
+          discardedShotIds={discardedShots}
           onClose={() => setShowMergeDialog(false)}
           onCreated={(message) => {
             if (message) setNotice(message);

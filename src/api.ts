@@ -46,6 +46,20 @@ export const api = {
     invoke<Snapshot>("read_document", { handle, path }),
   save: (handle: string, path: string, text: string, expectedHash: string) =>
     invoke<Snapshot>("save_document", { handle, path, text, expectedHash }),
+  listDiscardedShots: (handle: string, document: string) =>
+    invoke<string[]>("list_discarded_shots", { handle, document }),
+  setShotDiscarded: (
+    handle: string,
+    document: string,
+    shotId: string,
+    discarded: boolean,
+  ) =>
+    invoke<string[]>("set_shot_discarded", {
+      handle,
+      document,
+      shotId,
+      discarded,
+    }),
   media: (handle: string, document: string, reference: string) =>
     invoke<Media>("resolve_media", { handle, document, reference }),
   placeDocumentMedia: (

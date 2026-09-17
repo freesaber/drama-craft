@@ -426,6 +426,21 @@
   border-color: #9ab58b;
   box-shadow: 0 0 0 1px #dce8d5;
 }
+.shot-card.is-discarded {
+  border-color: #e8b4ae;
+}
+.shot-card.is-selected.is-discarded {
+  border-color: #d39a93;
+  box-shadow: 0 0 0 1px #f3dcd8;
+}
+.shot-card.is-discarded .shot-card-heading {
+  background: #fdf6f4;
+}
+.shot-actions button.is-discarded {
+  color: #9b3b32;
+  border-color: #e8c4bf;
+  background: #fbeeee;
+}
 .shot-card-heading {
   padding: 15px 22px;
   background: #fcfdf9;
@@ -2399,6 +2414,24 @@ select:focus {
 .merge-modal .batch-shot-table tbody tr.is-disabled.is-active {
   background: #e7efe2;
   box-shadow: inset 3px 0 0 #32563c;
+}
+.merge-modal .batch-shot-table tbody tr.is-discarded,
+.merge-modal .batch-shot-table tbody tr.is-discarded:hover,
+.merge-modal .batch-shot-table tbody tr.is-disabled.is-discarded,
+.merge-modal .batch-shot-table tbody tr.is-disabled.is-discarded:hover {
+  background: #f8d4d0;
+  color: #8a2f28;
+}
+.merge-modal .batch-shot-table tbody tr.is-discarded.is-active,
+.merge-modal .batch-shot-table tbody tr.is-discarded.is-active:hover,
+.merge-modal .batch-shot-table tbody tr.is-disabled.is-discarded.is-active {
+  background: #f3c5c0;
+  box-shadow: inset 3px 0 0 #b4453a;
+}
+.merge-discarded-tag {
+  margin-left: 8px;
+  font-size: 11px;
+  color: #9b3b32;
 }
 .batch-shot-table .batch-shot-check {
   width: 40px;

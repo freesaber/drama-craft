@@ -221,7 +221,7 @@ export const ui = {
     merge: "合并",
     mergeTitle: "合并本集分镜",
     mergeHint:
-      "列出当前集各分镜的当前视频。勾选后按分镜顺序拼接，生成 01 merge_时间戳.mp4，不改 Markdown。合并会统一重编码，不追求速度，以保证画质。",
+      "列出当前集各分镜的当前视频。勾选后按分镜顺序拼接，生成 01 merge_时间戳.mp4，不改 Markdown。已丢弃的分镜默认不勾选并标红，仍可手动勾选。合并会统一重编码，不追求速度，以保证画质。",
     mergeEmpty: "没有可合并的分镜视频。",
     mergeConfirm: "开始合并",
     mergeCreated: "合并任务已完成",
@@ -299,6 +299,9 @@ export const ui = {
     prompts: "提示词与生成参数",
     refs: "素材引用",
     source: "定位源码",
+    discardShot: "丢弃",
+    undiscardShot: "取消丢弃",
+    discardedShot: "已丢弃",
     generate: "生成视频",
     generationHint: "生成输入：本卡视频提示词、素材引用与参数。",
     noFrame: "尚未引用首帧图片",

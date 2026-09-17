@@ -235,6 +235,28 @@ fn save_document(
     Ok(snapshot)
 }
 #[tauri::command]
+fn list_discarded_shots(
+    state: State<Sessions>,
+    handle: String,
+    document: String,
+) -> Result<Vec<String>> {
+    with_root(&state, &handle, |root| {
+        storage::list_discarded_shots(root, &document)
+    })
+}
+#[tauri::command]
+fn set_shot_discarded(
+    state: State<Sessions>,
+    handle: String,
+    document: String,
+    shot_id: String,
+    discarded: bool,
+) -> Result<Vec<String>> {
+    with_root(&state, &handle, |root| {
+        storage::set_shot_discarded(root, &document, &shot_id, discarded)
+    })
+}
+#[tauri::command]
 fn resolve_media(
     app: tauri::AppHandle,
     state: State<Sessions>,
@@ -730,6 +752,8 @@ pub fn run() {
             scan_project,
             read_document,
             save_document,
+            list_discarded_shots,
+            set_shot_discarded,
             resolve_media,
             place_document_media,
             open_media,

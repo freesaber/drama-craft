@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
+    collections::{BTreeMap, BTreeSet},
     fs,
     io::{self, Write},
     path::{Component, Path, PathBuf},
@@ -310,6 +311,109 @@ fn metadata_paths(root: &Path) -> Result<(PathBuf, PathBuf)> {
     }
     Ok((dir, file))
 }
+
+const SHOT_FLAGS_FILE: &str = "shot-flags.json";
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ShotFlags {
+    #[serde(default = "shot_flags_version")]
+    format_version: u32,
+    #[serde(default)]
+    discarded: BTreeMap<String, Vec<String>>,
+}
+
+fn shot_flags_version() -> u32 {
+    1
+}
+
+fn shot_flags_path(root: &Path) -> Result<PathBuf> {
+    let (dir, _) = metadata_paths(root)?;
+    fs::create_dir_all(&dir)?;
+    let file = dir.join(SHOT_FLAGS_FILE);
+    if fs::symlink_metadata(&file).is_ok_and(|m| m.file_type().is_symlink()) {
+        return Err(AppError::new("path", "项目元数据文件不能是链接"));
+    }
+    Ok(file)
+}
+
+fn document_flag_key(root: &Path, relative: &str) -> Result<String> {
+    document_path(root, relative, true)?;
+    Ok(relative.replace('\\', "/"))
+}
+
+fn validate_shot_id(shot_id: &str) -> Result<String> {
+    let trimmed = shot_id.trim();
+    if trimmed.is_empty()
+        || trimmed.len() > 64
+        || trimmed.chars().any(|c| c.is_control() || "/\\".contains(c))
+    {
+        return Err(AppError::new("input", "分镜编号无效"));
+    }
+    Ok(trimmed.to_owned())
+}
+
+fn load_shot_flags(root: &Path) -> Result<ShotFlags> {
+    let file = shot_flags_path(root)?;
+    if !file.exists() {
+        return Ok(ShotFlags {
+            format_version: 1,
+            discarded: BTreeMap::new(),
+        });
+    }
+    let flags: ShotFlags = serde_json::from_slice(&fs::read(&file)?)?;
+    if flags.format_version != 1 {
+        return Err(AppError::new(
+            "version",
+            "项目格式版本不受支持，请使用兼容版本的客户端",
+        ));
+    }
+    Ok(flags)
+}
+
+fn save_shot_flags(root: &Path, flags: &ShotFlags) -> Result<()> {
+    atomic_write(
+        &shot_flags_path(root)?,
+        &serde_json::to_vec_pretty(flags)?,
+        false,
+    )
+}
+
+fn discarded_for(flags: &ShotFlags, document: &str) -> Vec<String> {
+    flags.discarded.get(document).cloned().unwrap_or_default()
+}
+
+pub fn list_discarded_shots(root: &Path, document: &str) -> Result<Vec<String>> {
+    let key = document_flag_key(root, document)?;
+    Ok(discarded_for(&load_shot_flags(root)?, &key))
+}
+
+pub fn set_shot_discarded(
+    root: &Path,
+    document: &str,
+    shot_id: &str,
+    discarded: bool,
+) -> Result<Vec<String>> {
+    let key = document_flag_key(root, document)?;
+    let shot_id = validate_shot_id(shot_id)?;
+    let mut flags = load_shot_flags(root)?;
+    let mut ids: BTreeSet<String> = discarded_for(&flags, &key).into_iter().collect();
+    if discarded {
+        ids.insert(shot_id);
+    } else {
+        ids.remove(&shot_id);
+    }
+    let next: Vec<String> = ids.into_iter().collect();
+    if next.is_empty() {
+        flags.discarded.remove(&key);
+    } else {
+        flags.discarded.insert(key.clone(), next.clone());
+    }
+    flags.format_version = 1;
+    save_shot_flags(root, &flags)?;
+    Ok(next)
+}
+
 fn has_extension(path: &Path, allowed: &[&str]) -> bool {
     path.extension()
         .and_then(|value| value.to_str())
