@@ -121,7 +121,6 @@ export default function GenerationPanel({
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [preview, setPreview] = useState<InputAsset | null>(null);
-  const [omitNarratorAudio, setOmitNarratorAudio] = useState(false);
   const [playingVideo, setPlayingVideo] = useState<string | null>(null);
   const [trimmingVideo, setTrimmingVideo] = useState<string | null>(null);
   const applied = useRef(new Set<string>());
@@ -140,13 +139,6 @@ export default function GenerationPanel({
     () => shotAudioInputs(card, episode),
     [card, episode],
   );
-  const promptHasNarration = /旁白/.test(card.fields.videoPrompt.value);
-  const showOmitNarrator = promptHasNarration && audioInputs.length > 0;
-
-  useEffect(() => {
-    if (!showOmitNarrator) setOmitNarratorAudio(false);
-  }, [showOmitNarrator, card.id]);
-
   const loadHistory = async () => {
     const records = await api.generationHistory(
       project.handle,
@@ -207,9 +199,6 @@ export default function GenerationPanel({
         throw new Error(ui.generation.invalidDuration);
       if (seed.trim() && !Number.isSafeInteger(parsedSeed))
         throw new Error(ui.generation.invalidSeed);
-      const audioRefs = audioInputs.map((item) => item.reference);
-      if (omitNarratorAudio && promptHasNarration && audioRefs.length)
-        audioRefs.shift();
       const next = await api.submitGeneration(project.handle, {
         document,
         shotId: card.id,
@@ -222,7 +211,7 @@ export default function GenerationPanel({
         ),
         seed: parsedSeed,
         imageRefs: imageInputs.map((item) => item.reference),
-        audioRefs,
+        audioRefs: audioInputs.map((item) => item.reference),
       });
       setTask(next);
       setHistory((items) => [
@@ -332,19 +321,6 @@ export default function GenerationPanel({
               {task ? ui.generation.status(task.status) : ui.generation.ready}
             </small>
           </div>
-          {showOmitNarrator && (
-            <label className="generation-omit-narrator">
-              <input
-                type="checkbox"
-                checked={omitNarratorAudio}
-                disabled={
-                  busy || submitting || !!(task && running(task.status))
-                }
-                onChange={(event) => setOmitNarratorAudio(event.target.checked)}
-              />
-              <span>{ui.generation.omitNarratorAudio}</span>
-            </label>
-          )}
           <button
             type="button"
             className="primary-button"

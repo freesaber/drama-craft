@@ -13,6 +13,7 @@ import { ui } from "./i18n";
 import Storyboard from "./BoardView";
 import TaskListView from "./TaskListView";
 import { applySourcePatch, fieldPatch, parseStoryboard } from "./storyboard";
+import { applyBatchVideoDocument } from "./batchVideo";
 import { useUnsavedChanges } from "./useUnsavedChanges";
 import type {
   ApiProfile,
@@ -638,42 +639,67 @@ export default function App() {
     }
   };
   const applyBatchVideo = useCallback(
-    async (documentPath: string, shotId: string, reference: string) => {
-      if (!project) return;
+    async (
+      documentPath: string,
+      shotId: string,
+      reference: string,
+      replaceExisting: boolean,
+    ) => {
+      if (!project) return false;
       const currentSnapshot = snapshotRef.current;
       const currentPath = pathRef.current;
-      if (!currentSnapshot || currentSnapshot.readonly || documentPath !== currentPath)
-        return;
-      if (busyRef.current) return;
-      const current = parseStoryboard(textRef.current);
-      const card = current.cards.find((item) => item.id === shotId);
-      if (!card) return;
-      if (card.fields.videoFile.value === reference) return;
-      busyRef.current = true;
-      setBusy(true);
+      const isCurrent = documentPath === currentPath;
+      if (
+        isCurrent &&
+        (!currentSnapshot ||
+          currentSnapshot.readonly ||
+          dirtyRef.current ||
+          busyRef.current)
+      )
+        return false;
+      if (isCurrent) {
+        busyRef.current = true;
+        setBusy(true);
+      }
       try {
-        const nextText = applySourcePatch(
-          textRef.current,
-          fieldPatch(current, card.fields.videoFile, reference),
-        );
-        textRef.current = nextText;
-        setText(nextText);
-        const saved = await api.save(
+        const result = await applyBatchVideoDocument(
+          {
+            read: api.read,
+            save: api.save,
+            exists: async (handle, document, current) =>
+              (await api.media(handle, document, current)).exists,
+          },
           project.handle,
-          currentPath,
-          nextText,
-          currentSnapshot.hash,
+          documentPath,
+          shotId,
+          reference,
+          isCurrent && currentSnapshot
+            ? { ...currentSnapshot, text: textRef.current }
+            : undefined,
+          replaceExisting,
         );
-        replaceDocument(currentPath, saved);
-        setRefreshKey((key) => key + 1);
-        setNotice(ui.batch.applyVideo);
+        if (isCurrent && result.changed) {
+          replaceDocument(currentPath, result.snapshot);
+          setRefreshKey((key) => key + 1);
+          setNotice(ui.batch.applyVideo);
+        }
+        return true;
       } catch (e) {
-        if (e && typeof e === "object" && "code" in e && e.code === "conflict")
+        if (
+          isCurrent &&
+          e &&
+          typeof e === "object" &&
+          "code" in e &&
+          e.code === "conflict"
+        )
           setConflict(true);
         setError(errorMessage(e));
+        return false;
       } finally {
-        busyRef.current = false;
-        setBusy(false);
+        if (isCurrent) {
+          busyRef.current = false;
+          setBusy(false);
+        }
       }
     },
     [project],
@@ -698,17 +724,31 @@ export default function App() {
           job.itemCancelled === right[index]?.itemCancelled &&
           job.itemFailed === right[index]?.itemFailed,
       );
-    const applyCompletedVideos = async (jobs: BatchJob[]) => {
+    const applyCompletedVideos = async (
+      jobs: BatchJob[],
+      completedBeforePoll: Set<string>,
+    ) => {
+      const handledShots = new Set<string>();
       for (const job of jobs) {
         for (const item of job.items) {
+          const shotKey = `${job.document}\u0000${item.shotId}`;
           if (
             item.status !== "completed" ||
             !item.localFile ||
+            handledShots.has(shotKey) ||
             appliedBatchItems.current.has(item.itemId)
           )
             continue;
-          appliedBatchItems.current.add(item.itemId);
-          await applyBatchVideo(job.document, item.shotId, item.localFile);
+          handledShots.add(shotKey);
+          if (
+            await applyBatchVideo(
+              job.document,
+              item.shotId,
+              item.localFile,
+              !completedBeforePoll.has(item.itemId),
+            )
+          )
+            appliedBatchItems.current.add(item.itemId);
         }
       }
     };
@@ -717,6 +757,13 @@ export default function App() {
       running = true;
       try {
         const synced = await api.syncBatchJobs(project.handle);
+        const completedBeforePoll = new Set(
+          synced.flatMap((job) =>
+            job.items
+              .filter((item) => item.status === "completed")
+              .map((item) => item.itemId),
+          ),
+        );
         const active = synced.some((job) =>
           ["scheduled", "running"].includes(job.status),
         );
@@ -742,7 +789,7 @@ export default function App() {
         }
         const afterPoll = await api.syncBatchJobs(project.handle);
         if (cancelled) return;
-        await applyCompletedVideos(afterPoll);
+        await applyCompletedVideos(afterPoll, completedBeforePoll);
         if (cancelled) return;
         const advanced = await api.advanceBatchJobs(project.handle);
         if (cancelled) return;

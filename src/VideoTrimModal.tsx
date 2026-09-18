@@ -7,11 +7,18 @@ import type { Project } from "./types";
 import {
   clampTrimRange,
   formatTimecode,
+  isTimelineDrag,
   MIN_TRIM_SPAN,
   ratioFromTime,
   timeFromRatio,
   trimUnchanged,
 } from "./videoTrim";
+
+type TimelineGesture = {
+  pointerId: number;
+  pointerDownX: number;
+  moved: boolean;
+};
 
 function releaseVideo(video: HTMLVideoElement | null) {
   if (!video) return;
@@ -37,7 +44,8 @@ export default function VideoTrimModal({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<"in" | "out" | "play" | null>(null);
+  const dragRef = useRef<"in" | "out" | null>(null);
+  const timelineGestureRef = useRef<TimelineGesture | null>(null);
   const rangeRef = useRef({ start: 0, end: 0 });
   const rangedRef = useRef(false);
   const [src, setSrc] = useState("");
@@ -119,8 +127,13 @@ export default function VideoTrimModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose, saving]);
 
-  const setRange = (nextStart: number, nextEnd: number, durationHint = duration) => {
+  const setRange = (
+    nextStart: number,
+    nextEnd: number,
+    durationHint = duration,
+  ) => {
     const next = clampTrimRange(nextStart, nextEnd, durationHint);
+    rangeRef.current = next;
     setStart(next.start);
     setEnd(next.end);
     return next;
@@ -171,33 +184,31 @@ export default function VideoTrimModal({
     setCurrent(next);
   };
 
-  const beginDrag = (which: "in" | "out" | "play") => (event: PointerEvent) => {
+  const beginDrag = (which: "in" | "out") => (event: PointerEvent) => {
     event.preventDefault();
     event.stopPropagation();
     dragRef.current = which;
     event.currentTarget.setPointerCapture(event.pointerId);
-    if (which !== "play") videoRef.current?.pause();
+    videoRef.current?.pause();
   };
 
-  const onTrackPointer = (event: PointerEvent<HTMLElement>) => {
-    if (event.type === "pointerdown" && !dragRef.current) {
-      dragRef.current = "play";
-      event.currentTarget.setPointerCapture(event.pointerId);
-    }
+  const onHandlePointerMove = (event: PointerEvent<HTMLButtonElement>) => {
     if (!dragRef.current) return;
+    event.preventDefault();
+    event.stopPropagation();
     const time = timeAt(event.clientX);
     if (dragRef.current === "in") {
       const next = setRange(time, end);
       seek(next.start);
-    } else if (dragRef.current === "out") {
+    } else {
       const next = setRange(start, time);
       seek(next.end);
-    } else {
-      seek(time);
     }
   };
 
-  const endDrag = (event: PointerEvent<HTMLElement>) => {
+  const endHandleDrag = (event: PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
     if (dragRef.current) {
       dragRef.current = null;
       try {
@@ -205,6 +216,46 @@ export default function VideoTrimModal({
       } catch {
         /* already released */
       }
+    }
+  };
+
+  const onTrackPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || duration <= 0 || saving) return;
+    event.preventDefault();
+    timelineGestureRef.current = {
+      pointerId: event.pointerId,
+      pointerDownX: event.clientX,
+      moved: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const onTrackPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    const gesture = timelineGestureRef.current;
+    if (
+      gesture &&
+      gesture.pointerId === event.pointerId &&
+      isTimelineDrag(gesture.pointerDownX, event.clientX)
+    ) {
+      gesture.moved = true;
+      event.preventDefault();
+    }
+  };
+
+  const endTimelineGesture = (
+    event: PointerEvent<HTMLDivElement>,
+    cancelled = false,
+  ) => {
+    const gesture = timelineGestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    const moved =
+      gesture.moved || isTimelineDrag(gesture.pointerDownX, event.clientX);
+    if (!cancelled && !moved) seek(timeAt(event.clientX));
+    timelineGestureRef.current = null;
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      /* already released */
     }
   };
 
@@ -303,7 +354,10 @@ export default function VideoTrimModal({
                 const video = videoRef.current;
                 if (!video) return;
                 if (video.paused) {
-                  if (video.currentTime < start || video.currentTime >= end - 0.02) {
+                  if (
+                    video.currentTime < start ||
+                    video.currentTime >= end - 0.02
+                  ) {
                     video.currentTime = start;
                   }
                   void video.play();
@@ -323,12 +377,15 @@ export default function VideoTrimModal({
             aria-valuemin={0}
             aria-valuemax={duration || 0}
             aria-valuenow={current}
-            onPointerDown={onTrackPointer}
-            onPointerMove={onTrackPointer}
-            onPointerUp={endDrag}
-            onPointerCancel={endDrag}
+            onPointerDown={onTrackPointerDown}
+            onPointerMove={onTrackPointerMove}
+            onPointerUp={endTimelineGesture}
+            onPointerCancel={(event) => endTimelineGesture(event, true)}
           >
-            <div className="video-trim-discard" style={{ width: `${inRatio * 100}%` }} />
+            <div
+              className="video-trim-discard"
+              style={{ width: `${inRatio * 100}%` }}
+            />
             <div
               className="video-trim-keep"
               style={{
@@ -342,8 +399,9 @@ export default function VideoTrimModal({
               style={{ left: `${inRatio * 100}%` }}
               aria-label={ui.generation.trimIn}
               onPointerDown={beginDrag("in")}
-              onPointerMove={onTrackPointer}
-              onPointerUp={endDrag}
+              onPointerMove={onHandlePointerMove}
+              onPointerUp={endHandleDrag}
+              onPointerCancel={endHandleDrag}
             />
             <button
               type="button"
@@ -351,8 +409,9 @@ export default function VideoTrimModal({
               style={{ left: `${outRatio * 100}%` }}
               aria-label={ui.generation.trimOut}
               onPointerDown={beginDrag("out")}
-              onPointerMove={onTrackPointer}
-              onPointerUp={endDrag}
+              onPointerMove={onHandlePointerMove}
+              onPointerUp={endHandleDrag}
+              onPointerCancel={endHandleDrag}
             />
             <div
               className="video-trim-playhead"

@@ -1,4 +1,5 @@
 export const MIN_TRIM_SPAN = 0.1;
+export const TIMELINE_DRAG_THRESHOLD = 4;
 
 export function clampTrimRange(
   start: number,
@@ -27,6 +28,14 @@ export function ratioFromTime(time: number, duration: number) {
   if (!Number.isFinite(duration) || duration <= 0) return 0;
   const value = Number.isFinite(time) ? time : 0;
   return Math.min(Math.max(value / duration, 0), 1);
+}
+
+export function isTimelineDrag(
+  pointerDownX: number,
+  currentX: number,
+  threshold = TIMELINE_DRAG_THRESHOLD,
+) {
+  return Math.abs(currentX - pointerDownX) >= threshold;
 }
 
 export function formatTimecode(seconds: number) {

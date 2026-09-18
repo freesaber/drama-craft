@@ -5,7 +5,11 @@ use reqwest::{header, Client};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::{fs, io::Write, path::Path};
+use std::{
+    fs,
+    io::{Read, Write},
+    path::Path,
+};
 
 const DATABASE_NAME: &str = "generations.sqlite3";
 const AUDIO_REQUIRED_WORKFLOW: &str = "minimax_h3_z0903";
@@ -499,6 +503,54 @@ fn video_stem(document: &Path, shot_id: &str, timestamp: &str) -> String {
     }
 }
 
+fn same_file_contents(left: &Path, right: &Path) -> std::io::Result<bool> {
+    if fs::metadata(left)?.len() != fs::metadata(right)?.len() {
+        return Ok(false);
+    }
+    let mut left = fs::File::open(left)?;
+    let mut right = fs::File::open(right)?;
+    let mut left_buffer = [0_u8; 64 * 1024];
+    let mut right_buffer = [0_u8; 64 * 1024];
+    loop {
+        let left_count = left.read(&mut left_buffer)?;
+        let right_count = right.read(&mut right_buffer)?;
+        if left_count != right_count || left_buffer[..left_count] != right_buffer[..right_count] {
+            return Ok(false);
+        }
+        if left_count == 0 {
+            return Ok(true);
+        }
+    }
+}
+
+fn persist_download(
+    mut temp: tempfile::NamedTempFile,
+    parent: &Path,
+    stem: &str,
+    task_id: &str,
+) -> Result<String> {
+    let task_suffix = &task_id[..8.min(task_id.len())];
+    for collision in 0_u32.. {
+        let filename = match collision {
+            0 => format!("{stem}.mp4"),
+            1 => format!("{stem}_{task_suffix}.mp4"),
+            number => format!("{stem}_{task_suffix}_{number}.mp4"),
+        };
+        let target = parent.join(&filename);
+        match temp.persist_noclobber(&target) {
+            Ok(_) => return Ok(filename),
+            Err(error) if target.is_file() => {
+                temp = error.file;
+                if same_file_contents(temp.path(), &target)? {
+                    return Ok(filename);
+                }
+            }
+            Err(error) => return Err(AppError::from(error.error)),
+        }
+    }
+    unreachable!()
+}
+
 async fn download(
     root: &Path,
     settings: &GenerationSettings,
@@ -511,14 +563,6 @@ async fn download(
         .ok_or_else(|| AppError::new("path", "文档缺少父目录"))?;
     let timestamp = Local::now().format("%Y%m%d-%H%M%S").to_string();
     let stem = video_stem(&document, &record.shot_id, &timestamp);
-    let mut filename = format!("{stem}.mp4");
-    if parent.join(&filename).exists() {
-        filename = format!(
-            "{}_{}.mp4",
-            stem,
-            &record.task_id[..8.min(record.task_id.len())]
-        );
-    }
     let mut response = client(settings)?
         .get(url)
         .send()
@@ -539,9 +583,7 @@ async fn download(
         temp.write_all(&chunk)?;
     }
     temp.as_file().sync_all()?;
-    temp.persist_noclobber(parent.join(&filename))
-        .map_err(|e| AppError::from(e.error))?;
-    Ok(filename)
+    persist_download(temp, parent, &stem, &record.task_id)
 }
 
 pub async fn poll(
@@ -665,6 +707,7 @@ mod tests {
         net::{TcpListener, TcpStream},
         thread,
     };
+    use tempfile::tempdir;
 
     #[test]
     fn resolves_short_resolution_labels_against_current_list() {
@@ -760,6 +803,43 @@ mod tests {
                 expected
             );
         }
+    }
+
+    #[test]
+    fn concurrent_download_of_the_same_result_reuses_the_existing_file() {
+        let dir = tempdir().unwrap();
+        let target = dir.path().join("01 S001_20260918-010203.mp4");
+        fs::write(&target, b"same-video").unwrap();
+        let mut temp = tempfile::NamedTempFile::new_in(dir.path()).unwrap();
+        temp.write_all(b"same-video").unwrap();
+
+        let filename =
+            persist_download(temp, dir.path(), "01 S001_20260918-010203", "12345678-task").unwrap();
+
+        assert_eq!(filename, "01 S001_20260918-010203.mp4");
+        assert_eq!(fs::read(target).unwrap(), b"same-video");
+        assert!(!dir
+            .path()
+            .join("01 S001_20260918-010203_12345678.mp4")
+            .exists());
+    }
+
+    #[test]
+    fn colliding_download_with_different_contents_uses_a_task_suffix() {
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join("01 S001_20260918-010203.mp4"),
+            b"other-video",
+        )
+        .unwrap();
+        let mut temp = tempfile::NamedTempFile::new_in(dir.path()).unwrap();
+        temp.write_all(b"new-video").unwrap();
+
+        let filename =
+            persist_download(temp, dir.path(), "01 S001_20260918-010203", "12345678-task").unwrap();
+
+        assert_eq!(filename, "01 S001_20260918-010203_12345678.mp4");
+        assert_eq!(fs::read(dir.path().join(&filename)).unwrap(), b"new-video");
     }
 
     #[test]
