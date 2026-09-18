@@ -38,10 +38,15 @@ export default function TaskListView({
   onRefresh: () => Promise<void>;
   onJobsChange: (jobs: BatchJob[]) => void;
 }) {
-  const [filter, setFilter] = useState<"all" | "generation" | "merge">("all");
+  const [filter, setFilter] = useState<
+    "all" | "generation" | "audio" | "merge"
+  >("all");
   const [page, setPage] = useState(1);
   const [detail, setDetail] = useState<BatchJob | null>(null);
-  const [playing, setPlaying] = useState<string | null>(null);
+  const [playing, setPlaying] = useState<{
+    reference: string;
+    kind: "video" | "audio";
+  } | null>(null);
   const [error, setError] = useState("");
   const [acting, setActing] = useState(false);
 
@@ -118,6 +123,15 @@ export default function TaskListView({
             }}
           >
             {ui.batch.typeGeneration}
+          </button>
+          <button
+            aria-pressed={filter === "audio"}
+            onClick={() => {
+              setFilter("audio");
+              setPage(1);
+            }}
+          >
+            {ui.batch.typeAudio}
           </button>
           <button
             aria-pressed={filter === "merge"}
@@ -246,8 +260,7 @@ export default function TaskListView({
               ["scheduled", "running"].includes(detail.status)
                 ? ui.batch.merging
                 : ui.generation.status(detail.status)}{" "}
-              · {ui.batch.scheduledAt}{" "}
-              {formatTime(detail.scheduledAt)}
+              · {ui.batch.scheduledAt} {formatTime(detail.scheduledAt)}
             </p>
             <p className="muted">
               {ui.batch.document}：{detail.document}
@@ -261,22 +274,22 @@ export default function TaskListView({
               <span>{ui.batch.items}</span>
               <small>{detail.items.length}</small>
             </div>
-            <div className="batch-shot-table-wrap">
+            <div className="batch-shot-table-wrap task-detail-table-wrap">
               {!detail.items.length ? (
                 <p className="muted">{ui.batch.noItems}</p>
               ) : (
-                <table className="batch-shot-table">
+                <table className="batch-shot-table task-detail-table">
                   <thead>
                     <tr>
                       <th className="batch-shot-id">{ui.batch.shotId}</th>
-                      <th>{ui.batch.shotTitle}</th>
+                      <th className="batch-shot-title">{ui.batch.shotTitle}</th>
                       <th className="task-table-status">
                         {ui.batch.statusLabel}
                       </th>
                       <th className="task-table-error">
                         {ui.batch.errorReason}
                       </th>
-                      <th>{ui.batch.result}</th>
+                      <th className="task-table-result">{ui.batch.result}</th>
                       <th className="task-table-actions">{ui.batch.actions}</th>
                     </tr>
                   </thead>
@@ -320,16 +333,32 @@ export default function TaskListView({
                           {item.localFile || "—"}
                         </td>
                         <td className="task-table-actions">
-                          {detail.jobType !== "merge" &&
-                            item.status === "pending" && (
+                          {item.localFile && item.status === "completed" && (
                             <button
                               type="button"
-                              disabled={busy || acting}
-                              onClick={() => cancelItem(item.itemId)}
+                              onClick={() =>
+                                setPlaying({
+                                  reference: item.localFile!,
+                                  kind:
+                                    detail.jobType === "audio"
+                                      ? "audio"
+                                      : "video",
+                                })
+                              }
                             >
-                              {ui.batch.cancelItem}
+                              {ui.generation.play}
                             </button>
                           )}
+                          {detail.jobType !== "merge" &&
+                            item.status === "pending" && (
+                              <button
+                                type="button"
+                                disabled={busy || acting}
+                                onClick={() => cancelItem(item.itemId)}
+                              >
+                                {ui.batch.cancelItem}
+                              </button>
+                            )}
                         </td>
                       </tr>
                     ))}
@@ -342,7 +371,12 @@ export default function TaskListView({
                 <button
                   type="button"
                   className="primary-button"
-                  onClick={() => setPlaying(detail.resultFile!)}
+                  onClick={() =>
+                    setPlaying({
+                      reference: detail.resultFile!,
+                      kind: "video",
+                    })
+                  }
                 >
                   {ui.batch.playResult}
                 </button>
@@ -367,8 +401,9 @@ export default function TaskListView({
         <VideoPlayerModal
           project={project}
           document={detail.document}
-          reference={playing}
-          title={playing.replace(/.*[/\\]/, "")}
+          reference={playing.reference}
+          title={playing.reference.replace(/.*[/\\]/, "")}
+          expectedKind={playing.kind}
           onClose={() => setPlaying(null)}
         />
       )}

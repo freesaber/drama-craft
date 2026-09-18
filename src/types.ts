@@ -57,6 +57,25 @@ export interface GenerationSettings {
   activeProfileId: string;
   defaultResolution: string;
 }
+export type AudioApiPlatformType = "autodl";
+export interface AudioApiProfile {
+  id: string;
+  name: string;
+  type: AudioApiPlatformType;
+  submitUrl: string;
+  queryUrl: string;
+  hasAuthorization: boolean;
+}
+export interface AudioSettings {
+  profiles: AudioApiProfile[];
+  activeProfileId: string;
+}
+export interface AudioRecord {
+  taskId: string;
+  status: string;
+  localFile: string | null;
+  error: string | null;
+}
 export interface GenerationInput {
   document: string;
   shotId: string;
@@ -82,7 +101,7 @@ export interface GenerationRecord {
   createdAt: string;
   updatedAt: string;
 }
-export type BatchJobType = "generation" | "merge";
+export type BatchJobType = "generation" | "audio" | "merge";
 export interface BatchJobItemInput {
   shotId: string;
   shotTitle: string;

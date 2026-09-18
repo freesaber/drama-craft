@@ -803,6 +803,11 @@
   border-radius: 8px;
   background: #000;
 }
+.audio-player {
+  display: block;
+  width: 100%;
+  margin: 18px 0 8px;
+}
 .video-trim-backdrop {
   z-index: 26;
   padding: 18px;
@@ -2239,6 +2244,130 @@ select:focus {
   max-height: min(80vh, 720px);
   overflow: visible;
 }
+.audio-batch-modal {
+  width: min(780px, 92vw);
+  overflow: auto;
+}
+.audio-batch-modal .batch-shot-table-wrap {
+  max-height: 430px;
+  overflow-x: hidden;
+}
+.audio-options {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid #d7ddd0;
+  border-radius: 8px;
+  background: #f7f9f4;
+}
+.audio-options summary {
+  cursor: pointer;
+  color: #52664a;
+  font-size: 12px;
+  font-weight: 600;
+}
+.audio-options-row {
+  display: flex;
+  align-items: end;
+  gap: 18px;
+  margin-top: 10px;
+}
+.audio-options-row > label:first-child {
+  flex: 1;
+  margin: 0;
+}
+.audio-options-row select {
+  width: 100%;
+}
+.audio-options .audio-random-option {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 9px;
+  white-space: nowrap;
+}
+.audio-options .audio-random-option input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+}
+.audio-options > .muted {
+  margin: 8px 0 0;
+}
+.audio-emotion-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px 10px;
+  margin-top: 10px;
+}
+.audio-emotion-grid label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+.audio-emotion-grid input {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+.audio-batch-modal .batch-shot-table th,
+.audio-batch-modal .batch-shot-table td {
+  white-space: normal;
+  overflow: hidden;
+}
+.audio-batch-modal .audio-character-column {
+  width: 104px;
+}
+.audio-batch-modal .audio-lines-column {
+  width: auto;
+}
+.audio-batch-modal .audio-voice-column {
+  width: 190px;
+}
+.audio-role-id {
+  display: block;
+  margin-top: 3px;
+  color: #929f86;
+}
+.audio-dialogue-lines {
+  display: grid;
+  gap: 5px;
+  max-height: 110px;
+  overflow: auto;
+  min-width: 0;
+}
+.audio-dialogue-lines > div {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 7px;
+  align-items: start;
+}
+.audio-dialogue-lines span {
+  white-space: normal;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.audio-voice-reference {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 720px) {
+  .audio-options-row {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .audio-options .audio-random-option {
+    margin-bottom: 0;
+  }
+  .audio-emotion-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 .merge-modal {
   width: min(1180px, 96vw);
   height: min(82vh, 860px);
@@ -2548,10 +2677,14 @@ select:focus {
 .task-table-error {
   white-space: normal;
   line-height: 1.45;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .task-table-error .generation-error {
   display: block;
   font-size: 12px;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .task-table tbody tr.task-table-empty,
 .task-table tbody tr.task-table-empty:hover {
@@ -2565,13 +2698,38 @@ select:focus {
   white-space: normal;
 }
 .task-detail-modal {
-  width: min(820px, 94vw);
+  width: min(1180px, 96vw);
 }
-.task-detail-modal .task-table-error {
-  width: 42%;
+.task-detail-table-wrap {
+  max-height: min(420px, 48vh);
+  overflow-x: hidden;
 }
-.task-detail-modal .task-table-result {
-  width: 18%;
+.task-detail-table th,
+.task-detail-table td {
+  white-space: normal;
+  overflow: hidden;
+}
+.task-detail-table .batch-shot-id {
+  width: 72px;
+}
+.task-detail-table .batch-shot-title {
+  width: 110px;
+}
+.task-detail-table .task-table-status {
+  width: 76px;
+}
+.task-detail-table .task-table-error {
+  width: auto;
+}
+.task-detail-table .task-table-result {
+  width: 240px;
+  white-space: nowrap;
+}
+.task-detail-table .task-table-actions {
+  width: 96px;
+}
+.task-detail-table tbody td {
+  vertical-align: top;
 }
 .candidate-list {
   max-height: 360px;

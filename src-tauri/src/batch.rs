@@ -1,3 +1,4 @@
+use crate::audio::{self, AudioInput, AudioSettings};
 use crate::generation::{self, GenerationInput, GenerationSettings};
 use crate::storage::{AppError, Result};
 use chrono::{DateTime, Local, SecondsFormat};
@@ -353,8 +354,59 @@ fn sync_item_from_generation(
     Ok(Some(next))
 }
 
+fn sync_item_from_audio(
+    connection: &rusqlite::Connection,
+    item: &BatchJobItem,
+) -> Result<Option<BatchJobItem>> {
+    let Some(task_id) = item.generation_task_id.as_deref() else {
+        return Ok(None);
+    };
+    if item.status == "cancelled" {
+        return Ok(None);
+    }
+    let Some((status, local_file, error)) = connection
+        .query_row(
+            "SELECT status, local_file, error FROM audio_generations WHERE task_id = ?1",
+            [task_id],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                ))
+            },
+        )
+        .optional()
+        .map_err(|e| AppError::new("database", e.to_string()))?
+    else {
+        return Ok(None);
+    };
+    let mapped = match status.to_ascii_lowercase().as_str() {
+        "completed" | "success" | "succeeded" if local_file.is_some() => "completed",
+        "failed" | "error" => "failed",
+        "cancelled" => "cancelled",
+        "download_failed" => "download_failed",
+        "submitted" | "pending" | "queued" => "submitted",
+        _ => "running",
+    };
+    if mapped == item.status
+        && local_file == item.local_file
+        && error.as_deref() == item.error.as_deref()
+    {
+        return Ok(None);
+    }
+    let stamp = now();
+    connection.execute("UPDATE batch_job_items SET status = ?2, local_file = ?3, error = ?4, updated_at = ?5 WHERE item_id = ?1", params![item.item_id, mapped, local_file, error, stamp]).map_err(|e| AppError::new("database", e.to_string()))?;
+    let mut next = item.clone();
+    next.status = mapped.into();
+    next.local_file = local_file;
+    next.error = error;
+    next.updated_at = stamp;
+    Ok(Some(next))
+}
+
 pub fn create_job(root: &Path, input: CreateBatchJobInput) -> Result<BatchJob> {
-    if input.job_type != "generation" {
+    if !matches!(input.job_type.as_str(), "generation" | "audio") {
         return Err(AppError::new("input", "不支持的任务类型"));
     }
     if input.delay_hours > 12 {
@@ -373,22 +425,39 @@ pub fn create_job(root: &Path, input: CreateBatchJobInput) -> Result<BatchJob> {
         if item.shot_id.trim().is_empty() {
             return Err(AppError::new("input", "分镜编号不能为空"));
         }
-        if item.prompt.trim().is_empty() || item.prompt.chars().count() > 10_000 {
+        let prompt_limit = if input.job_type == "audio" {
+            2_048
+        } else {
+            10_000
+        };
+        if item.prompt.trim().is_empty() || item.prompt.chars().count() > prompt_limit {
             return Err(AppError::new(
                 "input",
-                format!("{} 的视频提示词无效", item.shot_id),
+                format!("{} 的生成文本无效", item.shot_id),
             ));
         }
-        if !(1..=15).contains(&item.duration) {
+        if input.job_type == "generation" && !(1..=15).contains(&item.duration) {
             return Err(AppError::new(
                 "input",
                 format!("{} 的时长须为 1—15 秒", item.shot_id),
             ));
         }
-        if item.image_refs.is_empty() || item.image_refs.len() > 9 || item.audio_refs.len() > 3 {
+        if input.job_type == "generation"
+            && (item.image_refs.is_empty()
+                || item.image_refs.len() > 9
+                || item.audio_refs.len() > 3)
+        {
             return Err(AppError::new(
                 "input",
                 format!("{} 需要 1—9 张参考图，最多 3 段参考音频", item.shot_id),
+            ));
+        }
+        if input.job_type == "audio"
+            && (item.shot_title.trim().is_empty() || item.audio_refs.len() != 1)
+        {
+            return Err(AppError::new(
+                "input",
+                format!("{} 缺少角色名称或音色参考", item.shot_id),
             ));
         }
     }
@@ -734,20 +803,26 @@ pub fn sync_jobs(root: &Path) -> Result<Vec<BatchJob>> {
     let connection = generation::open_database(root)?;
     let mut statement = connection
         .prepare(
-            "SELECT job_id FROM batch_jobs
-              WHERE status IN ('scheduled', 'running') AND job_type = 'generation'
+            "SELECT job_id, job_type FROM batch_jobs
+              WHERE status IN ('scheduled', 'running') AND job_type IN ('generation', 'audio')
               ORDER BY created_at ASC",
         )
         .map_err(|e| AppError::new("database", e.to_string()))?;
     let ids = statement
-        .query_map([], |row| row.get::<_, String>(0))
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
         .map_err(|e| AppError::new("database", e.to_string()))?
         .collect::<std::result::Result<Vec<_>, _>>()
         .map_err(|e| AppError::new("database", e.to_string()))?;
-    for id in &ids {
+    for (id, job_type) in &ids {
         let items = load_items(&connection, id)?;
         for item in items {
-            let _ = sync_item_from_generation(&connection, &item)?;
+            if job_type == "audio" {
+                let _ = sync_item_from_audio(&connection, &item)?;
+            } else {
+                let _ = sync_item_from_generation(&connection, &item)?;
+            }
         }
         refresh_job_status(&connection, id)?;
     }
@@ -925,6 +1000,108 @@ pub async fn advance(root: &Path, settings: &GenerationSettings) -> Result<Batch
     })
 }
 
+pub async fn advance_audio(root: &Path, settings: &AudioSettings) -> Result<BatchAdvanceResult> {
+    let _ = sync_jobs(root)?;
+    let target = {
+        let connection = generation::open_database(root)?;
+        let in_flight: i64 = connection.query_row(
+            "SELECT COUNT(*) FROM batch_job_items AS items JOIN batch_jobs AS jobs ON jobs.job_id = items.job_id WHERE jobs.job_type = 'audio' AND items.status IN ('submitted', 'running')",
+            [], |row| row.get(0),
+        ).map_err(|e| AppError::new("database", e.to_string()))?;
+        if in_flight > 0 {
+            None
+        } else {
+            let mut statement = connection.prepare(
+                "SELECT job_id, status, scheduled_at, document FROM batch_jobs WHERE status IN ('scheduled', 'running') AND job_type = 'audio' ORDER BY scheduled_at ASC, created_at ASC"
+            ).map_err(|e| AppError::new("database", e.to_string()))?;
+            let jobs = statement
+                .query_map([], |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                    ))
+                })
+                .map_err(|e| AppError::new("database", e.to_string()))?
+                .collect::<std::result::Result<Vec<_>, _>>()
+                .map_err(|e| AppError::new("database", e.to_string()))?;
+            drop(statement);
+            let mut selected = None;
+            for (job_id, status, scheduled_at, document) in jobs {
+                if parse_time(&scheduled_at)? > Local::now() {
+                    continue;
+                }
+                if status == "scheduled" {
+                    connection.execute("UPDATE batch_jobs SET status = 'running', updated_at = ?2 WHERE job_id = ?1", params![job_id, now()]).map_err(|e| AppError::new("database", e.to_string()))?;
+                }
+                let pending = connection.query_row(
+                    &format!("{ITEM_SELECT} WHERE job_id = ?1 AND status = 'pending' ORDER BY sort_order ASC, created_at ASC LIMIT 1"),
+                    [&job_id], item_row,
+                ).optional().map_err(|e| AppError::new("database", e.to_string()))?;
+                if let Some(item) = pending {
+                    selected = Some((
+                        job_id,
+                        item.clone(),
+                        AudioInput {
+                            document,
+                            character_id: item.shot_id,
+                            character_name: item.shot_title,
+                            text: item.prompt,
+                            voice_ref: item.audio_refs.first().cloned().unwrap_or_default(),
+                            options: if item.resolution.trim().is_empty() {
+                                audio::AudioOptions::default()
+                            } else {
+                                serde_json::from_str(&item.resolution)
+                                    .map_err(|_| AppError::new("input", "音频任务参数快照无效"))?
+                            },
+                        },
+                    ));
+                    break;
+                }
+                refresh_job_status(&connection, &job_id)?;
+            }
+            selected
+        }
+    };
+    let submitted = if let Some((job_id, item, input)) = target {
+        match audio::submit(root, settings, input).await {
+            Ok(record) => {
+                let connection = generation::open_database(root)?;
+                let mapped = if record.local_file.is_some() {
+                    "completed"
+                } else if matches!(
+                    record.status.to_ascii_lowercase().as_str(),
+                    "failed" | "error" | "cancelled" | "download_failed"
+                ) {
+                    record.status.as_str()
+                } else {
+                    "submitted"
+                };
+                connection.execute("UPDATE batch_job_items SET status = ?2, generation_task_id = ?3, local_file = ?4, error = ?5, updated_at = ?6 WHERE item_id = ?1 AND status = 'pending'", params![item.item_id, mapped, record.task_id, record.local_file, record.error, now()]).map_err(|e| AppError::new("database", e.to_string()))?;
+                refresh_job_status(&connection, &job_id)?;
+                load_items(&connection, &job_id)?
+                    .into_iter()
+                    .find(|row| row.item_id == item.item_id)
+            }
+            Err(error) => {
+                let connection = generation::open_database(root)?;
+                connection.execute("UPDATE batch_job_items SET status = 'failed', error = ?2, updated_at = ?3 WHERE item_id = ?1 AND status = 'pending'", params![item.item_id, error.message, now()]).map_err(|e| AppError::new("database", e.to_string()))?;
+                refresh_job_status(&connection, &job_id)?;
+                load_items(&connection, &job_id)?
+                    .into_iter()
+                    .find(|row| row.item_id == item.item_id)
+            }
+        }
+    } else {
+        None
+    };
+    Ok(BatchAdvanceResult {
+        submitted,
+        jobs: list_jobs(root)?,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -992,6 +1169,34 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(error.code, "input");
+    }
+
+    #[test]
+    fn creates_audio_job_without_video_fields() {
+        let dir = tempdir().unwrap();
+        let job = create_job(
+            dir.path(),
+            CreateBatchJobInput {
+                job_type: "audio".into(),
+                name: "本集批量音频".into(),
+                document: "01.md".into(),
+                delay_hours: 0,
+                items: vec![BatchJobItemInput {
+                    shot_id: "C01".into(),
+                    shot_title: "秦墨".into(),
+                    prompt: "这是角色台词。".into(),
+                    duration: 1,
+                    resolution: String::new(),
+                    seed: None,
+                    image_refs: vec![],
+                    audio_refs: vec!["01 音色_秦墨.wav".into()],
+                }],
+            },
+        )
+        .unwrap();
+        assert_eq!(job.job_type, "audio");
+        assert_eq!(job.items[0].shot_title, "秦墨");
+        assert_eq!(job.items[0].audio_refs, vec!["01 音色_秦墨.wav"]);
     }
 
     fn two_shot_job(root: &std::path::Path) -> BatchJob {

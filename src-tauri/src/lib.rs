@@ -1,3 +1,4 @@
+pub mod audio;
 pub mod batch;
 pub mod ffmpeg;
 pub mod generation;
@@ -43,6 +44,10 @@ struct Preferences {
     generation_configuration: settings::Configuration,
     #[serde(default)]
     generation_authorizations: HashMap<String, String>,
+    #[serde(default)]
+    audio_configuration: audio::Configuration,
+    #[serde(default)]
+    audio_authorizations: HashMap<String, String>,
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -489,6 +494,92 @@ fn authorization(prefs: &Preferences, id: &str) -> String {
         .cloned()
         .unwrap_or_default()
 }
+fn audio_authorization(prefs: &Preferences, id: &str) -> String {
+    prefs
+        .audio_authorizations
+        .get(id)
+        .cloned()
+        .unwrap_or_default()
+}
+fn audio_configuration_from_preferences(prefs: &Preferences) -> audio::Configuration {
+    let mut config = prefs.audio_configuration.clone();
+    for profile in &mut config.profiles {
+        profile.has_authorization = !audio_authorization(prefs, &profile.id).is_empty();
+    }
+    config
+}
+fn audio_settings(
+    app: &tauri::AppHandle,
+    profile_id: Option<&str>,
+) -> Result<audio::AudioSettings> {
+    let prefs = read_prefs(app)?;
+    let config = audio_configuration_from_preferences(&prefs);
+    let id = profile_id.unwrap_or(&config.active_profile_id);
+    let profile = config
+        .profiles
+        .iter()
+        .find(|item| item.id == id)
+        .ok_or_else(|| AppError::new("config", "请先在音频 API 设置中配置服务和密钥"))?;
+    Ok(audio::AudioSettings {
+        profile_id: profile.id.clone(),
+        submit_url: profile.submit_url.clone(),
+        query_url: profile.query_url.clone(),
+        authorization: audio_authorization(&prefs, &profile.id),
+    })
+}
+#[tauri::command]
+fn get_audio_settings(app: tauri::AppHandle) -> Result<audio::Configuration> {
+    Ok(audio_configuration_from_preferences(&read_prefs(&app)?))
+}
+#[tauri::command]
+fn get_audio_authorization(app: tauri::AppHandle, profile_id: String) -> Result<String> {
+    let prefs = read_prefs(&app)?;
+    if !prefs
+        .audio_configuration
+        .profiles
+        .iter()
+        .any(|item| item.id == profile_id)
+    {
+        return Err(AppError::new("config", "密钥没有对应的音频 API 配置"));
+    }
+    Ok(audio_authorization(&prefs, &profile_id))
+}
+#[tauri::command]
+fn set_audio_settings(
+    app: tauri::AppHandle,
+    configuration: audio::Configuration,
+    authorizations: HashMap<String, String>,
+) -> Result<audio::Configuration> {
+    let mut config = configuration.normalize()?;
+    let mut prefs = read_prefs(&app)?;
+    for (id, value) in authorizations {
+        if !config.profiles.iter().any(|item| item.id == id) {
+            return Err(AppError::new("config", "密钥没有对应的音频 API 配置"));
+        }
+        if value.trim().is_empty() {
+            prefs.audio_authorizations.remove(&id);
+        } else {
+            reqwest::header::HeaderValue::from_str(value.trim())
+                .map_err(|_| AppError::new("config", "Authorization 内容无效"))?;
+            prefs
+                .audio_authorizations
+                .insert(id, value.trim().to_owned());
+        }
+    }
+    prefs
+        .audio_authorizations
+        .retain(|id, _| config.profiles.iter().any(|item| &item.id == id));
+    for profile in &mut config.profiles {
+        profile.has_authorization = !audio_authorization(&prefs, &profile.id).is_empty();
+    }
+    prefs.audio_configuration = config.clone();
+    storage::atomic_write(
+        &prefs_path(&app)?,
+        &serde_json::to_vec_pretty(&prefs)?,
+        false,
+    )?;
+    Ok(config)
+}
 fn configuration_from_preferences(prefs: &Preferences) -> settings::Configuration {
     let mut config = prefs.generation_configuration.clone();
     if config.default_resolution.is_empty() {
@@ -645,6 +736,26 @@ async fn poll_generation(
     generation::poll(&root, &settings, &task_id).await
 }
 #[tauri::command]
+async fn poll_audio(
+    app: tauri::AppHandle,
+    state: State<'_, Sessions>,
+    handle: String,
+    task_id: String,
+) -> Result<audio::AudioRecord> {
+    let root = root_for(&state, &handle)?;
+    let binding = audio::task_provider(&root, &task_id)?;
+    let settings = audio_settings(&app, binding.as_ref().map(|(id, _)| id.as_str()))?;
+    if let Some((_, submit_url)) = binding {
+        if settings.submit_url != submit_url {
+            return Err(AppError::new(
+                "config",
+                "任务的音频提交地址已变更，请恢复原地址后查询",
+            ));
+        }
+    }
+    audio::poll(&root, &settings, &task_id).await
+}
+#[tauri::command]
 fn generation_history(
     state: State<Sessions>,
     handle: String,
@@ -738,6 +849,15 @@ async fn advance_batch_jobs(
     let root = root_for(&state, &handle)?;
     batch::advance(&root, &generation_settings(&app, None)?).await
 }
+#[tauri::command]
+async fn advance_audio_jobs(
+    app: tauri::AppHandle,
+    state: State<'_, Sessions>,
+    handle: String,
+) -> Result<batch::BatchAdvanceResult> {
+    let root = root_for(&state, &handle)?;
+    batch::advance_audio(&root, &audio_settings(&app, None)?).await
+}
 
 pub fn run() {
     tauri::Builder::default()
@@ -766,8 +886,12 @@ pub fn run() {
             get_generation_settings,
             get_generation_authorization,
             set_generation_settings,
+            get_audio_settings,
+            get_audio_authorization,
+            set_audio_settings,
             submit_generation,
             poll_generation,
+            poll_audio,
             generation_history,
             import_generation_media,
             trim_media,
@@ -778,7 +902,8 @@ pub fn run() {
             cancel_batch_job,
             cancel_batch_job_item,
             sync_batch_jobs,
-            advance_batch_jobs
+            advance_batch_jobs,
+            advance_audio_jobs
         ])
         .run(tauri::generate_context!())
         .expect("Unable to start DramaCraft");

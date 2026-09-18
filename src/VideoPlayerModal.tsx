@@ -10,6 +10,7 @@ export default function VideoPlayerModal({
   document,
   reference,
   title,
+  expectedKind = "video",
   refreshKey = 0,
   onClose,
 }: {
@@ -17,6 +18,7 @@ export default function VideoPlayerModal({
   document: string;
   reference: string;
   title?: string;
+  expectedKind?: "video" | "audio";
   refreshKey?: number;
   onClose: () => void;
 }) {
@@ -39,8 +41,12 @@ export default function VideoPlayerModal({
           setMissing(true);
           return;
         }
-        if (media.kind !== "video") {
-          setError(ui.videoPlayer.notVideo);
+        if (media.kind !== expectedKind) {
+          setError(
+            expectedKind === "audio"
+              ? ui.audioPlayer.notAudio
+              : ui.videoPlayer.notVideo,
+          );
           return;
         }
         setSrc(
@@ -56,7 +62,7 @@ export default function VideoPlayerModal({
     return () => {
       active = false;
     };
-  }, [project.handle, document, reference, refreshKey]);
+  }, [project.handle, document, reference, refreshKey, expectedKind]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -69,10 +75,7 @@ export default function VideoPlayerModal({
   const label = title ?? reference.replace(/.*[/\\]/, "");
 
   return (
-    <div
-      className="modal-backdrop video-player-backdrop"
-      onMouseDown={onClose}
-    >
+    <div className="modal-backdrop video-player-backdrop" onMouseDown={onClose}>
       <section
         className="modal video-player-modal"
         role="dialog"
@@ -98,13 +101,22 @@ export default function VideoPlayerModal({
           </p>
         )}
         {missing && <p className="muted">{ui.missing}</p>}
-        {src && !failed && (
+        {src && !failed && expectedKind === "video" && (
           <video
             className="video-player"
             src={src}
             controls
             autoPlay
             playsInline
+            onError={() => setFailed(true)}
+          />
+        )}
+        {src && !failed && expectedKind === "audio" && (
+          <audio
+            className="audio-player"
+            src={src}
+            controls
+            autoPlay
             onError={() => setFailed(true)}
           />
         )}

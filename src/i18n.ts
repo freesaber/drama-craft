@@ -136,7 +136,7 @@ export const ui = {
   noGeneration:
     "在故事板中编排剧情、提示词与本地素材；配置视频 API 后可直接生成并归档版本。",
   generation: {
-    apiSettings: "视频 API / Token",
+    apiSettings: "视频 API",
     activeProfile: "当前使用配置（保存后生效）",
     profileName: "配置名称",
     defaultProfile: "默认 API",
@@ -212,11 +212,39 @@ export const ui = {
         download_failed: "下载失败",
       })[status.toLowerCase()] ?? status,
   },
+  audio: {
+    apiSettings: "音频 API",
+    defaultProfile: "默认音频 API",
+    platformHint: "当前支持 AutoDL IndexTTS2；配置结构已预留其他服务商。",
+    submitHint: "AutoDL IndexTTS2 提交地址，默认使用 indextts2-v1 工作流。",
+    settingsSaved: "音频 API 配置已保存",
+    batchTitle: "批量生成本集角色音频",
+    batchHint:
+      "按本集声音安排中的角色聚合台词。每个勾选角色生成一个音频文件；未绑定音色的角色不可勾选。",
+    character: "角色",
+    lines: "台词",
+    voice: "音色参考",
+    missingVoice: "未绑定音色",
+    empty: "本集声音安排中没有可生成的台词。",
+    selected: (n: number) => `已选 ${n} 个角色`,
+    confirm: "创建音频任务",
+    created: "批量音频任务已创建",
+    notConfigured: "请先在右上角配置可用的音频 API 和 Token。",
+    options: "音频参数",
+    controlMethod: "情绪控制方式",
+    randomEmotion: "随机情绪",
+    referenceEmotionHint:
+      "当前使用各角色绑定的音色文件，同时作为情感参考音频。",
+  },
   videoPlayer: {
     notVideo: "所选文件不是视频",
   },
+  audioPlayer: {
+    notAudio: "所选文件不是音频",
+  },
   batch: {
-    generate: "批量生成",
+    generate: "批量视频",
+    audio: "批量音频",
     merge: "合并",
     mergeTitle: "合并本集分镜",
     mergeHint:
@@ -252,9 +280,12 @@ export const ui = {
     checking: "正在检查素材…",
     back: "返回工作台",
     typeGeneration: "生成任务",
+    typeAudio: "音频任务",
     typeMerge: "合并任务",
     type: (type: string) =>
-      ({ generation: "生成任务", merge: "合并任务" })[type] ?? type,
+      ({ generation: "生成任务", audio: "音频任务", merge: "合并任务" })[
+        type
+      ] ?? type,
     filterAll: "全部",
     pagination: "任务列表分页",
     jobName: "任务",
@@ -263,7 +294,7 @@ export const ui = {
     errorReason: "失败原因",
     progressLabel: "进度",
     actions: "操作",
-    result: "成片",
+    result: "结果",
     emptyJobs: "暂无任务。可在故事板使用「批量生成」或「合并」创建。",
     progress: (done: number, total: number) => `${done}/${total}`,
     cancelJob: "取消任务",

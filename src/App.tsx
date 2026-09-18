@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { api, chooseDirectory, desktop, errorMessage } from "./api";
 import BatchGenerateDialog from "./BatchGenerateDialog";
+import BatchAudioDialog from "./BatchAudioDialog";
+import AudioApiDialog from "./AudioApiDialog";
 import MergeDialog from "./MergeDialog";
 import { isOverviewDocument, sortDocuments } from "./markdown";
 import {
@@ -58,6 +60,8 @@ export default function App() {
   );
   const [batchJobs, setBatchJobs] = useState<BatchJob[]>([]);
   const [showBatchDialog, setShowBatchDialog] = useState(false);
+  const [showAudioBatchDialog, setShowAudioBatchDialog] = useState(false);
+  const [showAudioApiDialog, setShowAudioApiDialog] = useState(false);
   const [showMergeDialog, setShowMergeDialog] = useState(false);
   const [discardedShots, setDiscardedShots] = useState<string[]>([]);
   const appliedBatchItems = useRef(new Set<string>());
@@ -464,6 +468,8 @@ export default function App() {
       setBatchJobs([]);
       appliedBatchItems.current.clear();
       setShowBatchDialog(false);
+      setShowAudioBatchDialog(false);
+      setShowAudioApiDialog(false);
     });
   const reload = () =>
     run(async () => {
@@ -730,6 +736,7 @@ export default function App() {
     ) => {
       const handledShots = new Set<string>();
       for (const job of jobs) {
+        if (job.jobType !== "generation") continue;
         for (const item of job.items) {
           const shotKey = `${job.document}\u0000${item.shotId}`;
           if (
@@ -781,7 +788,10 @@ export default function App() {
             )
               continue;
             try {
-              await api.pollGeneration(project.handle, item.generationTaskId);
+              if (job.jobType === "audio")
+                await api.pollAudio(project.handle, item.generationTaskId);
+              else if (job.jobType === "generation")
+                await api.pollGeneration(project.handle, item.generationTaskId);
             } catch {
               /* keep polling later */
             }
@@ -791,10 +801,16 @@ export default function App() {
         if (cancelled) return;
         await applyCompletedVideos(afterPoll, completedBeforePoll);
         if (cancelled) return;
-        const advanced = await api.advanceBatchJobs(project.handle);
+        await api.advanceBatchJobs(project.handle).catch(() => null);
         if (cancelled) return;
+        const audioAdvanced = await api
+          .advanceAudioJobs(project.handle)
+          .catch(() => null);
+        if (cancelled) return;
+        const latestJobs =
+          audioAdvanced?.jobs ?? (await api.syncBatchJobs(project.handle));
         setBatchJobs((current) =>
-          sameJobs(current, advanced.jobs) ? current : advanced.jobs,
+          sameJobs(current, latestJobs) ? current : latestJobs,
         );
       } catch {
         /* batch runner is best-effort while the project stays open */
@@ -1021,26 +1037,34 @@ export default function App() {
       ) : (
         <>
           {workspaceView !== "tasks" && (
-          <div className="project-toolbar">
-            <div className="project-location" title={project.root}>
-              ▱ {project.root.replace(/^\\\\\?\\/, "")}
+            <div className="project-toolbar">
+              <div className="project-location" title={project.root}>
+                ▱ {project.root.replace(/^\\\\\?\\/, "")}
+              </div>
+              <button disabled={busy} onClick={() => void refresh()}>
+                {ui.refresh}
+              </button>
+              <button disabled={busy} onClick={configureGeneration}>
+                {ui.generation.apiSettings}
+              </button>
+              <button
+                disabled={busy}
+                onClick={() => setShowAudioApiDialog(true)}
+              >
+                {ui.audio.apiSettings}
+              </button>
+              <button
+                disabled={busy}
+                onClick={() => {
+                  setWorkspaceView("tasks");
+                  void refreshBatchJobs().catch((e) =>
+                    setError(errorMessage(e)),
+                  );
+                }}
+              >
+                {ui.batch.tasks}
+              </button>
             </div>
-            <button disabled={busy} onClick={() => void refresh()}>
-              {ui.refresh}
-            </button>
-            <button disabled={busy} onClick={configureGeneration}>
-              {ui.generation.apiSettings}
-            </button>
-            <button
-              disabled={busy}
-              onClick={() => {
-                setWorkspaceView("tasks");
-                void refreshBatchJobs().catch((e) => setError(errorMessage(e)));
-              }}
-            >
-              {ui.batch.tasks}
-            </button>
-          </div>
           )}
           {conflict && (
             <div className="banner conflict" role="alert">
@@ -1060,199 +1084,212 @@ export default function App() {
               onJobsChange={setBatchJobs}
             />
           ) : (
-          <main className="workspace storyboard-workspace">
-            <aside className="sidebar">
-              <div className="sidebar-heading">
-                {ui.docs}
-                <span>{documents.length}</span>
-              </div>
-              <nav className="document-list">
-                {documents.map((doc) => (
-                  <button
-                    key={doc.path}
-                    title={doc.path}
-                    disabled={busy}
-                    className={doc.path === path ? "selected" : ""}
-                    onClick={() => void selectDocument(doc.path)}
-                  >
-                    <span>▤</span>
-                    {doc.name}
-                  </button>
-                ))}
-                {!documents.length && (
-                  <p className="muted empty-nav">{ui.noDocs}</p>
-                )}
-              </nav>
-              <div className="sidebar-heading shot-heading">
-                {ui.shots}
-                <span>{board.cards.length}</span>
-              </div>
-              <nav className="shot-list">
-                {board.cards.map((shot) => (
-                  <button
-                    key={`${shot.id}-${shot.offset}`}
-                    className={
-                      board.cards[activeShot]?.offset === shot.offset
-                        ? "selected"
-                        : ""
-                    }
-                    onClick={() => jump(shot.offset)}
-                  >
-                    <code>{shot.id}</code>
-                    <span>{shot.title}</span>
-                  </button>
-                ))}
-                {!board.cards.length && (
-                  <p className="muted empty-nav">{ui.noShots}</p>
-                )}
-              </nav>
-              <div className="sidebar-footer">{ui.outlineNote}</div>
-            </aside>
-            <section className="editor-panel">
-              <div className="panel-heading">
-                <div>
-                  <strong>{path.split("/").at(-1) || ui.raw}</strong>
-                  <small>
-                    {mode === "source"
-                      ? ui.raw
-                      : board.cards.length
-                        ? ui.board.count(board.cards.length)
-                        : ui.board.read}
-                  </small>
+            <main className="workspace storyboard-workspace">
+              <aside className="sidebar">
+                <div className="sidebar-heading">
+                  {ui.docs}
+                  <span>{documents.length}</span>
                 </div>
-                <div className="mode-switch" aria-label={ui.board.mode}>
-                  <button
-                    aria-pressed={mode === "board"}
-                    onClick={() => {
-                      const offset = editor.current?.selectionStart ?? 0;
-                      const index = board.cards.reduce(
-                        (last, card, i) => (card.offset <= offset ? i : last),
-                        -1,
-                      );
-                      if (mode === "source" && index >= 0) setActiveShot(index);
-                      pendingJump.current = offset;
-                      setMode("board");
-                    }}
-                  >
-                    {ui.board.mode}
-                  </button>
-                  <button
-                    aria-pressed={mode === "source"}
-                    onClick={() =>
-                      showSource(board.cards[activeShot]?.offset ?? 0)
-                    }
-                  >
-                    {ui.raw}
-                  </button>
-                </div>
-                <div className="save-actions">
-                  <span className={`save-status ${dirty ? "dirty" : ""}`}>
-                    {snapshot?.readonly
-                      ? ui.readonly
-                      : dirty
-                        ? ui.unsaved
-                        : ui.saved}
-                  </span>
-                  <button
-                    type="button"
-                    disabled={busy || !dirty || snapshot?.readonly}
-                    onClick={() => void revert()}
-                  >
-                    {ui.revert}
-                  </button>
-                  <button
-                    className="primary-button"
-                    disabled={busy || !dirty || snapshot?.readonly}
-                    onClick={() => void save()}
-                  >
-                    {busy ? ui.busy : ui.save}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={
-                      busy ||
-                      !board.cards.length ||
-                      isOverviewDocument(path) ||
-                      snapshot?.readonly
-                    }
-                    onClick={() => setShowBatchDialog(true)}
-                  >
-                    {ui.batch.generate}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={
-                      busy ||
-                      !board.cards.length ||
-                      isOverviewDocument(path) ||
-                      snapshot?.readonly
-                    }
-                    onClick={() => setShowMergeDialog(true)}
-                  >
-                    {ui.batch.merge}
-                  </button>
-                </div>
-              </div>
-              {snapshot && mode === "source" ? (
-                <textarea
-                  ref={editor}
-                  className="markdown-editor"
-                  aria-label={ui.editorLabel}
-                  spellCheck={false}
-                  wrap="off"
-                  value={text}
-                  disabled={busy}
-                  onChange={(event) => setText(event.target.value)}
-                />
-              ) : snapshot ? (
-                <Storyboard
-                  key={path}
-                  board={board}
-                  project={project}
-                  document={path}
-                  refreshKey={refreshKey}
-                  busy={busy}
-                  apply={apply}
-                  source={showSource}
-                  active={activeShot}
-                  select={setActiveShot}
-                  generationConfigured={generationSettings.profiles.some(
-                    (profile) =>
-                      profile.id === generationSettings.activeProfileId &&
-                      profile.hasAuthorization &&
-                      Boolean(profile.submitUrl?.trim()) &&
-                      Boolean(profile.queryUrl?.trim()),
+                <nav className="document-list">
+                  {documents.map((doc) => (
+                    <button
+                      key={doc.path}
+                      title={doc.path}
+                      disabled={busy}
+                      className={doc.path === path ? "selected" : ""}
+                      onClick={() => void selectDocument(doc.path)}
+                    >
+                      <span>▤</span>
+                      {doc.name}
+                    </button>
+                  ))}
+                  {!documents.length && (
+                    <p className="muted empty-nav">{ui.noDocs}</p>
                   )}
-                  videoWorkflow={activeVideoOptions}
-                  configureGeneration={configureGeneration}
-                  useVideo={useGeneratedVideo}
-                  showSourceActions={!isOverviewDocument(path)}
-                  discardedShotIds={discardedShots}
-                  onToggleDiscarded={(shotId, discarded) => {
-                    void toggleDiscardedShot(shotId, discarded);
-                  }}
-                  onMediaPlaced={() => {
-                    setRefreshKey((key) => key + 1);
-                    setNotice(ui.episodeData.mediaPlaced);
-                  }}
-                  onMediaChanged={() => {
-                    setRefreshKey((key) => key + 1);
-                    setNotice(ui.generation.videoTrimmed);
-                  }}
-                />
-              ) : (
-                <div className="empty-editor">
-                  ▤<p>{ui.empty}</p>
+                </nav>
+                <div className="sidebar-heading shot-heading">
+                  {ui.shots}
+                  <span>{board.cards.length}</span>
                 </div>
-              )}
-              <div className="editor-footer">
-                <span>{ui.statusHint}</span>
-                <span>
-                  {text.length.toLocaleString()} 字符 · {board.cards.length} 镜
-                </span>
-              </div>
-            </section>
-          </main>
+                <nav className="shot-list">
+                  {board.cards.map((shot) => (
+                    <button
+                      key={`${shot.id}-${shot.offset}`}
+                      className={
+                        board.cards[activeShot]?.offset === shot.offset
+                          ? "selected"
+                          : ""
+                      }
+                      onClick={() => jump(shot.offset)}
+                    >
+                      <code>{shot.id}</code>
+                      <span>{shot.title}</span>
+                    </button>
+                  ))}
+                  {!board.cards.length && (
+                    <p className="muted empty-nav">{ui.noShots}</p>
+                  )}
+                </nav>
+                <div className="sidebar-footer">{ui.outlineNote}</div>
+              </aside>
+              <section className="editor-panel">
+                <div className="panel-heading">
+                  <div>
+                    <strong>{path.split("/").at(-1) || ui.raw}</strong>
+                    <small>
+                      {mode === "source"
+                        ? ui.raw
+                        : board.cards.length
+                          ? ui.board.count(board.cards.length)
+                          : ui.board.read}
+                    </small>
+                  </div>
+                  <div className="mode-switch" aria-label={ui.board.mode}>
+                    <button
+                      aria-pressed={mode === "board"}
+                      onClick={() => {
+                        const offset = editor.current?.selectionStart ?? 0;
+                        const index = board.cards.reduce(
+                          (last, card, i) => (card.offset <= offset ? i : last),
+                          -1,
+                        );
+                        if (mode === "source" && index >= 0)
+                          setActiveShot(index);
+                        pendingJump.current = offset;
+                        setMode("board");
+                      }}
+                    >
+                      {ui.board.mode}
+                    </button>
+                    <button
+                      aria-pressed={mode === "source"}
+                      onClick={() =>
+                        showSource(board.cards[activeShot]?.offset ?? 0)
+                      }
+                    >
+                      {ui.raw}
+                    </button>
+                  </div>
+                  <div className="save-actions">
+                    <span className={`save-status ${dirty ? "dirty" : ""}`}>
+                      {snapshot?.readonly
+                        ? ui.readonly
+                        : dirty
+                          ? ui.unsaved
+                          : ui.saved}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={busy || !dirty || snapshot?.readonly}
+                      onClick={() => void revert()}
+                    >
+                      {ui.revert}
+                    </button>
+                    <button
+                      className="primary-button"
+                      disabled={busy || !dirty || snapshot?.readonly}
+                      onClick={() => void save()}
+                    >
+                      {busy ? ui.busy : ui.save}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={
+                        busy ||
+                        !board.cards.length ||
+                        isOverviewDocument(path) ||
+                        snapshot?.readonly
+                      }
+                      onClick={() => setShowBatchDialog(true)}
+                    >
+                      {ui.batch.generate}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={
+                        busy ||
+                        !board.episode.dialogues.length ||
+                        isOverviewDocument(path)
+                      }
+                      onClick={() => setShowAudioBatchDialog(true)}
+                    >
+                      {ui.batch.audio}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={
+                        busy ||
+                        !board.cards.length ||
+                        isOverviewDocument(path) ||
+                        snapshot?.readonly
+                      }
+                      onClick={() => setShowMergeDialog(true)}
+                    >
+                      {ui.batch.merge}
+                    </button>
+                  </div>
+                </div>
+                {snapshot && mode === "source" ? (
+                  <textarea
+                    ref={editor}
+                    className="markdown-editor"
+                    aria-label={ui.editorLabel}
+                    spellCheck={false}
+                    wrap="off"
+                    value={text}
+                    disabled={busy}
+                    onChange={(event) => setText(event.target.value)}
+                  />
+                ) : snapshot ? (
+                  <Storyboard
+                    key={path}
+                    board={board}
+                    project={project}
+                    document={path}
+                    refreshKey={refreshKey}
+                    busy={busy}
+                    apply={apply}
+                    source={showSource}
+                    active={activeShot}
+                    select={setActiveShot}
+                    generationConfigured={generationSettings.profiles.some(
+                      (profile) =>
+                        profile.id === generationSettings.activeProfileId &&
+                        profile.hasAuthorization &&
+                        Boolean(profile.submitUrl?.trim()) &&
+                        Boolean(profile.queryUrl?.trim()),
+                    )}
+                    videoWorkflow={activeVideoOptions}
+                    configureGeneration={configureGeneration}
+                    useVideo={useGeneratedVideo}
+                    showSourceActions={!isOverviewDocument(path)}
+                    discardedShotIds={discardedShots}
+                    onToggleDiscarded={(shotId, discarded) => {
+                      void toggleDiscardedShot(shotId, discarded);
+                    }}
+                    onMediaPlaced={() => {
+                      setRefreshKey((key) => key + 1);
+                      setNotice(ui.episodeData.mediaPlaced);
+                    }}
+                    onMediaChanged={() => {
+                      setRefreshKey((key) => key + 1);
+                      setNotice(ui.generation.videoTrimmed);
+                    }}
+                  />
+                ) : (
+                  <div className="empty-editor">
+                    ▤<p>{ui.empty}</p>
+                  </div>
+                )}
+                <div className="editor-footer">
+                  <span>{ui.statusHint}</span>
+                  <span>
+                    {text.length.toLocaleString()} 字符 · {board.cards.length}{" "}
+                    镜
+                  </span>
+                </div>
+              </section>
+            </main>
           )}
         </>
       )}
@@ -1267,6 +1304,29 @@ export default function App() {
           onCreated={(message) => {
             setNotice(message);
             void refreshBatchJobs().catch((e) => setError(errorMessage(e)));
+          }}
+        />
+      )}
+      {showAudioBatchDialog && project && snapshot && (
+        <BatchAudioDialog
+          project={project}
+          document={path}
+          board={board}
+          busy={busy}
+          onClose={() => setShowAudioBatchDialog(false)}
+          onCreated={(message) => {
+            setNotice(message);
+            void refreshBatchJobs().catch((e) => setError(errorMessage(e)));
+          }}
+        />
+      )}
+      {showAudioApiDialog && (
+        <AudioApiDialog
+          busy={busy}
+          onClose={() => setShowAudioApiDialog(false)}
+          onSaved={() => {
+            setShowAudioApiDialog(false);
+            setNotice(ui.audio.settingsSaved);
           }}
         />
       )}
@@ -1391,8 +1451,7 @@ export default function App() {
                             disabled={busy}
                             onChange={(event) =>
                               updateApi({
-                                type: event.target
-                                  .value as ApiProfile["type"],
+                                type: event.target.value as ApiProfile["type"],
                               })
                             }
                           >
@@ -1509,7 +1568,9 @@ export default function App() {
                                   [activeApi.id]: event.target.value,
                                 }))
                               }
-                              placeholder={ui.generation.authorizationPlaceholder}
+                              placeholder={
+                                ui.generation.authorizationPlaceholder
+                              }
                               autoComplete="new-password"
                               disabled={busy}
                             />

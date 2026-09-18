@@ -3,6 +3,8 @@ import { open } from "@tauri-apps/plugin-dialog";
 import type {
   BatchAdvanceResult,
   BatchJob,
+  AudioRecord,
+  AudioSettings,
   Candidate,
   CreateBatchJobInput,
   MergeEpisodeInput,
@@ -97,6 +99,19 @@ export const api = {
       configuration,
       authorizations,
     }),
+  audioSettings: () => invoke<AudioSettings>("get_audio_settings"),
+  audioAuthorization: (profileId: string) =>
+    invoke<string>("get_audio_authorization", { profileId }),
+  setAudioSettings: (
+    configuration: AudioSettings,
+    authorizations: Record<string, string>,
+  ) =>
+    invoke<AudioSettings>("set_audio_settings", {
+      configuration,
+      authorizations,
+    }),
+  pollAudio: (handle: string, taskId: string) =>
+    invoke<AudioRecord>("poll_audio", { handle, taskId }),
   submitGeneration: (handle: string, input: GenerationInput) =>
     invoke<GenerationRecord>("submit_generation", { handle, input }),
   pollGeneration: (handle: string, taskId: string) =>
@@ -151,6 +166,8 @@ export const api = {
     invoke<BatchJob[]>("sync_batch_jobs", { handle }),
   advanceBatchJobs: (handle: string) =>
     invoke<BatchAdvanceResult>("advance_batch_jobs", { handle }),
+  advanceAudioJobs: (handle: string) =>
+    invoke<BatchAdvanceResult>("advance_audio_jobs", { handle }),
 };
 export async function chooseDirectory(): Promise<string | null> {
   if (!desktop) return null;

@@ -237,7 +237,7 @@ try {
     firstCard().getByRole("button", { name: "生成视频", exact: true }),
   ).toBeEnabled();
   await page
-    .getByRole("button", { name: "视频 API / Token", exact: true })
+    .getByRole("button", { name: "视频 API", exact: true })
     .click();
   await expect(page.getByLabel("API 服务地址", { exact: true })).toBeVisible();
   const tokenInput = page.getByLabel("API Token（Authorization 请求头）", {
@@ -277,7 +277,7 @@ try {
   await page.getByRole("button", { name: "确认", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page
-    .getByRole("button", { name: "视频 API / Token", exact: true })
+    .getByRole("button", { name: "视频 API", exact: true })
     .click();
   await expect(page.getByLabel("配置名称", { exact: true })).toHaveValue(
     "备用测试配置",
@@ -299,7 +299,7 @@ try {
   ).toHaveCount(initialProfiles);
   await page.getByRole("button", { name: "确认", exact: true }).click();
   await page
-    .getByRole("button", { name: "视频 API / Token", exact: true })
+    .getByRole("button", { name: "视频 API", exact: true })
     .click();
   await expect(
     page.getByLabel("当前使用配置（保存后生效）").locator("option"),
