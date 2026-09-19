@@ -320,6 +320,7 @@ export default function GenerationPanel({
             <small>
               {task ? ui.generation.status(task.status) : ui.generation.ready}
             </small>
+            {task && <small>任务 ID：{task.taskId} · 提交时间：{new Date(task.createdAt).toLocaleString("zh-CN")}</small>}
           </div>
           <button
             type="button"

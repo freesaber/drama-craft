@@ -1338,6 +1338,21 @@ export default function App() {
           busy={busy}
           mergeRunning={episodeMergeRunning}
           discardedShotIds={discardedShots}
+          onToggleDiscarded={(shotId, discarded) => {
+            void toggleDiscardedShot(shotId, discarded);
+          }}
+          onLocate={(shotId) => {
+            const index = board.cards.findIndex((card) => card.id === shotId);
+            setShowMergeDialog(false);
+            if (index < 0) return;
+            setActiveShot(index);
+            // 弹框关闭和故事板重绘后再滚动，避免只更新左侧导航高亮。
+            window.setTimeout(() => {
+              document
+                .getElementById(`shot-card-${index}`)
+                ?.scrollIntoView({ block: "start", behavior: "smooth" });
+            }, 50);
+          }}
           onClose={() => setShowMergeDialog(false)}
           onCreated={(message) => {
             if (message) setNotice(message);

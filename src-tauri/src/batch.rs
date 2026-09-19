@@ -63,6 +63,7 @@ pub struct BatchJobItem {
     pub image_refs: Vec<String>,
     pub audio_refs: Vec<String>,
     pub generation_task_id: Option<String>,
+    pub submitted_at: Option<String>,
     pub local_file: Option<String>,
     pub error: Option<String>,
     pub sort_order: i64,
@@ -125,16 +126,17 @@ fn item_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<BatchJobItem> {
         image_refs: decode_refs(row.get(9)?),
         audio_refs: decode_refs(row.get(10)?),
         generation_task_id: row.get(11)?,
-        local_file: row.get(12)?,
-        error: row.get(13)?,
-        sort_order: row.get(14)?,
-        created_at: row.get(15)?,
-        updated_at: row.get(16)?,
+        submitted_at: row.get(12)?,
+        local_file: row.get(13)?,
+        error: row.get(14)?,
+        sort_order: row.get(15)?,
+        created_at: row.get(16)?,
+        updated_at: row.get(17)?,
     })
 }
 
 const ITEM_SELECT: &str = "SELECT item_id, job_id, shot_id, shot_title, status, prompt, duration,
-       resolution, seed, image_refs, audio_refs, generation_task_id, local_file, error,
+       resolution, seed, image_refs, audio_refs, generation_task_id, submitted_at, local_file, error,
        sort_order, created_at, updated_at
   FROM batch_job_items";
 
@@ -955,7 +957,7 @@ pub async fn advance(root: &Path, settings: &GenerationSettings) -> Result<Batch
                         .execute(
                             "UPDATE batch_job_items
                                 SET status = ?2, generation_task_id = ?3, local_file = ?4,
-                                    error = ?5, updated_at = ?6
+                                    error = ?5, submitted_at = ?6, updated_at = ?6
                               WHERE item_id = ?1 AND status = 'pending'",
                             params![
                                 target.item_id,
@@ -1078,7 +1080,8 @@ pub async fn advance_audio(root: &Path, settings: &AudioSettings) -> Result<Batc
                 } else {
                     "submitted"
                 };
-                connection.execute("UPDATE batch_job_items SET status = ?2, generation_task_id = ?3, local_file = ?4, error = ?5, updated_at = ?6 WHERE item_id = ?1 AND status = 'pending'", params![item.item_id, mapped, record.task_id, record.local_file, record.error, now()]).map_err(|e| AppError::new("database", e.to_string()))?;
+                let submitted_at = now();
+                connection.execute("UPDATE batch_job_items SET status = ?2, generation_task_id = ?3, local_file = ?4, error = ?5, submitted_at = ?6, updated_at = ?6 WHERE item_id = ?1 AND status = 'pending'", params![item.item_id, mapped, record.task_id, record.local_file, record.error, submitted_at]).map_err(|e| AppError::new("database", e.to_string()))?;
                 refresh_job_status(&connection, &job_id)?;
                 load_items(&connection, &job_id)?
                     .into_iter()

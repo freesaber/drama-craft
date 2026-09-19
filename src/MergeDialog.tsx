@@ -91,6 +91,7 @@ function MergePreview({
           src={src}
           controls
           playsInline
+          autoPlay
           onError={() => setFailed(true)}
         />
       ) : (
@@ -113,6 +114,8 @@ export default function MergeDialog({
   busy,
   mergeRunning,
   discardedShotIds,
+  onToggleDiscarded,
+  onLocate,
   onClose,
   onCreated,
 }: {
@@ -122,6 +125,8 @@ export default function MergeDialog({
   busy: boolean;
   mergeRunning: boolean;
   discardedShotIds: readonly string[];
+  onToggleDiscarded: (shotId: string, discarded: boolean) => void;
+  onLocate: (shotId: string) => void;
   onClose: () => void;
   onCreated: (notice: string) => void;
 }) {
@@ -267,6 +272,7 @@ export default function MergeDialog({
                     <th>{ui.batch.shotTitle}</th>
                     <th>{ui.batch.currentVideo}</th>
                     <th className="batch-shot-duration">{ui.batch.duration}</th>
+                    <th className="merge-operation-column">{ui.batch.actions}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -325,6 +331,60 @@ export default function MergeDialog({
                               : ui.batch.missingVideo}
                         </td>
                         <td className="batch-shot-duration">{row.duration}s</td>
+                        <td
+                          className="merge-operation-column"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          {row.discarded ? (
+                            <button
+                              type="button"
+                              disabled={busy || submitting || !row.exists}
+                              onClick={() => {
+                                setRows((current) =>
+                                  current.map((item) =>
+                                    item.shotId === row.shotId
+                                      ? { ...item, discarded: false }
+                                      : item,
+                                  ),
+                                );
+                                if (row.exists && !selected.has(row.shotId))
+                                  toggle(row.shotId);
+                                onToggleDiscarded(row.shotId, false);
+                              }}
+                            >
+                              {ui.board.undiscardShot}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={busy || submitting || !row.exists}
+                              onClick={() => {
+                                setRows((current) =>
+                                  current.map((item) =>
+                                    item.shotId === row.shotId
+                                      ? { ...item, discarded: true }
+                                      : item,
+                                  ),
+                                );
+                                setSelected((current) => {
+                                  const next = new Set(current);
+                                  next.delete(row.shotId);
+                                  return next;
+                                });
+                                onToggleDiscarded(row.shotId, true);
+                              }}
+                            >
+                              {ui.board.discardShot}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            disabled={busy || submitting}
+                            onClick={() => onLocate(row.shotId)}
+                          >
+                            {ui.batch.locate}
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}

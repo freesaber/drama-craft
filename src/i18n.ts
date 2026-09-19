@@ -245,7 +245,7 @@ export const ui = {
   batch: {
     generate: "批量视频",
     audio: "批量音频",
-    merge: "合并",
+    merge: "预览/合并",
     mergeTitle: "合并本集分镜",
     mergeHint:
       "列出当前集各分镜的当前视频。勾选后按分镜顺序拼接，生成 01 merge_时间戳.mp4，不改 Markdown。已丢弃的分镜默认不勾选并标红，仍可手动勾选。合并会统一重编码，不追求速度，以保证画质。",
@@ -302,6 +302,9 @@ export const ui = {
     detail: "任务详情",
     openDetail: "查看详情",
     scheduledAt: "计划提交",
+    submittedAt: "提交时间",
+    apiTaskId: "API 任务 ID",
+    locate: "定位",
     document: "文档",
     items: "分镜明细",
     noItems: "没有明细",

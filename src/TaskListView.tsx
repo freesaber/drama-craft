@@ -286,6 +286,8 @@ export default function TaskListView({
                       <th className="task-table-status">
                         {ui.batch.statusLabel}
                       </th>
+                      <th>{ui.batch.apiTaskId}</th>
+                      <th>{ui.batch.submittedAt}</th>
                       <th className="task-table-error">
                         {ui.batch.errorReason}
                       </th>
@@ -310,6 +312,8 @@ export default function TaskListView({
                         >
                           {ui.generation.status(item.status)}
                         </td>
+                        <td><code>{item.generationTaskId || "—"}</code></td>
+                        <td>{item.submittedAt ? formatTime(item.submittedAt) : "—"}</td>
                         <td
                           className="task-table-error"
                           title={item.error || undefined}

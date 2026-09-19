@@ -2369,7 +2369,7 @@ select:focus {
   }
 }
 .merge-modal {
-  width: min(1180px, 96vw);
+  width: min(1320px, 97vw);
   height: min(82vh, 860px);
   max-height: min(90vh, 900px);
   display: flex;
@@ -2549,6 +2549,10 @@ select:focus {
   margin-left: 8px;
   font-size: 11px;
   color: #9b3b32;
+}
+.merge-operation-column {
+  width: 180px;
+  white-space: nowrap;
 }
 .batch-shot-table .batch-shot-check {
   width: 40px;
@@ -2730,6 +2734,11 @@ select:focus {
 }
 .task-detail-table tbody td {
   vertical-align: top;
+}
+.task-detail-table tbody tr,
+.task-detail-table tbody td,
+.task-detail-table code {
+  user-select: text;
 }
 .candidate-list {
   max-height: 360px;

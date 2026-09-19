@@ -144,6 +144,7 @@ export interface BatchJobItem {
   imageRefs: string[];
   audioRefs: string[];
   generationTaskId: string | null;
+  submittedAt: string | null;
   localFile: string | null;
   error: string | null;
   sortOrder: number;

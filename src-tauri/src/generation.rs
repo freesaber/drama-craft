@@ -111,6 +111,7 @@ pub(crate) fn open_database(root: &Path) -> Result<Connection> {
                image_refs TEXT NOT NULL,
                audio_refs TEXT NOT NULL,
                generation_task_id TEXT,
+               submitted_at TEXT,
                local_file TEXT,
                error TEXT,
                sort_order INTEGER NOT NULL,
@@ -122,6 +123,7 @@ pub(crate) fn open_database(root: &Path) -> Result<Connection> {
         )
         .map_err(|e| AppError::new("database", e.to_string()))?;
     let _ = connection.execute("ALTER TABLE batch_jobs ADD COLUMN result_file TEXT", []);
+    let _ = connection.execute("ALTER TABLE batch_job_items ADD COLUMN submitted_at TEXT", []);
     Ok(connection)
 }
 
