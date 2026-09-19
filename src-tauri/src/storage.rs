@@ -548,6 +548,30 @@ pub fn configure_project(
     )?;
     Ok(metadata)
 }
+
+pub fn rename_project(root: &Path, name: &str, rename_folder: bool) -> Result<PathBuf> {
+    validate_name(name)?;
+    if ignored(name) {
+        return Err(AppError::new("name", "请选择非隐藏项目名称"));
+    }
+    let root = fs::canonicalize(root)?;
+    let destination = root
+        .parent()
+        .ok_or_else(|| AppError::new("rename", "项目目录没有可用的父目录"))?
+        .join(name);
+    if rename_folder && destination.exists() {
+        return Err(AppError::new("rename", "目标文件夹已存在"));
+    }
+    let (_, metadata_file) = metadata_paths(&root)?;
+    let mut metadata: ProjectMeta = serde_json::from_slice(&fs::read(&metadata_file)?)?;
+    metadata.name = name.to_owned();
+    atomic_write(&metadata_file, &serde_json::to_vec_pretty(&metadata)?, false)?;
+    if !rename_folder {
+        return Ok(root);
+    }
+    fs::rename(&root, &destination)?;
+    Ok(destination)
+}
 pub fn create_project(
     parent: &Path,
     name: &str,

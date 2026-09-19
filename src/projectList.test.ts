@@ -6,14 +6,14 @@ import {
 } from "./projectList";
 import type { Recent } from "./types";
 
-const project = (name: string, updatedAt?: string): Recent => ({
+const project = (name: string, createdAt?: string): Recent => ({
   name,
   path: `F:\\项目\\${name}`,
-  updatedAt,
+  createdAt,
 });
 
 describe("project list", () => {
-  it("sorts timestamped projects first and preserves legacy order", () => {
+  it("sorts projects by creation time descending and preserves legacy order", () => {
     const items = [
       project("旧项目甲"),
       project("旧项目乙"),

@@ -49,6 +49,10 @@ export default function App() {
   const [currentProjectPage, setCurrentProjectPage] = useState(1);
   const [pendingRecentRemoval, setPendingRecentRemoval] =
     useState<Recent | null>(null);
+  const [pendingRecentRename, setPendingRecentRename] =
+    useState<Recent | null>(null);
+  const [renameName, setRenameName] = useState("");
+  const [renameFolder, setRenameFolder] = useState(true);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [error, setError] = useState("");
@@ -988,16 +992,19 @@ export default function App() {
                     >
                       ✕
                     </button>
+                    <button
+                      title={ui.renameProject}
+                      disabled={busy}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPendingRecentRename(item);
+                        setRenameName(item.name);
+                        setRenameFolder(true);
+                      }}
+                    >
+                      ✎
+                    </button>
                   </span>
-                  <button
-                    className="recent-open-btn"
-                    aria-label={ui.open}
-                    title={ui.open}
-                    disabled={busy}
-                    onClick={() => void openPath(item.path)}
-                  >
-                    <span aria-hidden="true">→</span>
-                  </button>
                 </div>
               ))
             ) : (
@@ -1041,6 +1048,33 @@ export default function App() {
               <div className="project-location" title={project.root}>
                 ▱ {project.root.replace(/^\\\\\?\\/, "")}
               </div>
+              <div className="project-location-actions">
+                <button
+                  disabled={busy}
+                  title={ui.openInTerminal}
+                  aria-label={ui.openInTerminal}
+                  onClick={() => {
+                    void run(async () => {
+                      await api.openInTerminal(project.root);
+                    });
+                  }}
+                >
+                  ⌨
+                </button>
+                <button
+                  disabled={busy}
+                  title={ui.openInExplorer}
+                  aria-label={ui.openInExplorer}
+                  onClick={() => {
+                    void run(async () => {
+                      await api.openDirectory(project.root);
+                    });
+                  }}
+                >
+                  📂
+                </button>
+              </div>
+              <span className="project-toolbar-spacer" />
               <button disabled={busy} onClick={() => void refresh()}>
                 {ui.refresh}
               </button>
@@ -1143,6 +1177,29 @@ export default function App() {
                           ? ui.board.count(board.cards.length)
                           : ui.board.read}
                     </small>
+                  </div>
+                  <div className="chapter-nav" aria-label={ui.chapterNavigation}>
+                    <button
+                      type="button"
+                      disabled={busy || documents.findIndex((doc) => doc.path === path) <= 0}
+                      onClick={() => {
+                        const index = documents.findIndex((doc) => doc.path === path);
+                        if (index > 0) void selectDocument(documents[index - 1].path);
+                      }}
+                    >
+                      {ui.previousChapter}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy || documents.findIndex((doc) => doc.path === path) < 0 || documents.findIndex((doc) => doc.path === path) >= documents.length - 1}
+                      onClick={() => {
+                        const index = documents.findIndex((doc) => doc.path === path);
+                        if (index >= 0 && index < documents.length - 1)
+                          void selectDocument(documents[index + 1].path);
+                      }}
+                    >
+                      {ui.nextChapter}
+                    </button>
                   </div>
                   <div className="mode-switch" aria-label={ui.board.mode}>
                     <button
@@ -1807,6 +1864,52 @@ export default function App() {
                 }}
               >
                 {ui.removeConfirmAction}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+      {pendingRecentRename && (
+        <div className="modal-backdrop">
+          <section className="modal confirmation-modal" role="dialog" aria-modal="true" aria-labelledby="rename-recent-title">
+            <h2 id="rename-recent-title">{ui.renameProject}</h2>
+            <label>
+              {ui.projectName}
+              <input
+                autoFocus
+                value={renameName}
+                onChange={(event) => setRenameName(event.target.value)}
+              />
+            </label>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={renameFolder}
+                onChange={(event) => setRenameFolder(event.target.checked)}
+              />
+              {ui.renameFolderToo}
+            </label>
+            <div className="modal-actions">
+              <button disabled={busy} onClick={() => setPendingRecentRename(null)}>
+                {ui.cancel}
+              </button>
+              <button
+                className="primary-button"
+                disabled={busy || !renameName.trim()}
+                onClick={() => {
+                  const target = pendingRecentRename;
+                  void run(async () => {
+                    const result = await api.renameRecent(
+                      target.path,
+                      renameName.trim(),
+                      renameFolder,
+                    );
+                    setRecent(result.recent);
+                    setPendingRecentRename(null);
+                  });
+                }}
+              >
+                {ui.confirm}
               </button>
             </div>
           </section>

@@ -30,6 +30,8 @@ struct Recent {
     name: String,
     path: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    created_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     updated_at: Option<String>,
 }
 #[derive(Default, Serialize, Deserialize)]
@@ -77,16 +79,27 @@ fn read_prefs(app: &tauri::AppHandle) -> Result<Preferences> {
     }
     Ok(serde_json::from_slice(&fs::read(path)?)?)
 }
-fn upsert_recent(recent: &mut Vec<Recent>, name: String, path: String, updated_at: String) {
-    recent.retain(|item| item.path != path);
-    recent.insert(
-        0,
-        Recent {
-            name,
-            path,
-            updated_at: Some(updated_at),
-        },
-    );
+fn upsert_recent(
+    recent: &mut Vec<Recent>,
+    name: String,
+    path: String,
+    created_at: String,
+    updated_at: String,
+) {
+    if let Some(item) = recent.iter_mut().find(|item| item.path == path) {
+        item.name = name;
+        item.updated_at = Some(updated_at);
+        if item.created_at.is_none() {
+            item.created_at = Some(created_at);
+        }
+        return;
+    }
+    recent.push(Recent {
+        name,
+        path,
+        created_at: Some(created_at),
+        updated_at: Some(updated_at),
+    });
 }
 fn touch_recent(app: &tauri::AppHandle, root: &Path, name: Option<&str>) -> Result<()> {
     let mut prefs = read_prefs(app)?;
@@ -106,10 +119,23 @@ fn touch_recent(app: &tauri::AppHandle, root: &Path, name: Option<&str>) -> Resu
                 .to_string_lossy()
                 .into_owned()
         });
+    let fallback_created_at = prefs
+        .recent
+        .iter()
+        .find(|item| item.path == path)
+        .and_then(|item| item.created_at.clone().or_else(|| item.updated_at.clone()))
+        .or_else(|| {
+            fs::metadata(root)
+                .and_then(|metadata| metadata.created())
+                .ok()
+                .map(|time| chrono::DateTime::<chrono::Utc>::from(time).to_rfc3339())
+        })
+        .unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
     upsert_recent(
         &mut prefs.recent,
         name,
         path,
+        fallback_created_at,
         chrono::Utc::now().to_rfc3339(),
     );
     storage::atomic_write(
@@ -331,6 +357,31 @@ fn remove_recent(app: tauri::AppHandle, path: String) -> Result<PublicPreference
     )?;
     Ok(public_preferences(&prefs))
 }
+
+#[tauri::command]
+fn rename_recent(
+    app: tauri::AppHandle,
+    path: String,
+    name: String,
+    rename_folder: bool,
+) -> Result<PublicPreferences> {
+    let mut prefs = read_prefs(&app)?;
+    let new_path = storage::rename_project(Path::new(&path), &name, rename_folder)?;
+    let item = prefs
+        .recent
+        .iter_mut()
+        .find(|item| item.path == path)
+        .ok_or_else(|| AppError::new("project", "项目不在最近项目列表中"))?;
+    item.name = name;
+    item.path = new_path.to_string_lossy().into_owned();
+    item.updated_at = Some(chrono::Utc::now().to_rfc3339());
+    storage::atomic_write(
+        &prefs_path(&app)?,
+        &serde_json::to_vec_pretty(&prefs)?,
+        false,
+    )?;
+    Ok(public_preferences(&prefs))
+}
 #[tauri::command]
 fn default_voice_directory(app: tauri::AppHandle) -> Result<String> {
     let bundled = app
@@ -401,11 +452,12 @@ mod tests {
     }
 
     #[test]
-    fn project_activity_moves_an_existing_project_to_the_front() {
+    fn project_activity_does_not_change_creation_order() {
         let mut items = (0..12)
             .map(|index| Recent {
                 name: format!("项目{index}"),
                 path: format!(r"F:\项目\{index}"),
+                created_at: None,
                 updated_at: None,
             })
             .collect::<Vec<_>>();
@@ -414,21 +466,24 @@ mod tests {
             &mut items,
             "项目5".into(),
             r"F:\项目\5".into(),
+            "2026-09-15T08:00:00Z".into(),
             "2026-09-15T09:00:00Z".into(),
         );
 
         assert_eq!(items.len(), 12);
-        assert_eq!(items[0].name, "项目5");
-        assert_eq!(items[0].updated_at.as_deref(), Some("2026-09-15T09:00:00Z"));
+        assert_eq!(items[0].name, "项目0");
+        assert_eq!(items[5].name, "项目5");
+        assert_eq!(items[5].updated_at.as_deref(), Some("2026-09-15T09:00:00Z"));
 
         upsert_recent(
             &mut items,
             "项目12".into(),
             r"F:\项目\12".into(),
             "2026-09-15T10:00:00Z".into(),
+            "2026-09-15T10:00:00Z".into(),
         );
         assert_eq!(items.len(), 13);
-        assert_eq!(items[0].name, "项目12");
+        assert_eq!(items[12].name, "项目12");
     }
 
     #[test]
@@ -879,6 +934,7 @@ pub fn run() {
             open_media,
             get_preferences,
             remove_recent,
+            rename_recent,
             default_voice_directory,
             open_directory,
             open_in_terminal,

@@ -82,6 +82,12 @@ export const api = {
     invoke<{ recent: Recent[]; previewVisible?: boolean }>("get_preferences"),
   removeRecent: (path: string) =>
     invoke<{ recent: Recent[] }>("remove_recent", { path }),
+  renameRecent: (path: string, name: string, renameFolder: boolean) =>
+    invoke<{ recent: Recent[] }>("rename_recent", {
+      path,
+      name,
+      renameFolder,
+    }),
   defaultVoiceDirectory: () => invoke<string>("default_voice_directory"),
   openDirectory: (path: string) => invoke<void>("open_directory", { path }),
   openInTerminal: (path: string) => invoke<void>("open_in_terminal", { path }),

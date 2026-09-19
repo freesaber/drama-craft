@@ -22,6 +22,7 @@ export interface Snapshot {
 export interface Recent {
   name: string;
   path: string;
+  createdAt?: string;
   updatedAt?: string;
 }
 export interface Candidate {

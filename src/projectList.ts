@@ -11,8 +11,8 @@ export function filterAndSortProjects(items: Recent[], query: string) {
       return `${item.name}\n${item.path}`.toLocaleLowerCase().includes(keyword);
     })
     .sort((left, right) => {
-      const leftTime = Date.parse(left.item.updatedAt ?? "");
-      const rightTime = Date.parse(right.item.updatedAt ?? "");
+      const leftTime = Date.parse(left.item.createdAt ?? left.item.updatedAt ?? "");
+      const rightTime = Date.parse(right.item.createdAt ?? right.item.updatedAt ?? "");
       const leftValue = Number.isNaN(leftTime) ? Number.NEGATIVE_INFINITY : leftTime;
       const rightValue = Number.isNaN(rightTime)
         ? Number.NEGATIVE_INFINITY
