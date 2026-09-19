@@ -1039,7 +1039,6 @@ export default function App() {
               </nav>
             )}
           </section>
-          <p className="roadmap-note">{ui.noGeneration}</p>
         </main>
       ) : (
         <>
