@@ -112,7 +112,14 @@ fn rejects_traversal_reserved_names_and_overwrites() {
     let project = create_project(&root, "中文 项目", None, &voices).unwrap();
     assert!(create_project(&root, "中文 项目", None, &voices).is_err());
     assert!(project.join("剧本大纲.md").exists());
+    let outline = fs::read_to_string(project.join("剧本大纲.md")).unwrap();
+    assert!(outline.contains("旁白决定：待与用户确认（使用 / 不使用）"));
     let agents = fs::read_to_string(project.join("AGENTS.md")).unwrap();
+    assert!(agents.contains("是否使用旁白？"));
+    assert!(agents.contains("旁白选择同样是全剧约束"));
+    assert!(agents.contains("全剧不创建旁白角色"));
+    assert!(agents.contains("声音安排无「旁白」发声方式"));
+    assert!(!agents.contains("| N001 | 旁白 |"));
     assert!(agents.contains("视频提示词画面与发声规则"));
     assert!(agents.contains("视频提示词画面风格写法"));
     assert!(agents.contains("每个视频提示词在参考素材说明之后"));
