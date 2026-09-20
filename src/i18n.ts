@@ -180,8 +180,11 @@ export const ui = {
     referenceImages: "参考图片",
     referenceAudios: "参考音频",
     reviewTitle: "确认本次视频生成",
+    regenerationReviewTitle: "确认重新生成",
     reviewHint:
       "勾选本次提交的素材；首帧必须提交。取消素材后，后续 Picture / Audio 标签会连续重排，右侧仅影响本次请求，不改写 Markdown。",
+    regenerationReviewHint:
+      "素材按当前分镜完整列出，勾选状态来自这条提交历史；首帧必须提交。调整勾选后，Picture / Audio 标签会连续重排，右侧仅影响本次请求。",
     promptEditOnSubmit: "只读 · 生成时可编辑",
     firstFrameLocked: "Picture 1 · 首帧必须提交",
     renumberedPicture: (before: number, after: number) =>
@@ -203,9 +206,6 @@ export const ui = {
     generating: "视频生成中",
     history: "历史生成版本",
     regeneration: "重新生成",
-    resubmit: "重新生成",
-    resubmitting: "正在重新提交…",
-    resubmitted: "已重新提交",
     submittedPrompt: "本次提交的视频提示词",
     taskId: "任务 ID",
     createdAt: "创建时间",

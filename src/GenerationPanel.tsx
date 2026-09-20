@@ -6,7 +6,7 @@ import {
   generationPromptIssues,
   mediaKind,
   prepareGenerationSelection,
-  replayGenerationReferences,
+  regenerationSelections,
   shotAudioInputs,
   shotImageInputs,
   type InputAsset,
@@ -89,6 +89,15 @@ const running = (status: string) =>
     "download_failed",
   ].includes(status.toLowerCase());
 
+interface GenerationReviewRequest {
+  document: string;
+  shotId: string;
+  duration: number;
+  resolution: string;
+  seed: number | null;
+  regeneration: boolean;
+}
+
 export default function GenerationPanel({
   card,
   episode,
@@ -129,9 +138,14 @@ export default function GenerationPanel({
   );
   const [trimmingVideo, setTrimmingVideo] = useState<string | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewBasePrompt, setReviewBasePrompt] = useState("");
   const [reviewPrompt, setReviewPrompt] = useState("");
+  const [reviewImageInputs, setReviewImageInputs] = useState<InputAsset[]>([]);
+  const [reviewAudioInputs, setReviewAudioInputs] = useState<InputAsset[]>([]);
   const [reviewImages, setReviewImages] = useState<boolean[]>([]);
   const [reviewAudios, setReviewAudios] = useState<boolean[]>([]);
+  const [reviewRequest, setReviewRequest] =
+    useState<GenerationReviewRequest | null>(null);
   const applied = useRef(new Set<string>());
   const useVideoRef = useRef(useVideo);
   useVideoRef.current = useVideo;
@@ -209,33 +223,80 @@ export default function GenerationPanel({
     };
   }, [task, project.handle]);
 
+  const openReview = (
+    prompt: string,
+    reviewImageAssets: InputAsset[],
+    reviewAudioAssets: InputAsset[],
+    request: GenerationReviewRequest,
+    images = reviewImageAssets.map(() => true),
+    audios = reviewAudioAssets.map(() => true),
+  ) => {
+    const prepared = prepareGenerationSelection(
+      prompt,
+      reviewImageAssets,
+      reviewAudioAssets,
+      images,
+      audios,
+    );
+    setReviewBasePrompt(prompt);
+    setReviewImageInputs(reviewImageAssets);
+    setReviewAudioInputs(reviewAudioAssets);
+    setReviewImages(images);
+    setReviewAudios(audios);
+    setReviewPrompt(prepared.prompt);
+    setReviewRequest(request);
+    setError("");
+    setReviewOpen(true);
+  };
+
   const openSubmissionReview = () => {
     if (!configured) {
       configure();
       return;
     }
-    const images = imageInputs.map(() => true);
-    const audios = audioInputs.map(() => true);
-    const prepared = prepareGenerationSelection(
+    openReview(card.fields.videoPrompt.value, imageInputs, audioInputs, {
+      document,
+      shotId: card.id,
+      duration: Number(card.fields.duration.value || "5"),
+      resolution: matchConfiguredResolution(
+        card.fields.resolution.value,
+        videoWorkflow.resolutions,
+        videoWorkflow.defaultResolution,
+      ),
+      seed: seed.trim() ? Number(seed) : null,
+      regeneration: false,
+    });
+  };
+
+  const openRegenerationReview = (record: GenerationRecord) => {
+    if (!configured) {
+      configure();
+      return;
+    }
+    const selected = regenerationSelections(imageInputs, audioInputs, record);
+    openReview(
       card.fields.videoPrompt.value,
       imageInputs,
       audioInputs,
-      images,
-      audios,
+      {
+        document: record.document,
+        shotId: record.shotId,
+        duration: record.duration,
+        resolution: record.resolution,
+        seed: record.seed,
+        regeneration: true,
+      },
+      selected.images,
+      selected.audios,
     );
-    setReviewImages(images);
-    setReviewAudios(audios);
-    setReviewPrompt(prepared.prompt);
-    setError("");
-    setReviewOpen(true);
   };
 
   const rebuildReviewPrompt = (images: boolean[], audios: boolean[]) => {
     setReviewPrompt(
       prepareGenerationSelection(
-        card.fields.videoPrompt.value,
-        imageInputs,
-        audioInputs,
+        reviewBasePrompt,
+        reviewImageInputs,
+        reviewAudioInputs,
         images,
         audios,
       ).prompt,
@@ -259,33 +320,29 @@ export default function GenerationPanel({
     rebuildReviewPrompt(reviewImages, next);
   };
 
-  const submit = async (
-    prompt: string,
-    selectedImages: string[],
-    selectedAudios: string[],
-  ) => {
+  const submit = async () => {
+    if (!reviewRequest) return;
     setSubmitting(true);
     setError("");
     try {
-      const duration = Number(card.fields.duration.value || "5");
-      const parsedSeed = seed.trim() ? Number(seed) : null;
+      const { duration, resolution, seed: submittedSeed } = reviewRequest;
       if (!Number.isInteger(duration) || duration < 1 || duration > 15)
         throw new Error(ui.generation.invalidDuration);
-      if (seed.trim() && !Number.isSafeInteger(parsedSeed))
+      if (submittedSeed !== null && !Number.isSafeInteger(submittedSeed))
         throw new Error(ui.generation.invalidSeed);
       const next = await api.submitGeneration(project.handle, {
-        document,
-        shotId: card.id,
-        prompt,
+        document: reviewRequest.document,
+        shotId: reviewRequest.shotId,
+        prompt: reviewPrompt,
         duration,
-        resolution: matchConfiguredResolution(
-          card.fields.resolution.value,
-          videoWorkflow.resolutions,
-          videoWorkflow.defaultResolution,
-        ),
-        seed: parsedSeed,
-        imageRefs: selectedImages,
-        audioRefs: selectedAudios,
+        resolution,
+        seed: submittedSeed,
+        imageRefs: reviewImageInputs
+          .filter((_, index) => reviewImages[index] !== false)
+          .map((item) => item.reference),
+        audioRefs: reviewAudioInputs
+          .filter((_, index) => reviewAudios[index] !== false)
+          .map((item) => item.reference),
       });
       setReviewOpen(false);
       setTask(next);
@@ -302,34 +359,6 @@ export default function GenerationPanel({
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const resubmit = async (record: GenerationRecord, prompt: string) => {
-    const references = replayGenerationReferences(
-      record,
-      imageInputs.map((item) => item.reference),
-      audioInputs.map((item) => item.reference),
-    );
-    const next = await api.submitGeneration(project.handle, {
-      document: record.document,
-      shotId: record.shotId,
-      prompt,
-      duration: record.duration,
-      resolution: record.resolution,
-      seed: record.seed,
-      imageRefs: references.imageRefs,
-      audioRefs: references.audioRefs,
-    });
-    setTask(next);
-    setHistory((items) => [
-      next,
-      ...items.filter((item) => item.taskId !== next.taskId),
-    ]);
-    if (next.localFile) {
-      applied.current.add(next.taskId);
-      await useVideo(next.localFile);
-    }
-    return `${ui.generation.resubmitted} · ${next.taskId}`;
   };
 
   return (
@@ -497,8 +526,8 @@ export default function GenerationPanel({
                       <small className="generation-error">{record.error}</small>
                     )}
                   </div>
-                  {record.localFile && (
-                    <div className="generation-history-actions">
+                  <div className="generation-history-actions">
+                    {record.localFile && (
                       <button
                         type="button"
                         disabled={busy}
@@ -506,30 +535,46 @@ export default function GenerationPanel({
                       >
                         {ui.generation.play}
                       </button>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => {
-                          setPlayingVideo(null);
-                          setTrimmingVideo(record.localFile!);
-                        }}
-                      >
-                        {ui.generation.edit}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={
-                          busy ||
-                          record.localFile === card.fields.videoFile.value
-                        }
-                        onClick={() => void useVideo(record.localFile!)}
-                      >
-                        {record.localFile === card.fields.videoFile.value
-                          ? ui.generation.inUse
-                          : ui.generation.useVersion}
-                      </button>
-                    </div>
-                  )}
+                    )}
+                    <button
+                      type="button"
+                      disabled={
+                        busy ||
+                        submitting ||
+                        !!(task && running(task.status)) ||
+                        !record.prompt.trim()
+                      }
+                      onClick={() => openRegenerationReview(record)}
+                    >
+                      {ui.generation.regeneration}
+                    </button>
+                    {record.localFile && (
+                      <>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => {
+                            setPlayingVideo(null);
+                            setTrimmingVideo(record.localFile!);
+                          }}
+                        >
+                          {ui.generation.edit}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={
+                            busy ||
+                            record.localFile === card.fields.videoFile.value
+                          }
+                          onClick={() => void useVideo(record.localFile!)}
+                        >
+                          {record.localFile === card.fields.videoFile.value
+                            ? ui.generation.inUse
+                            : ui.generation.useVersion}
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </article>
               ))}
             </div>
@@ -557,12 +602,10 @@ export default function GenerationPanel({
           title={playingVideo.localFile!.replace(/.*[/\\]/, "")}
           refreshKey={refreshKey}
           generation={playingVideo}
-          resubmitDisabled={busy || !!(task && running(task.status))}
-          onResubmit={(prompt) => resubmit(playingVideo, prompt)}
           onClose={() => setPlayingVideo(null)}
         />
       )}
-      {reviewOpen && (
+      {reviewOpen && reviewRequest && (
         <div
           className="modal-backdrop generation-submit-backdrop"
           onMouseDown={() => {
@@ -586,19 +629,37 @@ export default function GenerationPanel({
               ×
             </button>
             <h2 id={`generation-submit-${card.id}`}>
-              {ui.generation.reviewTitle}
+              {reviewRequest.regeneration
+                ? ui.generation.regenerationReviewTitle
+                : ui.generation.reviewTitle}
             </h2>
-            <p className="generation-review-hint">{ui.generation.reviewHint}</p>
+            <p className="generation-review-hint">
+              {reviewRequest.regeneration
+                ? ui.generation.regenerationReviewHint
+                : ui.generation.reviewHint}
+            </p>
+            <div className="generation-review-parameters">
+              <span>
+                {ui.board.duration}：{reviewRequest.duration} 秒
+              </span>
+              <span>
+                {ui.board.resolution}：{reviewRequest.resolution}
+              </span>
+              <span>
+                {ui.generation.seed}：
+                {reviewRequest.seed ?? ui.generation.randomSeed}
+              </span>
+            </div>
             <div className="generation-review-layout">
               <div className="generation-review-assets">
                 <div className="generation-review-heading">
                   <strong>{ui.generation.referenceImages}</strong>
                   <span>
-                    {selectedImageCount}/{imageInputs.length}
+                    {selectedImageCount}/{reviewImageInputs.length}
                   </span>
                 </div>
                 <div className="generation-review-list">
-                  {imageInputs.map((item, index) => {
+                  {reviewImageInputs.map((item, index) => {
                     const selected = reviewImages[index] !== false;
                     const nextSlot = reviewImages
                       .slice(0, index + 1)
@@ -643,16 +704,16 @@ export default function GenerationPanel({
                     );
                   })}
                 </div>
-                {!!audioInputs.length && (
+                {!!reviewAudioInputs.length && (
                   <>
                     <div className="generation-review-heading audio-title">
                       <strong>{ui.generation.referenceAudios}</strong>
                       <span>
-                        {selectedAudioCount}/{audioInputs.length}
+                        {selectedAudioCount}/{reviewAudioInputs.length}
                       </span>
                     </div>
                     <div className="generation-review-list">
-                      {audioInputs.map((item, index) => {
+                      {reviewAudioInputs.map((item, index) => {
                         const selected = reviewAudios[index] !== false;
                         const nextSlot = reviewAudios
                           .slice(0, index + 1)
@@ -744,17 +805,7 @@ export default function GenerationPanel({
                   selectedImageCount < 1 ||
                   reviewIssues.length > 0
                 }
-                onClick={() =>
-                  void submit(
-                    reviewPrompt,
-                    imageInputs
-                      .filter((_, index) => reviewImages[index] !== false)
-                      .map((item) => item.reference),
-                    audioInputs
-                      .filter((_, index) => reviewAudios[index] !== false)
-                      .map((item) => item.reference),
-                  )
-                }
+                onClick={() => void submit()}
               >
                 {submitting
                   ? ui.generation.submitting

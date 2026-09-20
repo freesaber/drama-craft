@@ -28,8 +28,6 @@ export default function VideoPlayerModal({
   expectedKind = "video",
   refreshKey = 0,
   generation,
-  resubmitDisabled = false,
-  onResubmit,
   onClose,
 }: {
   project: Project;
@@ -39,22 +37,12 @@ export default function VideoPlayerModal({
   expectedKind?: "video" | "audio";
   refreshKey?: number;
   generation?: ReplayGeneration;
-  resubmitDisabled?: boolean;
-  onResubmit?: (prompt: string) => Promise<string | void>;
   onClose: () => void;
 }) {
   const [src, setSrc] = useState("");
   const [missing, setMissing] = useState(false);
   const [error, setError] = useState("");
   const [failed, setFailed] = useState(false);
-  const [prompt, setPrompt] = useState(generation?.prompt ?? "");
-  const [resubmitting, setResubmitting] = useState(false);
-  const [resubmitted, setResubmitted] = useState("");
-
-  useEffect(() => {
-    setPrompt(generation?.prompt ?? "");
-    setResubmitted("");
-  }, [generation]);
 
   useEffect(() => {
     let active = true;
@@ -103,20 +91,6 @@ export default function VideoPlayerModal({
 
   const label = title ?? reference.replace(/.*[/\\]/, "");
 
-  const resubmit = async () => {
-    if (!onResubmit || !prompt.trim()) return;
-    setResubmitting(true);
-    setError("");
-    setResubmitted("");
-    try {
-      setResubmitted((await onResubmit(prompt)) || ui.generation.resubmitted);
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      setResubmitting(false);
-    }
-  };
-
   return (
     <div className="modal-backdrop video-player-backdrop" onMouseDown={onClose}>
       <section
@@ -154,15 +128,15 @@ export default function VideoPlayerModal({
                 {generation.seed === null ? "" : ` · Seed ${generation.seed}`}
               </small>
             </div>
-            <textarea
-              value={prompt}
-              rows={7}
+            <div
+              className="video-player-prompt-readonly"
+              role="textbox"
               aria-label={ui.generation.submittedPrompt}
-              onChange={(event) => {
-                setPrompt(event.target.value);
-                setResubmitted("");
-              }}
-            />
+              aria-readonly="true"
+              tabIndex={0}
+            >
+              {generation.prompt}
+            </div>
           </section>
         )}
         {error && (
@@ -191,20 +165,7 @@ export default function VideoPlayerModal({
           />
         )}
         {failed && <p className="warning-text">{ui.decodeError}</p>}
-        {resubmitted && <p className="success-text">{resubmitted}</p>}
         <div className="modal-actions">
-          {generation && onResubmit && (
-            <button
-              type="button"
-              className="primary-button"
-              disabled={resubmitDisabled || resubmitting || !prompt.trim()}
-              onClick={() => void resubmit()}
-            >
-              {resubmitting
-                ? ui.generation.resubmitting
-                : ui.generation.resubmit}
-            </button>
-          )}
           <button type="button" onClick={onClose}>
             {ui.cancel}
           </button>

@@ -3,6 +3,7 @@ import {
   generationPromptIssues,
   hasSelectedVideo,
   prepareGenerationSelection,
+  regenerationSelections,
   replayGenerationReferences,
   shotGenerationPayload,
   shotImageInputs,
@@ -58,6 +59,39 @@ const episode: EpisodeData = {
 };
 
 describe("generationInputs", () => {
+  it("shows current materials and restores historical checked states", () => {
+    const images = ["frame.png", "scene.png", "alice.png", "spider.png"].map(
+      (reference, index) => ({
+        reference,
+        label: `Picture ${index + 1}`,
+      }),
+    );
+    const audios = [
+      { reference: "narrator.wav", label: "Audio 1" },
+      { reference: "alice.wav", label: "Audio 2" },
+    ];
+
+    expect(
+      regenerationSelections(images, audios, {
+        imageRefs: ["frame.png", "scene.png", "spider.png"],
+        audioRefs: ["narrator.wav"],
+      }),
+    ).toEqual({
+      images: [true, true, false, true],
+      audios: [true, false],
+    });
+
+    expect(
+      regenerationSelections(images, audios, {
+        imageRefs: [],
+        audioRefs: [],
+      }),
+    ).toEqual({
+      images: [true, true, true, true],
+      audios: [true, true],
+    });
+  });
+
   it("reuses recorded generation references and falls back for legacy history", () => {
     expect(
       replayGenerationReferences(

@@ -99,31 +99,6 @@ export default function TaskListView({
       setDetail(next);
     });
 
-  const resubmit = async (item: BatchJobItem, prompt: string) => {
-    if (!detail) throw new Error(ui.generation.noDocument);
-    const job = await api.createBatchJob(project.handle, {
-      jobType: "generation",
-      name: `${ui.generation.regeneration} · ${documentName(detail.document)} · ${item.shotId}`,
-      document: detail.document,
-      delayHours: 0,
-      items: [
-        {
-          shotId: item.shotId,
-          shotTitle: item.shotTitle,
-          prompt,
-          duration: item.duration,
-          resolution: item.resolution,
-          seed: item.seed,
-          imageRefs: item.imageRefs,
-          audioRefs: item.audioRefs,
-        },
-      ],
-    });
-    const advanced = await api.advanceBatchJobs(project.handle);
-    onJobsChange(advanced.jobs);
-    return `${ui.generation.resubmitted} · ${job.jobId}`;
-  };
-
   return (
     <main className="workspace task-workspace">
       <div className="panel-heading task-heading">
@@ -453,11 +428,6 @@ export default function TaskListView({
                     playing.generation.submittedAt ??
                     playing.generation.createdAt,
                 }
-              : undefined
-          }
-          onResubmit={
-            playing.generation
-              ? (prompt) => resubmit(playing.generation!, prompt)
               : undefined
           }
           onClose={() => setPlaying(null)}

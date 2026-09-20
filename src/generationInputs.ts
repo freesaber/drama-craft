@@ -41,6 +41,29 @@ export function replayGenerationReferences(
   };
 }
 
+export function regenerationSelections(
+  images: InputAsset[],
+  audios: InputAsset[],
+  recorded: {
+    imageRefs?: string[] | null;
+    audioRefs?: string[] | null;
+  },
+) {
+  const references = replayGenerationReferences(
+    recorded,
+    images.map((item) => item.reference),
+    audios.map((item) => item.reference),
+  );
+  const selectedImages = new Set(references.imageRefs);
+  const selectedAudios = new Set(references.audioRefs);
+  return {
+    images: images.map(
+      (item, index) => index === 0 || selectedImages.has(item.reference),
+    ),
+    audios: audios.map((item) => selectedAudios.has(item.reference)),
+  };
+}
+
 function sourceSlot(
   item: InputAsset,
   kind: "Picture" | "Audio",
