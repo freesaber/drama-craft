@@ -639,16 +639,75 @@ export default function GenerationPanel({
                 : ui.generation.reviewHint}
             </p>
             <div className="generation-review-parameters">
-              <span>
-                {ui.board.duration}：{reviewRequest.duration} 秒
-              </span>
-              <span>
-                {ui.board.resolution}：{reviewRequest.resolution}
-              </span>
-              <span>
-                {ui.generation.seed}：
-                {reviewRequest.seed ?? ui.generation.randomSeed}
-              </span>
+              <label>
+                <span>{ui.board.duration}</span>
+                <select
+                  value={String(reviewRequest.duration)}
+                  disabled={submitting}
+                  onChange={(event) =>
+                    setReviewRequest((current) =>
+                      current
+                        ? { ...current, duration: Number(event.target.value) }
+                        : current,
+                    )
+                  }
+                >
+                  {Array.from({ length: 15 }, (_, index) => index + 1).map(
+                    (value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+              <label>
+                <span>{ui.board.resolution}</span>
+                <select
+                  value={reviewRequest.resolution}
+                  disabled={submitting}
+                  onChange={(event) =>
+                    setReviewRequest((current) =>
+                      current
+                        ? { ...current, resolution: event.target.value }
+                        : current,
+                    )
+                  }
+                >
+                  {!videoWorkflow.resolutions.includes(
+                    reviewRequest.resolution,
+                  ) && (
+                    <option value={reviewRequest.resolution}>
+                      {reviewRequest.resolution}
+                    </option>
+                  )}
+                  {videoWorkflow.resolutions.map((resolution) => (
+                    <option key={resolution} value={resolution}>
+                      {resolution}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>{ui.generation.seed}</span>
+                <input
+                  inputMode="numeric"
+                  value={reviewRequest.seed ?? ""}
+                  placeholder={ui.generation.randomSeed}
+                  disabled={submitting}
+                  onChange={(event) => {
+                    const value = event.target.value.replace(/[^0-9]/g, "");
+                    setReviewRequest((current) =>
+                      current
+                        ? {
+                            ...current,
+                            seed: value ? Number(value) : null,
+                          }
+                        : current,
+                    );
+                  }}
+                />
+              </label>
             </div>
             <div className="generation-review-layout">
               <div className="generation-review-assets">

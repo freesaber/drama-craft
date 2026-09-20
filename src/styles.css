@@ -870,12 +870,29 @@
   line-height: 1.65;
 }
 .generation-review-parameters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px 18px;
+  display: grid;
+  grid-template-columns: 120px minmax(190px, 1fr) minmax(170px, 0.8fr);
+  gap: 10px;
   margin: 0 0 14px;
   color: #83917c;
   font-size: 10px;
+}
+.generation-review-parameters label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.generation-review-parameters select,
+.generation-review-parameters input {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid #dce4d6;
+  border-radius: 7px;
+  background: #fff;
+  color: #465b3d;
+  font-size: 11px;
 }
 .generation-review-layout {
   display: grid;
@@ -1019,6 +1036,9 @@
   }
   .generation-review-assets {
     overflow: auto;
+  }
+  .generation-review-parameters {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 .video-player-reference {
