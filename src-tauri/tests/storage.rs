@@ -114,6 +114,10 @@ fn rejects_traversal_reserved_names_and_overwrites() {
     assert!(project.join("剧本大纲.md").exists());
     let agents = fs::read_to_string(project.join("AGENTS.md")).unwrap();
     assert!(agents.contains("视频提示词画面与发声规则"));
+    assert!(agents.contains("视频提示词画面风格写法"));
+    assert!(agents.contains("每个视频提示词在参考素材说明之后"));
+    assert!(agents.contains("画面风格：[此处写入已确认的画面风格]。"));
+    assert!(!agents.contains("禁止转成 3D、写实或其他未确认风格"));
     assert!(agents.contains("删掉破折号不够"));
     assert!(agents.contains("不要用破折号串联动作或代替正常标点"));
     assert!(agents.contains("正文未滥用破折号"));
@@ -129,6 +133,7 @@ fn rejects_traversal_reserved_names_and_overwrites() {
     assert!(agents.contains("角色表固定为五列"));
     assert!(agents.contains("先写完分镜，再反向生成使用镜号"));
     assert!(agents.contains("使用镜号由分镜反向生成并双向一致"));
+    assert!(agents.contains("视频提示词已写入已确认的画面风格"));
 }
 #[test]
 fn project_identity_moves_while_external_library_configuration_is_preserved() {
