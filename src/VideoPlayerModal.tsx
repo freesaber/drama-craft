@@ -5,6 +5,21 @@ import { ui } from "./i18n";
 import { withMediaRevision } from "./mediaUrl";
 import type { Project } from "./types";
 
+interface ReplayGeneration {
+  prompt: string;
+  duration: number;
+  resolution: string;
+  seed: number | null;
+  taskId?: string | null;
+  createdAt?: string | null;
+}
+
+function formatCreatedAt(value: string | null | undefined) {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("zh-CN");
+}
+
 export default function VideoPlayerModal({
   project,
   document,
@@ -12,6 +27,9 @@ export default function VideoPlayerModal({
   title,
   expectedKind = "video",
   refreshKey = 0,
+  generation,
+  resubmitDisabled = false,
+  onResubmit,
   onClose,
 }: {
   project: Project;
@@ -20,12 +38,23 @@ export default function VideoPlayerModal({
   title?: string;
   expectedKind?: "video" | "audio";
   refreshKey?: number;
+  generation?: ReplayGeneration;
+  resubmitDisabled?: boolean;
+  onResubmit?: (prompt: string) => Promise<string | void>;
   onClose: () => void;
 }) {
   const [src, setSrc] = useState("");
   const [missing, setMissing] = useState(false);
   const [error, setError] = useState("");
   const [failed, setFailed] = useState(false);
+  const [prompt, setPrompt] = useState(generation?.prompt ?? "");
+  const [resubmitting, setResubmitting] = useState(false);
+  const [resubmitted, setResubmitted] = useState("");
+
+  useEffect(() => {
+    setPrompt(generation?.prompt ?? "");
+    setResubmitted("");
+  }, [generation]);
 
   useEffect(() => {
     let active = true;
@@ -74,6 +103,20 @@ export default function VideoPlayerModal({
 
   const label = title ?? reference.replace(/.*[/\\]/, "");
 
+  const resubmit = async () => {
+    if (!onResubmit || !prompt.trim()) return;
+    setResubmitting(true);
+    setError("");
+    setResubmitted("");
+    try {
+      setResubmitted((await onResubmit(prompt)) || ui.generation.resubmitted);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setResubmitting(false);
+    }
+  };
+
   return (
     <div className="modal-backdrop video-player-backdrop" onMouseDown={onClose}>
       <section
@@ -92,9 +135,36 @@ export default function VideoPlayerModal({
           ×
         </button>
         <h2 id="video-player-title">{label}</h2>
-        <p className="muted video-player-reference" title={reference}>
-          {reference}
-        </p>
+        {generation ? (
+          <p className="muted video-player-reference">
+            {ui.generation.taskId}：{generation.taskId || "—"} ·{" "}
+            {ui.generation.createdAt}：{formatCreatedAt(generation.createdAt)}
+          </p>
+        ) : (
+          <p className="muted video-player-reference" title={reference}>
+            {reference}
+          </p>
+        )}
+        {generation && (
+          <section className="video-player-prompt">
+            <div className="video-player-prompt-heading">
+              <strong>{ui.generation.submittedPrompt}</strong>
+              <small>
+                {generation.duration} 秒 · {generation.resolution}
+                {generation.seed === null ? "" : ` · Seed ${generation.seed}`}
+              </small>
+            </div>
+            <textarea
+              value={prompt}
+              rows={7}
+              aria-label={ui.generation.submittedPrompt}
+              onChange={(event) => {
+                setPrompt(event.target.value);
+                setResubmitted("");
+              }}
+            />
+          </section>
+        )}
         {error && (
           <p className="generation-error" role="alert">
             {error}
@@ -121,17 +191,18 @@ export default function VideoPlayerModal({
           />
         )}
         {failed && <p className="warning-text">{ui.decodeError}</p>}
+        {resubmitted && <p className="success-text">{resubmitted}</p>}
         <div className="modal-actions">
-          {src && !failed && (
+          {generation && onResubmit && (
             <button
               type="button"
-              onClick={() =>
-                void api
-                  .openMedia(project.handle, document, reference)
-                  .catch((e) => setError(errorMessage(e)))
-              }
+              className="primary-button"
+              disabled={resubmitDisabled || resubmitting || !prompt.trim()}
+              onClick={() => void resubmit()}
             >
-              {ui.openFile} ↗
+              {resubmitting
+                ? ui.generation.resubmitting
+                : ui.generation.resubmit}
             </button>
           )}
           <button type="button" onClick={onClose}>

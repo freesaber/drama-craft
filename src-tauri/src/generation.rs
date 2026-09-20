@@ -49,6 +49,8 @@ pub struct GenerationRecord {
     pub duration: u8,
     pub resolution: String,
     pub seed: Option<i64>,
+    pub image_refs: Vec<String>,
+    pub audio_refs: Vec<String>,
     pub remote_url: Option<String>,
     pub local_file: Option<String>,
     pub error: Option<String>,
@@ -141,11 +143,13 @@ fn row(row: &rusqlite::Row<'_>) -> rusqlite::Result<GenerationRecord> {
         duration: row.get(5)?,
         resolution: row.get(6)?,
         seed: row.get(7)?,
-        remote_url: row.get(8)?,
-        local_file: row.get(9)?,
-        error: row.get(10)?,
-        created_at: row.get(11)?,
-        updated_at: row.get(12)?,
+        image_refs: serde_json::from_str(&row.get::<_, String>(8)?).unwrap_or_default(),
+        audio_refs: serde_json::from_str(&row.get::<_, String>(9)?).unwrap_or_default(),
+        remote_url: row.get(10)?,
+        local_file: row.get(11)?,
+        error: row.get(12)?,
+        created_at: row.get(13)?,
+        updated_at: row.get(14)?,
     })
 }
 
@@ -169,7 +173,8 @@ pub fn history(root: &Path, document: &str, shot_id: &str) -> Result<Vec<Generat
     let mut statement = connection
         .prepare(
             "SELECT task_id, document, shot_id, status, prompt, duration, resolution,
-                    seed, remote_url, local_file, error, created_at, updated_at
+                    seed, image_refs, audio_refs, remote_url, local_file, error,
+                    created_at, updated_at
                FROM generations WHERE document = ?1 AND shot_id = ?2
                ORDER BY created_at DESC LIMIT 50",
         )
@@ -186,7 +191,8 @@ fn get(root: &Path, task_id: &str) -> Result<GenerationRecord> {
     database(root)?
         .query_row(
             "SELECT task_id, document, shot_id, status, prompt, duration, resolution,
-                    seed, remote_url, local_file, error, created_at, updated_at
+                    seed, image_refs, audio_refs, remote_url, local_file, error,
+                    created_at, updated_at
                FROM generations WHERE task_id = ?1",
             [task_id],
             row,
@@ -926,7 +932,11 @@ mod tests {
         assert!(file.starts_with("01 S001_"), "{file}");
         assert!(file.ends_with(".mp4"), "{file}");
         assert_eq!(fs::read(root.join(&file)).unwrap(), b"synthetic-video");
-        assert_eq!(history(&root, "01 测试.md", "S001").unwrap().len(), 1);
+        let records = history(&root, "01 测试.md", "S001").unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].prompt, "向前走");
+        assert_eq!(records[0].image_refs, vec!["frame.png"]);
+        assert_eq!(records[0].audio_refs, vec!["voice.mp3"]);
         server.join().unwrap();
     }
 

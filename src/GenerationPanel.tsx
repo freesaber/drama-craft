@@ -121,7 +121,9 @@ export default function GenerationPanel({
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [preview, setPreview] = useState<InputAsset | null>(null);
-  const [playingVideo, setPlayingVideo] = useState<string | null>(null);
+  const [playingVideo, setPlayingVideo] = useState<GenerationRecord | null>(
+    null,
+  );
   const [trimmingVideo, setTrimmingVideo] = useState<string | null>(null);
   const applied = useRef(new Set<string>());
   const useVideoRef = useRef(useVideo);
@@ -229,6 +231,29 @@ export default function GenerationPanel({
     }
   };
 
+  const resubmit = async (record: GenerationRecord, prompt: string) => {
+    const next = await api.submitGeneration(project.handle, {
+      document: record.document,
+      shotId: record.shotId,
+      prompt,
+      duration: record.duration,
+      resolution: record.resolution,
+      seed: record.seed,
+      imageRefs: record.imageRefs,
+      audioRefs: record.audioRefs,
+    });
+    setTask(next);
+    setHistory((items) => [
+      next,
+      ...items.filter((item) => item.taskId !== next.taskId),
+    ]);
+    if (next.localFile) {
+      applied.current.add(next.taskId);
+      await useVideo(next.localFile);
+    }
+    return `${ui.generation.resubmitted} · ${next.taskId}`;
+  };
+
   return (
     <section className="shot-main generation-panel">
       <div className="shot-narrative">
@@ -320,7 +345,12 @@ export default function GenerationPanel({
             <small>
               {task ? ui.generation.status(task.status) : ui.generation.ready}
             </small>
-            {task && <small>任务 ID：{task.taskId} · 提交时间：{new Date(task.createdAt).toLocaleString("zh-CN")}</small>}
+            {task && (
+              <small>
+                任务 ID：{task.taskId} · 提交时间：
+                {new Date(task.createdAt).toLocaleString("zh-CN")}
+              </small>
+            )}
           </div>
           <button
             type="button"
@@ -374,7 +404,7 @@ export default function GenerationPanel({
                       <button
                         type="button"
                         disabled={busy}
-                        onClick={() => setPlayingVideo(record.localFile!)}
+                        onClick={() => setPlayingVideo(record)}
                       >
                         {ui.generation.play}
                       </button>
@@ -425,9 +455,12 @@ export default function GenerationPanel({
         <VideoPlayerModal
           project={project}
           document={document}
-          reference={playingVideo}
-          title={playingVideo.replace(/.*[/\\]/, "")}
+          reference={playingVideo.localFile!}
+          title={playingVideo.localFile!.replace(/.*[/\\]/, "")}
           refreshKey={refreshKey}
+          generation={playingVideo}
+          resubmitDisabled={busy || !!(task && running(task.status))}
+          onResubmit={(prompt) => resubmit(playingVideo, prompt)}
           onClose={() => setPlayingVideo(null)}
         />
       )}

@@ -1325,6 +1325,9 @@ mod tests {
         assert_eq!(items[0].status, "failed");
         assert_eq!(items[1].status, "submitted");
         assert_eq!(items[1].generation_task_id.as_deref(), Some("task-2"));
+        let records = generation::history(&root, "01.md", "S002").unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].prompt, "测试提示词");
         server.join().unwrap();
     }
 

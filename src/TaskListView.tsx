@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, errorMessage } from "./api";
 import { ui } from "./i18n";
-import type { BatchJob, Project } from "./types";
+import type { BatchJob, BatchJobItem, Project } from "./types";
 import VideoPlayerModal from "./VideoPlayerModal";
 
 const TASKS_PER_PAGE = 10;
@@ -46,6 +46,7 @@ export default function TaskListView({
   const [playing, setPlaying] = useState<{
     reference: string;
     kind: "video" | "audio";
+    generation?: BatchJobItem;
   } | null>(null);
   const [error, setError] = useState("");
   const [acting, setActing] = useState(false);
@@ -97,6 +98,31 @@ export default function TaskListView({
       onJobsChange(jobs.map((job) => (job.jobId === next.jobId ? next : job)));
       setDetail(next);
     });
+
+  const resubmit = async (item: BatchJobItem, prompt: string) => {
+    if (!detail) throw new Error(ui.generation.noDocument);
+    const job = await api.createBatchJob(project.handle, {
+      jobType: "generation",
+      name: `${ui.generation.regeneration} · ${documentName(detail.document)} · ${item.shotId}`,
+      document: detail.document,
+      delayHours: 0,
+      items: [
+        {
+          shotId: item.shotId,
+          shotTitle: item.shotTitle,
+          prompt,
+          duration: item.duration,
+          resolution: item.resolution,
+          seed: item.seed,
+          imageRefs: item.imageRefs,
+          audioRefs: item.audioRefs,
+        },
+      ],
+    });
+    const advanced = await api.advanceBatchJobs(project.handle);
+    onJobsChange(advanced.jobs);
+    return `${ui.generation.resubmitted} · ${job.jobId}`;
+  };
 
   return (
     <main className="workspace task-workspace">
@@ -312,8 +338,14 @@ export default function TaskListView({
                         >
                           {ui.generation.status(item.status)}
                         </td>
-                        <td><code>{item.generationTaskId || "—"}</code></td>
-                        <td>{item.submittedAt ? formatTime(item.submittedAt) : "—"}</td>
+                        <td>
+                          <code>{item.generationTaskId || "—"}</code>
+                        </td>
+                        <td>
+                          {item.submittedAt
+                            ? formatTime(item.submittedAt)
+                            : "—"}
+                        </td>
                         <td
                           className="task-table-error"
                           title={item.error || undefined}
@@ -347,6 +379,10 @@ export default function TaskListView({
                                     detail.jobType === "audio"
                                       ? "audio"
                                       : "video",
+                                  generation:
+                                    detail.jobType === "generation"
+                                      ? item
+                                      : undefined,
                                 })
                               }
                             >
@@ -408,6 +444,22 @@ export default function TaskListView({
           reference={playing.reference}
           title={playing.reference.replace(/.*[/\\]/, "")}
           expectedKind={playing.kind}
+          generation={
+            playing.generation
+              ? {
+                  ...playing.generation,
+                  taskId: playing.generation.generationTaskId,
+                  createdAt:
+                    playing.generation.submittedAt ??
+                    playing.generation.createdAt,
+                }
+              : undefined
+          }
+          onResubmit={
+            playing.generation
+              ? (prompt) => resubmit(playing.generation!, prompt)
+              : undefined
+          }
           onClose={() => setPlaying(null)}
         />
       )}

@@ -96,6 +96,8 @@ export interface GenerationRecord {
   duration: number;
   resolution: string;
   seed: number | null;
+  imageRefs: string[];
+  audioRefs: string[];
   remoteUrl: string | null;
   localFile: string | null;
   error: string | null;
