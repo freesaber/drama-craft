@@ -3,6 +3,160 @@ import { matchConfiguredResolution } from "./videoWorkflows";
 
 export type InputAsset = { reference: string; label: string };
 
+export interface PreparedGenerationSelection {
+  prompt: string;
+  imageRefs: string[];
+  audioRefs: string[];
+}
+
+export interface GenerationPromptIssue {
+  tag: string;
+  kind: "cancelled-reference" | "missing-reference";
+}
+
+export function replayGenerationReferences(
+  recorded: {
+    imageRefs?: string[] | null;
+    audioRefs?: string[] | null;
+  },
+  fallbackImageRefs: string[],
+  fallbackAudioRefs: string[],
+) {
+  // Every valid video request has at least one image. An empty/missing image
+  // list therefore identifies history written before input references were
+  // recorded (or an unreadable legacy value). In that case both lists must be
+  // rebuilt together from the current shot. A recorded empty audio list is
+  // intentional and must remain empty.
+  if (!Array.isArray(recorded.imageRefs) || !recorded.imageRefs.length) {
+    return {
+      imageRefs: fallbackImageRefs,
+      audioRefs: fallbackAudioRefs,
+    };
+  }
+  return {
+    imageRefs: recorded.imageRefs,
+    audioRefs: Array.isArray(recorded.audioRefs)
+      ? recorded.audioRefs
+      : fallbackAudioRefs,
+  };
+}
+
+function sourceSlot(
+  item: InputAsset,
+  kind: "Picture" | "Audio",
+  index: number,
+) {
+  const match = new RegExp(`${kind}\\s*(\\d+)`, "i").exec(item.label);
+  return match ? Number(match[1]) : index + 1;
+}
+
+function tagPattern(kind: "Picture" | "Audio", slot: number, flags: string) {
+  return new RegExp(`<${kind}\\s*${slot}>`, flags);
+}
+
+function prepareReferences(
+  prompt: string,
+  items: InputAsset[],
+  selected: readonly boolean[],
+  kind: "Picture" | "Audio",
+) {
+  const entries = items.map((item, index) => ({
+    item,
+    selected: selected[index] !== false,
+    oldSlot: sourceSlot(item, kind, index),
+    placeholder: `\uE000${kind}-${index}\uE001`,
+  }));
+  let nextPrompt = prompt;
+
+  for (const entry of entries.filter((item) => item.selected)) {
+    nextPrompt = nextPrompt.replace(
+      tagPattern(kind, entry.oldSlot, "gi"),
+      entry.placeholder,
+    );
+  }
+
+  for (const entry of entries.filter((item) => !item.selected)) {
+    const declaration = new RegExp(
+      `^[ \\t]*<${kind}\\s*${entry.oldSlot}>[ \\t]*[：:].*(?:\\r?\\n|$)`,
+      "gim",
+    );
+    nextPrompt = nextPrompt.replace(declaration, "");
+    nextPrompt = nextPrompt.replace(
+      tagPattern(kind, entry.oldSlot, "gi"),
+      `⟦已取消 ${kind} ${entry.oldSlot}⟧`,
+    );
+  }
+
+  const kept = entries.filter((item) => item.selected);
+  kept.forEach((entry, index) => {
+    nextPrompt = nextPrompt.replaceAll(
+      entry.placeholder,
+      `<${kind} ${index + 1}>`,
+    );
+  });
+
+  return {
+    prompt: nextPrompt,
+    references: kept.map((entry) => entry.item.reference),
+  };
+}
+
+export function prepareGenerationSelection(
+  prompt: string,
+  images: InputAsset[],
+  audios: InputAsset[],
+  selectedImages: readonly boolean[],
+  selectedAudios: readonly boolean[],
+): PreparedGenerationSelection {
+  const imageResult = prepareReferences(
+    prompt,
+    images,
+    selectedImages,
+    "Picture",
+  );
+  const audioResult = prepareReferences(
+    imageResult.prompt,
+    audios,
+    selectedAudios,
+    "Audio",
+  );
+  return {
+    prompt: audioResult.prompt.replace(/\n{3,}/g, "\n\n").trim(),
+    imageRefs: imageResult.references,
+    audioRefs: audioResult.references,
+  };
+}
+
+export function generationPromptIssues(
+  prompt: string,
+  imageCount: number,
+  audioCount: number,
+): GenerationPromptIssue[] {
+  const issues: GenerationPromptIssue[] = [];
+  const seen = new Set<string>();
+  for (const match of prompt.matchAll(/⟦已取消 (Picture|Audio) (\d+)⟧/g)) {
+    const tag = `<${match[1]} ${match[2]}>`;
+    const key = `cancelled:${tag}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      issues.push({ tag, kind: "cancelled-reference" });
+    }
+  }
+  for (const match of prompt.matchAll(/<(Picture|Audio)\s*(\d+)>/gi)) {
+    const kind = /^picture$/i.test(match[1]) ? "Picture" : "Audio";
+    const slot = Number(match[2]);
+    const count = kind === "Picture" ? imageCount : audioCount;
+    if (slot >= 1 && slot <= count) continue;
+    const tag = `<${kind} ${slot}>`;
+    const key = `missing:${tag}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      issues.push({ tag, kind: "missing-reference" });
+    }
+  }
+  return issues;
+}
+
 export function mediaKind(
   reference: string,
 ): "image" | "audio" | "video" | null {

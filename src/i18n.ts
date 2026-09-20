@@ -179,6 +179,23 @@ export const ui = {
     invalidSeed: "随机种子须为安全整数",
     referenceImages: "参考图片",
     referenceAudios: "参考音频",
+    reviewTitle: "确认本次视频生成",
+    reviewHint:
+      "勾选本次提交的素材；首帧必须提交。取消素材后，后续 Picture / Audio 标签会连续重排，右侧仅影响本次请求，不改写 Markdown。",
+    promptEditOnSubmit: "只读 · 生成时可编辑",
+    firstFrameLocked: "Picture 1 · 首帧必须提交",
+    renumberedPicture: (before: number, after: number) =>
+      before === after
+        ? `Picture ${after}`
+        : `Picture ${before} → Picture ${after}`,
+    renumberedAudio: (before: number, after: number) =>
+      before === after ? `Audio ${after}` : `Audio ${before} → Audio ${after}`,
+    notSubmitted: "本次不提交",
+    cancelledReference: (tag: string) =>
+      `${tag} 已取消，但提示词正文仍引用它；请删除或改写右侧标记后再提交。`,
+    missingReference: (tag: string) =>
+      `${tag} 没有对应的已选素材；请检查提示词编号。`,
+    confirmSubmit: "确认提交",
     replace: "替换",
     addImage: "添加图片",
     ready: "提交后自动查询任务、下载视频并更新 Markdown。",

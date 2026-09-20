@@ -3,7 +3,10 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { api, errorMessage } from "./api";
 import { withMediaRevision } from "./mediaUrl";
 import {
+  generationPromptIssues,
   mediaKind,
+  prepareGenerationSelection,
+  replayGenerationReferences,
   shotAudioInputs,
   shotImageInputs,
   type InputAsset,
@@ -125,6 +128,10 @@ export default function GenerationPanel({
     null,
   );
   const [trimmingVideo, setTrimmingVideo] = useState<string | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewPrompt, setReviewPrompt] = useState("");
+  const [reviewImages, setReviewImages] = useState<boolean[]>([]);
+  const [reviewAudios, setReviewAudios] = useState<boolean[]>([]);
   const applied = useRef(new Set<string>());
   const useVideoRef = useRef(useVideo);
   useVideoRef.current = useVideo;
@@ -133,6 +140,10 @@ export default function GenerationPanel({
     setSeed(videoWorkflow.defaultSeed);
   }, [videoWorkflow.defaultSeed]);
 
+  useEffect(() => {
+    setReviewOpen(false);
+  }, [card.id, document]);
+
   const imageInputs = useMemo(
     () => shotImageInputs(card, episode, videoWorkflow.maxImages),
     [card, episode, videoWorkflow.maxImages],
@@ -140,6 +151,17 @@ export default function GenerationPanel({
   const audioInputs = useMemo(
     () => shotAudioInputs(card, episode),
     [card, episode],
+  );
+  const selectedImageCount = reviewImages.filter(Boolean).length;
+  const selectedAudioCount = reviewAudios.filter(Boolean).length;
+  const reviewIssues = useMemo(
+    () =>
+      generationPromptIssues(
+        reviewPrompt,
+        selectedImageCount,
+        selectedAudioCount,
+      ),
+    [reviewPrompt, selectedImageCount, selectedAudioCount],
   );
   const loadHistory = async () => {
     const records = await api.generationHistory(
@@ -187,11 +209,61 @@ export default function GenerationPanel({
     };
   }, [task, project.handle]);
 
-  const submit = async () => {
+  const openSubmissionReview = () => {
     if (!configured) {
       configure();
       return;
     }
+    const images = imageInputs.map(() => true);
+    const audios = audioInputs.map(() => true);
+    const prepared = prepareGenerationSelection(
+      card.fields.videoPrompt.value,
+      imageInputs,
+      audioInputs,
+      images,
+      audios,
+    );
+    setReviewImages(images);
+    setReviewAudios(audios);
+    setReviewPrompt(prepared.prompt);
+    setError("");
+    setReviewOpen(true);
+  };
+
+  const rebuildReviewPrompt = (images: boolean[], audios: boolean[]) => {
+    setReviewPrompt(
+      prepareGenerationSelection(
+        card.fields.videoPrompt.value,
+        imageInputs,
+        audioInputs,
+        images,
+        audios,
+      ).prompt,
+    );
+  };
+
+  const setReviewImage = (index: number, selected: boolean) => {
+    if (index === 0) return;
+    const next = reviewImages.map((value, current) =>
+      current === index ? selected : value,
+    );
+    setReviewImages(next);
+    rebuildReviewPrompt(next, reviewAudios);
+  };
+
+  const setReviewAudio = (index: number, selected: boolean) => {
+    const next = reviewAudios.map((value, current) =>
+      current === index ? selected : value,
+    );
+    setReviewAudios(next);
+    rebuildReviewPrompt(reviewImages, next);
+  };
+
+  const submit = async (
+    prompt: string,
+    selectedImages: string[],
+    selectedAudios: string[],
+  ) => {
     setSubmitting(true);
     setError("");
     try {
@@ -204,7 +276,7 @@ export default function GenerationPanel({
       const next = await api.submitGeneration(project.handle, {
         document,
         shotId: card.id,
-        prompt: card.fields.videoPrompt.value,
+        prompt,
         duration,
         resolution: matchConfiguredResolution(
           card.fields.resolution.value,
@@ -212,9 +284,10 @@ export default function GenerationPanel({
           videoWorkflow.defaultResolution,
         ),
         seed: parsedSeed,
-        imageRefs: imageInputs.map((item) => item.reference),
-        audioRefs: audioInputs.map((item) => item.reference),
+        imageRefs: selectedImages,
+        audioRefs: selectedAudios,
       });
+      setReviewOpen(false);
       setTask(next);
       setHistory((items) => [
         next,
@@ -232,6 +305,11 @@ export default function GenerationPanel({
   };
 
   const resubmit = async (record: GenerationRecord, prompt: string) => {
+    const references = replayGenerationReferences(
+      record,
+      imageInputs.map((item) => item.reference),
+      audioInputs.map((item) => item.reference),
+    );
     const next = await api.submitGeneration(project.handle, {
       document: record.document,
       shotId: record.shotId,
@@ -239,8 +317,8 @@ export default function GenerationPanel({
       duration: record.duration,
       resolution: record.resolution,
       seed: record.seed,
-      imageRefs: record.imageRefs,
-      audioRefs: record.audioRefs,
+      imageRefs: references.imageRefs,
+      audioRefs: references.audioRefs,
     });
     setTask(next);
     setHistory((items) => [
@@ -258,7 +336,21 @@ export default function GenerationPanel({
     <section className="shot-main generation-panel">
       <div className="shot-narrative">
         <div className="generation-fields">
-          {renderField("videoPrompt", true)}
+          <section className="board-field generation-prompt-field">
+            <div className="generation-prompt-heading">
+              <span>{ui.board.videoPrompt}</span>
+              <small>{ui.generation.promptEditOnSubmit}</small>
+            </div>
+            <div
+              className="generation-prompt-readonly"
+              role="textbox"
+              aria-label={ui.board.videoPrompt}
+              aria-readonly="true"
+              tabIndex={0}
+            >
+              {card.fields.videoPrompt.value || "—"}
+            </div>
+          </section>
           <div className="generation-parameters">
             {renderField("duration")}
             {renderField("resolution")}
@@ -336,7 +428,7 @@ export default function GenerationPanel({
       </div>
       <div className="generation-actions">
         <div className="generation-submit">
-          <div>
+          <div className="generation-submit-status">
             <strong>
               {task && running(task.status)
                 ? ui.generation.generating
@@ -345,13 +437,19 @@ export default function GenerationPanel({
             <small>
               {task ? ui.generation.status(task.status) : ui.generation.ready}
             </small>
-            {task && (
-              <small>
-                任务 ID：{task.taskId} · 提交时间：
-                {new Date(task.createdAt).toLocaleString("zh-CN")}
-              </small>
-            )}
           </div>
+          {task && (
+            <div className="generation-submit-meta">
+              <small>
+                <span>{ui.generation.taskId}：</span>
+                <span title={task.taskId}>{task.taskId}</span>
+              </small>
+              <small>
+                <span>{ui.generation.createdAt}：</span>
+                <span>{new Date(task.createdAt).toLocaleString("zh-CN")}</span>
+              </small>
+            </div>
+          )}
           <button
             type="button"
             className="primary-button"
@@ -362,7 +460,7 @@ export default function GenerationPanel({
               !card.fields.videoPrompt.value.trim() ||
               !imageInputs.length
             }
-            onClick={() => void submit()}
+            onClick={openSubmissionReview}
           >
             {submitting ? ui.generation.submitting : ui.board.generate}
           </button>
@@ -463,6 +561,208 @@ export default function GenerationPanel({
           onResubmit={(prompt) => resubmit(playingVideo, prompt)}
           onClose={() => setPlayingVideo(null)}
         />
+      )}
+      {reviewOpen && (
+        <div
+          className="modal-backdrop generation-submit-backdrop"
+          onMouseDown={() => {
+            if (!submitting) setReviewOpen(false);
+          }}
+        >
+          <section
+            className="modal generation-submit-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={`generation-submit-${card.id}`}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="modal-close"
+              aria-label={ui.cancel}
+              disabled={submitting}
+              onClick={() => setReviewOpen(false)}
+            >
+              ×
+            </button>
+            <h2 id={`generation-submit-${card.id}`}>
+              {ui.generation.reviewTitle}
+            </h2>
+            <p className="generation-review-hint">{ui.generation.reviewHint}</p>
+            <div className="generation-review-layout">
+              <div className="generation-review-assets">
+                <div className="generation-review-heading">
+                  <strong>{ui.generation.referenceImages}</strong>
+                  <span>
+                    {selectedImageCount}/{imageInputs.length}
+                  </span>
+                </div>
+                <div className="generation-review-list">
+                  {imageInputs.map((item, index) => {
+                    const selected = reviewImages[index] !== false;
+                    const nextSlot = reviewImages
+                      .slice(0, index + 1)
+                      .filter(Boolean).length;
+                    return (
+                      <div
+                        className={`generation-review-asset${selected ? " selected" : ""}`}
+                        key={`review-image-${index}-${item.reference}`}
+                      >
+                        <input
+                          type="checkbox"
+                          aria-label={`${ui.generation.referenceImages} ${index + 1}`}
+                          checked={selected}
+                          disabled={index === 0 || submitting}
+                          onChange={(event) =>
+                            setReviewImage(index, event.target.checked)
+                          }
+                        />
+                        <Thumbnail
+                          project={project}
+                          document={document}
+                          item={{ ...item, label: `图 ${index + 1}` }}
+                          refreshKey={refreshKey}
+                          onOpen={() => setPreview(item)}
+                        />
+                        <div>
+                          <strong>
+                            {item.reference.replace(/.*[/\\]/, "")}
+                          </strong>
+                          <small>
+                            {index === 0
+                              ? ui.generation.firstFrameLocked
+                              : selected
+                                ? ui.generation.renumberedPicture(
+                                    index + 1,
+                                    nextSlot,
+                                  )
+                                : ui.generation.notSubmitted}
+                          </small>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {!!audioInputs.length && (
+                  <>
+                    <div className="generation-review-heading audio-title">
+                      <strong>{ui.generation.referenceAudios}</strong>
+                      <span>
+                        {selectedAudioCount}/{audioInputs.length}
+                      </span>
+                    </div>
+                    <div className="generation-review-list">
+                      {audioInputs.map((item, index) => {
+                        const selected = reviewAudios[index] !== false;
+                        const nextSlot = reviewAudios
+                          .slice(0, index + 1)
+                          .filter(Boolean).length;
+                        return (
+                          <div
+                            className={`generation-review-asset${selected ? " selected" : ""}`}
+                            key={`review-audio-${index}-${item.reference}`}
+                          >
+                            <input
+                              type="checkbox"
+                              aria-label={`${ui.generation.referenceAudios} ${index + 1}`}
+                              checked={selected}
+                              disabled={submitting}
+                              onChange={(event) =>
+                                setReviewAudio(index, event.target.checked)
+                              }
+                            />
+                            <Thumbnail
+                              project={project}
+                              document={document}
+                              item={{ ...item, label: `音 ${index + 1}` }}
+                              refreshKey={refreshKey}
+                              onOpen={() => setPreview(item)}
+                            />
+                            <div>
+                              <strong>
+                                {item.reference.replace(/.*[/\\]/, "")}
+                              </strong>
+                              <small>
+                                {selected
+                                  ? ui.generation.renumberedAudio(
+                                      index + 1,
+                                      nextSlot,
+                                    )
+                                  : ui.generation.notSubmitted}
+                              </small>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="generation-review-prompt">
+                <label htmlFor={`generation-review-prompt-${card.id}`}>
+                  {ui.generation.submittedPrompt}
+                </label>
+                <textarea
+                  id={`generation-review-prompt-${card.id}`}
+                  value={reviewPrompt}
+                  disabled={submitting}
+                  spellCheck={false}
+                  onChange={(event) => setReviewPrompt(event.target.value)}
+                />
+                {!!reviewIssues.length && (
+                  <div className="generation-review-warnings" role="alert">
+                    {reviewIssues.map((issue) => (
+                      <p key={`${issue.kind}-${issue.tag}`}>
+                        {issue.kind === "cancelled-reference"
+                          ? ui.generation.cancelledReference(issue.tag)
+                          : ui.generation.missingReference(issue.tag)}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            {error && (
+              <p className="generation-error" role="alert">
+                {error}
+              </p>
+            )}
+            <div className="modal-actions">
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => setReviewOpen(false)}
+              >
+                {ui.cancel}
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                disabled={
+                  submitting ||
+                  !reviewPrompt.trim() ||
+                  selectedImageCount < 1 ||
+                  reviewIssues.length > 0
+                }
+                onClick={() =>
+                  void submit(
+                    reviewPrompt,
+                    imageInputs
+                      .filter((_, index) => reviewImages[index] !== false)
+                      .map((item) => item.reference),
+                    audioInputs
+                      .filter((_, index) => reviewAudios[index] !== false)
+                      .map((item) => item.reference),
+                  )
+                }
+              >
+                {submitting
+                  ? ui.generation.submitting
+                  : ui.generation.confirmSubmit}
+              </button>
+            </div>
+          </section>
+        </div>
       )}
       {preview && (
         <div

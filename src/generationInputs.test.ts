@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  generationPromptIssues,
   hasSelectedVideo,
+  prepareGenerationSelection,
+  replayGenerationReferences,
   shotGenerationPayload,
   shotImageInputs,
 } from "./generationInputs";
@@ -55,6 +58,67 @@ const episode: EpisodeData = {
 };
 
 describe("generationInputs", () => {
+  it("reuses recorded generation references and falls back for legacy history", () => {
+    expect(
+      replayGenerationReferences(
+        { imageRefs: ["chosen-frame.png"], audioRefs: [] },
+        ["current-frame.png"],
+        ["current-voice.wav"],
+      ),
+    ).toEqual({ imageRefs: ["chosen-frame.png"], audioRefs: [] });
+
+    expect(
+      replayGenerationReferences(
+        { imageRefs: [], audioRefs: [] },
+        ["current-frame.png", "current-role.png"],
+        ["current-voice.wav"],
+      ),
+    ).toEqual({
+      imageRefs: ["current-frame.png", "current-role.png"],
+      audioRefs: ["current-voice.wav"],
+    });
+  });
+
+  it("removes an unchecked declaration and compacts later picture labels", () => {
+    const prepared = prepareGenerationSelection(
+      "<Picture 1>：首帧。\n<Picture 2>：场景。\n<Picture 3>：艾莉丝外貌。\n<Picture 4>：蜘蛛外貌。\n\n蜘蛛沿小径走出。",
+      ["frame.png", "scene.png", "alice.png", "spider.png"].map(
+        (reference, index) => ({ reference, label: `Picture ${index + 1}` }),
+      ),
+      [],
+      [true, true, false, true],
+      [],
+    );
+
+    expect(prepared.imageRefs).toEqual([
+      "frame.png",
+      "scene.png",
+      "spider.png",
+    ]);
+    expect(prepared.prompt).toContain("<Picture 3>：蜘蛛外貌。");
+    expect(prepared.prompt).not.toContain("艾莉丝外貌");
+    expect(prepared.prompt).not.toContain("<Picture 4>");
+    expect(generationPromptIssues(prepared.prompt, 3, 0)).toEqual([]);
+  });
+
+  it("marks references that remain after their material is unchecked", () => {
+    const prepared = prepareGenerationSelection(
+      "<Picture 1>：首帧。\n<Picture 2>：艾莉丝外貌。\n艾莉丝外貌沿用<Picture 2>。",
+      [
+        { reference: "frame.png", label: "Picture 1" },
+        { reference: "alice.png", label: "Picture 2" },
+      ],
+      [],
+      [true, false],
+      [],
+    );
+
+    expect(prepared.prompt).toContain("艾莉丝外貌沿用⟦已取消 Picture 2⟧");
+    expect(generationPromptIssues(prepared.prompt, 1, 0)).toEqual([
+      { tag: "<Picture 2>", kind: "cancelled-reference" },
+    ]);
+  });
+
   it("detects missing video and builds payload from frame", () => {
     const shot = card({
       id: "S001",

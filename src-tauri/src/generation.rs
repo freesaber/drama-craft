@@ -125,7 +125,18 @@ pub(crate) fn open_database(root: &Path) -> Result<Connection> {
         )
         .map_err(|e| AppError::new("database", e.to_string()))?;
     let _ = connection.execute("ALTER TABLE batch_jobs ADD COLUMN result_file TEXT", []);
-    let _ = connection.execute("ALTER TABLE batch_job_items ADD COLUMN submitted_at TEXT", []);
+    let _ = connection.execute(
+        "ALTER TABLE batch_job_items ADD COLUMN submitted_at TEXT",
+        [],
+    );
+    let _ = connection.execute(
+        "ALTER TABLE generations ADD COLUMN image_refs TEXT NOT NULL DEFAULT '[]'",
+        [],
+    );
+    let _ = connection.execute(
+        "ALTER TABLE generations ADD COLUMN audio_refs TEXT NOT NULL DEFAULT '[]'",
+        [],
+    );
     Ok(connection)
 }
 
@@ -848,6 +859,47 @@ mod tests {
 
         assert_eq!(filename, "01 S001_20260918-010203_12345678.mp4");
         assert_eq!(fs::read(dir.path().join(&filename)).unwrap(), b"new-video");
+    }
+
+    #[test]
+    fn migrates_generation_history_without_recorded_media_references() {
+        let project = tempdir().unwrap();
+        let metadata = project.path().join(".drama-craft");
+        fs::create_dir_all(&metadata).unwrap();
+        {
+            let connection = Connection::open(metadata.join(DATABASE_NAME)).unwrap();
+            connection
+                .execute_batch(
+                    "CREATE TABLE generations (
+                       task_id TEXT PRIMARY KEY,
+                       document TEXT NOT NULL,
+                       shot_id TEXT NOT NULL,
+                       status TEXT NOT NULL,
+                       prompt TEXT NOT NULL,
+                       duration INTEGER NOT NULL,
+                       resolution TEXT NOT NULL,
+                       seed INTEGER,
+                       remote_url TEXT,
+                       local_file TEXT,
+                       error TEXT,
+                       created_at TEXT NOT NULL,
+                       updated_at TEXT NOT NULL
+                     );
+                     INSERT INTO generations
+                       (task_id, document, shot_id, status, prompt, duration, resolution,
+                        seed, remote_url, local_file, error, created_at, updated_at)
+                     VALUES
+                       ('legacy-1', '01 测试.md', 'S001', 'completed', '旧提示词', 5,
+                        '480p横(864*480)', NULL, NULL, 'legacy.mp4', NULL,
+                        '2026-01-01T00:00:00+08:00', '2026-01-01T00:00:00+08:00');",
+                )
+                .unwrap();
+        }
+
+        let records = history(project.path(), "01 测试.md", "S001").unwrap();
+        assert_eq!(records.len(), 1);
+        assert!(records[0].image_refs.is_empty());
+        assert!(records[0].audio_refs.is_empty());
     }
 
     #[test]
