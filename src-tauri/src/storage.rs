@@ -1107,8 +1107,8 @@ GPT附件：**图片1＝场景母版（`01 素材_场景.png`）；图片2＝角
 <Picture 3>：角色B的外貌与服饰参考图。
 <Picture 4>：内门跟班群像的外貌与服饰参考图。
 
-<Subject 1>：角色A，外貌与服饰来自<Picture 2>，位于首帧左侧。
-<Subject 2>：角色B，外貌与服饰来自<Picture 3>，位于首帧右侧。
+<Subject 1>：角色A，外貌与服饰来自<Picture 2>。
+<Subject 2>：角色B，外貌与服饰来自<Picture 3>。
 <Subject 3>：远景中的内门跟班群像，外貌与服饰来自<Picture 4>。
 <Audio 1>：<Subject 1>（角色A，发声者(S1)）的音色与说话方式参考，不复制样本原对白。
 
