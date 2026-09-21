@@ -1102,7 +1102,7 @@ GPT附件：**图片1＝场景母版（`01 素材_场景.png`）；图片2＝角
 **视频提示词｜duration=5，resolution=480p横**
 
 \```text
-<Picture 1>：本镜完整首帧，场景、光线、构图以此为准。
+<Picture 1> is the first frame of [Shot 1]。
 <Picture 2>：角色A的外貌与服饰参考图。
 <Picture 3>：角色B的外貌与服饰参考图。
 <Picture 4>：内门跟班群像的外貌与服饰参考图。
@@ -1114,7 +1114,7 @@ GPT附件：**图片1＝场景母版（`01 素材_场景.png`）；图片2＝角
 
 画面风格：[此处写入已确认的画面风格]。
 
-保持首帧景别和拍摄角度，摄影机位置与焦距不变。
+[Shot 1] The shot begins from <Picture 1>, fully preserving its scene, lighting, and composition.
 
 0—3.5秒：<Subject 1>（角色A）手指指着<Subject 2>（角色B），表情愤怒。<Subject 1> (S1)参考<Audio 1>的音色在画内说（暴躁训斥）：<d>[Chinese] 你又迟到了！</d> <Subject 2>低头点头，保持沉默；<Subject 3>仍立在远景。
 3.5—5秒：<Subject 1>闭口转身走开；<Subject 2>缓缓抬头。
