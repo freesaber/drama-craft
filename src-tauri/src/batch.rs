@@ -806,7 +806,15 @@ pub fn sync_jobs(root: &Path) -> Result<Vec<BatchJob>> {
     let mut statement = connection
         .prepare(
             "SELECT job_id, job_type FROM batch_jobs
-              WHERE status IN ('scheduled', 'running') AND job_type IN ('generation', 'audio')
+              WHERE job_type IN ('generation', 'audio')
+                AND (
+                  status IN ('scheduled', 'running')
+                  OR EXISTS (
+                    SELECT 1 FROM batch_job_items AS items
+                     WHERE items.job_id = batch_jobs.job_id
+                       AND items.status IN ('submitted', 'running')
+                  )
+                )
               ORDER BY created_at ASC",
         )
         .map_err(|e| AppError::new("database", e.to_string()))?;
@@ -1002,15 +1010,27 @@ pub async fn advance(root: &Path, settings: &GenerationSettings) -> Result<Batch
     })
 }
 
+fn has_in_flight_audio(connection: &rusqlite::Connection) -> Result<bool> {
+    let count: i64 = connection
+        .query_row(
+            "SELECT COUNT(*)
+               FROM batch_job_items AS items
+              JOIN batch_jobs AS jobs ON jobs.job_id = items.job_id
+              WHERE jobs.job_type = 'audio'
+                AND jobs.status IN ('scheduled', 'running')
+                AND items.status IN ('submitted', 'running')",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|e| AppError::new("database", e.to_string()))?;
+    Ok(count > 0)
+}
+
 pub async fn advance_audio(root: &Path, settings: &AudioSettings) -> Result<BatchAdvanceResult> {
     let _ = sync_jobs(root)?;
     let target = {
         let connection = generation::open_database(root)?;
-        let in_flight: i64 = connection.query_row(
-            "SELECT COUNT(*) FROM batch_job_items AS items JOIN batch_jobs AS jobs ON jobs.job_id = items.job_id WHERE jobs.job_type = 'audio' AND items.status IN ('submitted', 'running')",
-            [], |row| row.get(0),
-        ).map_err(|e| AppError::new("database", e.to_string()))?;
-        if in_flight > 0 {
+        if has_in_flight_audio(&connection)? {
             None
         } else {
             let mut statement = connection.prepare(
@@ -1200,6 +1220,94 @@ mod tests {
         assert_eq!(job.job_type, "audio");
         assert_eq!(job.items[0].shot_title, "秦墨");
         assert_eq!(job.items[0].audio_refs, vec!["01 音色_秦墨.wav"]);
+    }
+
+    #[test]
+    fn cancelled_audio_job_does_not_leave_an_in_flight_blocker() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+        let job = create_job(
+            root,
+            CreateBatchJobInput {
+                job_type: "audio".into(),
+                name: "本集批量音频".into(),
+                document: "01.md".into(),
+                delay_hours: 0,
+                items: vec![BatchJobItemInput {
+                    shot_id: "C01".into(),
+                    shot_title: "秦墨".into(),
+                    prompt: "这是角色台词。".into(),
+                    duration: 1,
+                    resolution: String::new(),
+                    seed: None,
+                    image_refs: vec![],
+                    audio_refs: vec!["01 音色_秦墨.wav".into()],
+                }],
+            },
+        )
+        .unwrap();
+        set_item_status(root, "C01", "running");
+
+        let cancelled = cancel_job(root, &job.job_id).unwrap();
+        assert_eq!(cancelled.status, "cancelled");
+        assert_eq!(cancelled.items[0].status, "running");
+        assert!(!has_in_flight_audio(&generation::open_database(root).unwrap()).unwrap());
+    }
+
+    #[test]
+    fn sync_finishes_remote_item_after_parent_job_was_cancelled() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+        let job = create_job(
+            root,
+            CreateBatchJobInput {
+                job_type: "audio".into(),
+                name: "本集批量音频".into(),
+                document: "01.md".into(),
+                delay_hours: 0,
+                items: vec![BatchJobItemInput {
+                    shot_id: "C01".into(),
+                    shot_title: "秦墨".into(),
+                    prompt: "这是角色台词。".into(),
+                    duration: 1,
+                    resolution: String::new(),
+                    seed: None,
+                    image_refs: vec![],
+                    audio_refs: vec!["01 音色_秦墨.wav".into()],
+                }],
+            },
+        )
+        .unwrap();
+        audio::task_provider(root, "missing").unwrap();
+        let connection = generation::open_database(root).unwrap();
+        connection
+            .execute(
+                "UPDATE batch_job_items
+                    SET status = 'running', generation_task_id = 'audio-finished'
+                  WHERE item_id = ?1",
+                [&job.items[0].item_id],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO audio_generations
+                    (task_id, document, character_id, character_name, status,
+                     local_file, profile_id, submit_url, created_at, updated_at)
+                 VALUES
+                    ('audio-finished', '01.md', 'C01', '秦墨', 'SUCCESS',
+                     '01_秦墨.wav', 'fixture', 'https://example.test/submit', ?1, ?1)",
+                [now()],
+            )
+            .unwrap();
+        drop(connection);
+        cancel_job(root, &job.job_id).unwrap();
+
+        sync_jobs(root).unwrap();
+
+        let synced = get_job(root, &job.job_id).unwrap();
+        assert_eq!(synced.status, "cancelled");
+        assert_eq!(synced.items[0].status, "completed");
+        assert_eq!(synced.items[0].local_file.as_deref(), Some("01_秦墨.wav"));
     }
 
     fn two_shot_job(root: &std::path::Path) -> BatchJob {
