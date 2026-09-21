@@ -151,8 +151,19 @@ try {
 **视频提示词｜duration=5，resolution=480p横**
 
 \`\`\`text
-<Picture 1>：本镜完整首帧。
+<Picture 1> is the first frame of [Shot 1].
+
+detailed_description:
+The target video uses [replace with the visual style confirmed with the user, written in concise English]. Maintain that style and the rendering of <Picture 1> throughout the video.
+
+[Shot 1] The shot begins from <Picture 1>, preserving its scene, lighting, and opening composition.
 在此描述动作、摄影机行为与声音。
+
+overall_soundscape:
+[用简短英文描述持续环境声。]
+
+non_diegetic_music:
+N/A
 \`\`\`
 `;
   // Structural document creation is performed outside the client.

@@ -1112,15 +1112,21 @@ GPT附件：**图片1＝场景母版（`01 素材_场景.png`）；图片2＝角
 <Subject 3>：远景中的内门跟班群像，外貌与服饰来自<Picture 4>。
 <Audio 1>：<Subject 1>（角色A，发声者(S1)）的音色与说话方式参考，不复制样本原对白。
 
-画面风格：[此处写入已确认的画面风格]。
+detailed_description:
+The target video uses [replace with the visual style confirmed with the user, written in concise English]. Maintain that style and the rendering of <Picture 1> throughout the video.
 
-[Shot 1] The shot begins from <Picture 1>, fully preserving its scene, lighting, and composition.
+[Shot 1] The shot begins from <Picture 1>, preserving its scene, lighting, and opening composition. The camera remains fixed, with no zoom or cuts.
 
 0—3.5秒：<Subject 1>（角色A）手指指着<Subject 2>（角色B），表情愤怒。<Subject 1> (S1)参考<Audio 1>的音色在画内说（暴躁训斥）：<d>[Chinese] 你又迟到了！</d> <Subject 2>低头点头，保持沉默；<Subject 3>仍立在远景。
 3.5—5秒：<Subject 1>闭口转身走开；<Subject 2>缓缓抬头。
 
-音效：环境音描述。
-无配乐、字幕或水印。
+无字幕或水印。
+
+overall_soundscape:
+Soft indoor room tone continues throughout, quieter than the dialogue.
+
+non_diegetic_music:
+N/A
 \```
 
 配音校验：N个汉字；语速按4字/秒，停顿预留0.3秒，估计需X秒；
@@ -1138,9 +1144,9 @@ GPT附件：**图片1＝场景母版（`01 素材_场景.png`）；图片2＝角
 > - 视频映射表同样一格一行上传素材，与 GPT附件编号独立编号（视频的 `<Picture 1>` 通常是本镜首帧，不继承首帧 GPT 的图片序号）。
 
 > **视频提示词画面风格写法**：
-> - 每个视频提示词在参考素材说明之后、动作时间线之前，写一行 `画面风格：具体风格描述。`。
-> - 写提示词前，核对本镜引用的角色图、场景图、道具图、群像图及其生成提示词，从用户已确认的方案中带入核心风格词。
-> - 同一作品沿用同一组核心风格词；镜头仍可根据剧情调整景别、光线和气氛。
+> - 画面风格不是模板预设值。先在创作流程中与用户确认，再由创作 agent 将确认结果翻成简短、具体的英文，写在 `detailed_description:` 后、`[Shot 1]` 前；不得把方括号占位文字原样提交给视频模型。
+> - 推荐格式：`The target video uses [已确认画面风格的简短英文描述]. Maintain that style and the rendering of <Picture 1> throughout the video.`。其中方括号内容必须替换；后一句要求视频沿用首帧已经呈现的风格，不代表在模板中固定某一种风格。
+> - 同一作品沿用已确认的核心风格；镜头仍可根据剧情调整景别、光线和气氛。写提示词前核对本镜参考素材，避免新增与素材冲突的风格词。
 
 > **H3 Ref2VA 主体与音色引用（逐条视频请求独立定义）**：
 > - 本模板采用官方标签语义的中文简化格式，保留中文动作时间线，便于编辑。它不是完整官方六节英文格式；不能保证消除串音。官方原文：https://raw.githubusercontent.com/MiniMax-AI/MiniMax-H3/main/skills/h3-prompt-writing/references/ref-en.txt 。完整格式依次为 `subject_definitions`、`summary`、`retention_analysis`、`detailed_description`、`overall_soundscape`、`non_diegetic_music`，正文英文，台词与画面文字保留原语言。
@@ -1237,7 +1243,7 @@ GPT附件：**图片1＝场景母版（`01 素材_场景.png`）；图片2＝角
 - [ ] **GPT附件一图一号**：每个 `图片N＝…（\`文件\`）` 只绑一个文件；多角色写成 `图片2＝…；图片3＝…`，禁止同一括号内用顿号并列多个路径。首帧提示词按「角色名外貌与服饰沿用图片N」逐条写，禁止「图片N中的两个角色」。
 - [ ] **群像有素材图**：会跨镜出现的跟班、村民、看客等已进素材表并挂群像参考图；各镜 GPT 附件引用该图，不只写空名。
 - [ ] **相邻镜可承接**：切到另一主体时，必要时用远景保留上一镜关键人物与群像，避免画面突然只剩两人。
-- [ ] **视频提示词已写入已确认的画面风格**：每镜在参考素材说明后带入用户确认的核心风格词，并将示例占位文字替换为具体描述。
+- [ ] **视频提示词已写入已确认的画面风格**：`detailed_description` 开头已将用户确认的风格翻成简短英文，并明确沿用 `<Picture 1>` 的风格与渲染；没有遗留方括号占位文字，也没有自行预设用户未确认的风格。
 - [ ] **主体与发声者对应明确**：Subject 均能追溯到参考素材；Audio 定义与每句台词中的 Subject、(Sx) 对应一致；纯画外声音有稳定名称；本条请求内发声者编号不随切镜改变。Subject 未被写入上传映射表，所有 Picture/Audio 引用均能在该表找到，未添加不存在的素材。
 - [ ] **台词边界正确**：每句实际台词只有一对 `<d>...</d>`，没有引用标签的伪结束标签或句尾 Audio；内心独白明确闭口，台词未在音效等段落重复。
 - [ ] **对白合入时间段**：视频提示词里人物说话动作与台词写在同一 `起始—结束秒` 段落（含角色名、画内/画外、`<Audio N>`、语气、`<d>[Chinese]…</d>`）；禁止时间线只写「嘴在说话」再另列「某某画内对白」段。旁白允许单独成段。
