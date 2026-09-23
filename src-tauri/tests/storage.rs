@@ -146,8 +146,10 @@ fn rejects_traversal_reserved_names_and_overwrites() {
     assert!(agents.contains("使用镜号由分镜反向生成并双向一致"));
     assert!(agents.contains("视频提示词已写入已确认的画面风格"));
     assert!(agents.contains("H3 Ref2VA 主体与音色引用"));
-    assert!(agents.contains("<Subject 1>：角色A，外貌与服饰来自<Picture 2>"));
-    assert!(agents.contains("<Subject 1> (S1)参考<Audio 1>的音色在画内说"));
+    assert!(agents.contains("<Subject 1> is the young apprentice in <Picture 2>"));
+    assert!(agents.contains(
+        "<Subject 1> (S1) speaks on screen in an irritated voice, using the timbre of <Audio 1>:"
+    ));
     assert!(agents.contains("没有可见主体的系统声或旁白"));
 }
 #[test]
