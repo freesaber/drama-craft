@@ -183,7 +183,8 @@ fn new_project_metadata_uses_regular_library_paths() {
     let voices = voice_library(library_temp.path());
     let project = create_project(&root, "路径示例", None, &voices).unwrap();
     let (metadata, _) = load_project(&project).unwrap();
-    assert_eq!(metadata.libraries.voices, regular_path(&voices));
+    let canonical_voices = fs::canonicalize(&voices).unwrap();
+    assert_eq!(metadata.libraries.voices, regular_path(&canonical_voices));
     #[cfg(windows)]
     {
         assert!(!metadata.libraries.voices.starts_with(r"\\?\"));
