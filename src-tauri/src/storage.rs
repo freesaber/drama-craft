@@ -1114,7 +1114,7 @@ GPT附件：**图片1＝场景母版（`01 素材_场景.png`）；图片2＝角
 <Subject 1>：角色A，外貌与服饰来自<Picture 2>。
 <Subject 2>：角色B，外貌与服饰来自<Picture 3>。
 <Subject 3>：远景中的内门跟班群像，外貌与服饰来自<Picture 4>。
-<Audio 1>：<Subject 1>（角色A，发声者(S1)）的音色与说话方式参考，不复制样本原对白。
+<Audio 1> is the voice-timbre reference for <Subject 1> (S1), containing a spoken Chinese vocal layer. Do not copy the source dialogue.
 
 detailed_description:
 The target video uses [replace with the visual style confirmed with the user, written in concise English]. Maintain that style and the rendering of <Picture 1> throughout the video.
@@ -1153,12 +1153,12 @@ N/A
 > - 同一作品沿用已确认的核心风格；镜头仍可根据剧情调整景别、光线和气氛。写提示词前核对本镜参考素材，避免新增与素材冲突的风格词。
 
 > **H3 Ref2VA 主体与音色引用（逐条视频请求独立定义）**：
-> - 本模板采用官方标签语义的中文简化格式，保留中文动作时间线，便于编辑。它不是完整官方六节英文格式；不能保证消除串音。官方原文：https://raw.githubusercontent.com/MiniMax-AI/MiniMax-H3/main/skills/h3-prompt-writing/references/ref-en.txt 。完整格式依次为 `subject_definitions`、`summary`、`retention_analysis`、`detailed_description`、`overall_soundscape`、`non_diegetic_music`，正文英文，台词与画面文字保留原语言。
+> - 本模板采用官方标签语义的简化格式，保留中文动作时间线，便于编辑。它不是完整官方六节英文格式；不能保证消除串音。官方原文：https://raw.githubusercontent.com/MiniMax-AI/MiniMax-H3/main/skills/h3-prompt-writing/references/ref-en.txt 。完整格式依次为 `subject_definitions`、`summary`、`retention_analysis`、`detailed_description`、`overall_soundscape`、`non_diegetic_music`，正文英文，台词与画面文字保留原语言。
 > - `<Picture N>` 是上传图片引用；`<Subject N>` 是从参考素材中指定的可见主体，可为人物、动物、群像、物件或场景。本模板要求在实际发送给 H3 的视频提示词代码块内，先逐行写明所有上传图片的编号与用途，包括首帧、角色图、场景图和群像图；不能只在代码块外的上传映射表中说明。然后定义 Subject 并引用相应图片，例如 `<Picture 2>：秦墨外貌与服饰参考图。`、`<Subject 1>：秦墨，外貌与服饰来自<Picture 2>。`。这是便于阅读的中文简化约定；官方完整格式允许仅在 Subject 定义中引用角色参考图。每个需要持续追踪的主体有稳定标签；首次出场说明位置与特征，后续动作继续引用同一标签。
 > - Subject 不是上传素材，不添加 `ref_subject_N` 参数或 Subject 映射行。原上传表仍使用 `ref_image_0` → `<Picture 1>`、`ref_audio_0` → `<Audio 1>`；一个 Subject 可引用多张图片，一张图片也可定义多个主体。首帧 GPT 附件的一图一文件规则不变。
 > - `(S1)`、`(S2)` 是本条目标视频的发声者编号，按实际首次发声顺序分配；无发声角色不分配。它与项目镜号 `S001`、角色 ID `C001`、Subject 编号及 Audio 编号分别编号，无须数字相同。同一视频内部切镜、画内转画外仍沿用同一发声者 ID；下一条独立请求重新定义。
-> - 在素材定义处明确绑定，例如 `<Audio 1>：<Subject 2> (S1)的音色参考。`；每句台词处再写 `<Subject 2> (S1)参考<Audio 1>的音色在画内说（语气）：<d>[Chinese] 台词。</d>`。多人发声分别绑定，不能靠素材排列顺序猜测音色归属。只借音色时明确不复制样本原对白，不把完整台词重复写进定义、音效或总结。
-> - 没有可见主体的系统声或旁白，用稳定名称、声音描述与 `(Sx)` 绑定 Audio，不虚构 Subject 或参考图。例如 `<Audio 2>：提示系统(S2)的清冷电子女声音色参考。`，发声写 `提示系统(S2)参考<Audio 2>在画外播报：<d>[Chinese] 通道已开启。</d>`。若声音属于已有可见主体，即使画外发声也保留其 `<Subject N> (Sx)`。
+> - 标签定义行遵循官方格式并使用英文；不得将 `<Audio N>` 定义行写成中文。例如 `<Audio 1> is the voice-timbre reference for <Subject 2> (S1).`。每句台词处仍可用中文动作描述，例如 `<Subject 2> (S1)参考<Audio 1>的音色在画内说（语气）：<d>[Chinese] 台词。</d>`。多人发声分别绑定，不能靠素材排列顺序猜测音色归属。只借音色时明确不复制样本原对白，不把完整台词重复写进定义、音效或总结。
+> - 没有可见主体的系统声或旁白，用稳定名称、声音描述与 `(Sx)` 绑定 Audio，不虚构 Subject 或参考图；其 Audio 定义仍用英文，例如 `<Audio 2> is the voice-timbre reference for the off-screen system voice (S2).`，发声写 `提示系统(S2)参考<Audio 2>在画外播报：<d>[Chinese] 通道已开启。</d>`。若声音属于已有可见主体，即使画外发声也保留其 `<Subject N> (Sx)`。
 > - 内心独白标明“画外内心独白”，并说明对应可见角色嘴唇保持闭合。英文完整格式使用 `says in an off-screen voiceover`。不要把主体 ID、情绪、动作或音色说明放进 `<d>`。
 > - `<d>[Chinese] 台词</d>` 必须配对闭合；`<Picture N>`、`<Subject N>`、`<Audio N>`、`<Video N>` 是引用标签，没有结束标签。不要在 `</d>` 后追加 Audio 充当封口，也不添加 VOICE FENCE、NO SPEECH、END OF SPEECH 等自创控制标记。正常换行、自然语言动作即可；这不代表模型会严格执行声音边界。
 > - 全镜无台词时不编造发声者 ID、台词或配音参考；仍保留需要的 Subject 和物理环境音描述。非语言人声如笑声可按剧情明确指定主体，不能把一切人声都禁止。
