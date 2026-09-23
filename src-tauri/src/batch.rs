@@ -664,8 +664,11 @@ fn run_merge_job(root: &Path, job_id: &str, document: &str, references: &[String
 }
 
 fn finish_merge_job(root: &Path, job_id: &str, outcome: Result<String>) -> Result<()> {
-    let connection = generation::open_database(root)?;
-    let status: String = connection
+    let mut connection = generation::open_database(root)?;
+    let transaction = connection
+        .transaction()
+        .map_err(|e| AppError::new("database", e.to_string()))?;
+    let status: String = transaction
         .query_row(
             "SELECT status FROM batch_jobs WHERE job_id = ?1",
             [job_id],
@@ -678,7 +681,7 @@ fn finish_merge_job(root: &Path, job_id: &str, outcome: Result<String>) -> Resul
     let updated = now();
     match outcome {
         Ok(filename) => {
-            connection
+            transaction
                 .execute(
                     "UPDATE batch_jobs
                         SET status = 'completed', result_file = ?2, updated_at = ?3
@@ -686,7 +689,7 @@ fn finish_merge_job(root: &Path, job_id: &str, outcome: Result<String>) -> Resul
                     params![job_id, filename, updated],
                 )
                 .map_err(|e| AppError::new("database", e.to_string()))?;
-            connection
+            transaction
                 .execute(
                     "UPDATE batch_job_items
                         SET status = 'completed', updated_at = ?2
@@ -696,7 +699,7 @@ fn finish_merge_job(root: &Path, job_id: &str, outcome: Result<String>) -> Resul
                 .map_err(|e| AppError::new("database", e.to_string()))?;
         }
         Err(error) => {
-            connection
+            transaction
                 .execute(
                     "UPDATE batch_jobs
                         SET status = 'failed', updated_at = ?2
@@ -704,7 +707,7 @@ fn finish_merge_job(root: &Path, job_id: &str, outcome: Result<String>) -> Resul
                     params![job_id, updated],
                 )
                 .map_err(|e| AppError::new("database", e.to_string()))?;
-            connection
+            transaction
                 .execute(
                     "UPDATE batch_job_items
                         SET status = 'failed', error = ?2, updated_at = ?3
@@ -714,6 +717,9 @@ fn finish_merge_job(root: &Path, job_id: &str, outcome: Result<String>) -> Resul
                 .map_err(|e| AppError::new("database", e.to_string()))?;
         }
     }
+    transaction
+        .commit()
+        .map_err(|e| AppError::new("database", e.to_string()))?;
     Ok(())
 }
 
