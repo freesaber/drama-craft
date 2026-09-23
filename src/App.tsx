@@ -746,6 +746,7 @@ export default function App() {
           if (
             item.status !== "completed" ||
             !item.localFile ||
+            item.appliedAt ||
             handledShots.has(shotKey) ||
             appliedBatchItems.current.has(item.itemId)
           )
@@ -758,8 +759,14 @@ export default function App() {
               item.localFile,
               !completedBeforePoll.has(item.itemId),
             )
-          )
+          ) {
+            await api.markBatchVideoApplied(
+              project.handle,
+              item.itemId,
+              item.localFile,
+            );
             appliedBatchItems.current.add(item.itemId);
+          }
         }
       }
     };

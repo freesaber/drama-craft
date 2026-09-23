@@ -170,6 +170,8 @@ export const api = {
     invoke<BatchJob>("cancel_batch_job_item", { handle, itemId }),
   syncBatchJobs: (handle: string) =>
     invoke<BatchJob[]>("sync_batch_jobs", { handle }),
+  markBatchVideoApplied: (handle: string, itemId: string, localFile: string) =>
+    invoke<void>("mark_batch_video_applied", { handle, itemId, localFile }),
   advanceBatchJobs: (handle: string) =>
     invoke<BatchAdvanceResult>("advance_batch_jobs", { handle }),
   advanceAudioJobs: (handle: string) =>

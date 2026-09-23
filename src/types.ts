@@ -153,6 +153,7 @@ export interface BatchJobItem {
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
+  appliedAt: string | null;
 }
 export interface BatchJob {
   jobId: string;

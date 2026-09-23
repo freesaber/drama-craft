@@ -69,6 +69,7 @@ pub struct BatchJobItem {
     pub sort_order: i64,
     pub created_at: String,
     pub updated_at: String,
+    pub applied_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -132,12 +133,13 @@ fn item_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<BatchJobItem> {
         sort_order: row.get(15)?,
         created_at: row.get(16)?,
         updated_at: row.get(17)?,
+        applied_at: row.get(18)?,
     })
 }
 
 const ITEM_SELECT: &str = "SELECT item_id, job_id, shot_id, shot_title, status, prompt, duration,
        resolution, seed, image_refs, audio_refs, generation_task_id, submitted_at, local_file, error,
-       sort_order, created_at, updated_at
+       sort_order, created_at, updated_at, applied_at
   FROM batch_job_items";
 
 fn load_items(connection: &rusqlite::Connection, job_id: &str) -> Result<Vec<BatchJobItem>> {
@@ -751,6 +753,26 @@ pub fn get_job(root: &Path, job_id: &str) -> Result<BatchJob> {
     load_job(&generation::open_database(root)?, job_id)
 }
 
+pub fn mark_video_applied(root: &Path, item_id: &str, local_file: &str) -> Result<()> {
+    let connection = generation::open_database(root)?;
+    let changed = connection
+        .execute(
+            "UPDATE batch_job_items
+                SET applied_at = ?3
+              WHERE item_id = ?1 AND local_file = ?2
+                AND status = 'completed' AND applied_at IS NULL
+                AND job_id IN (
+                  SELECT job_id FROM batch_jobs WHERE job_type = 'generation'
+                )",
+            params![item_id, local_file, now()],
+        )
+        .map_err(|e| AppError::new("database", e.to_string()))?;
+    if changed == 0 {
+        return Err(AppError::new("conflict", "批量视频结果状态已变化"));
+    }
+    Ok(())
+}
+
 pub fn cancel_job(root: &Path, job_id: &str) -> Result<BatchJob> {
     let connection = generation::open_database(root)?;
     let stamp = now();
@@ -1136,6 +1158,73 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::tempdir;
+
+    #[test]
+    fn completed_legacy_batch_items_are_not_replayed_and_new_items_are_marked_once() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+        let metadata = root.join(".drama-craft");
+        fs::create_dir_all(&metadata).unwrap();
+        let old = rusqlite::Connection::open(metadata.join("generations.sqlite3")).unwrap();
+        old.execute_batch(
+            "CREATE TABLE batch_jobs (
+               job_id TEXT PRIMARY KEY, job_type TEXT NOT NULL, name TEXT NOT NULL,
+               document TEXT NOT NULL, status TEXT NOT NULL, scheduled_at TEXT NOT NULL,
+               created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+             );
+             CREATE TABLE batch_job_items (
+               item_id TEXT PRIMARY KEY, job_id TEXT NOT NULL, shot_id TEXT NOT NULL,
+               shot_title TEXT NOT NULL, status TEXT NOT NULL, prompt TEXT NOT NULL,
+               duration INTEGER NOT NULL, resolution TEXT NOT NULL, seed INTEGER,
+               image_refs TEXT NOT NULL, audio_refs TEXT NOT NULL,
+               generation_task_id TEXT, submitted_at TEXT, local_file TEXT, error TEXT,
+               sort_order INTEGER NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+             );
+             INSERT INTO batch_jobs VALUES
+               ('old-job','generation','旧任务','01.md','completed','2026-01-01',
+                '2026-01-01','2026-01-02');
+             INSERT INTO batch_job_items VALUES
+               ('old-item','old-job','S001','第一镜','completed','提示词',5,'480p',NULL,
+                '[]','[]',NULL,NULL,'old.mp4',NULL,0,'2026-01-01','2026-01-02');",
+        )
+        .unwrap();
+        drop(old);
+
+        let migrated = get_job(root, "old-job").unwrap();
+        assert_eq!(migrated.items[0].applied_at.as_deref(), Some("2026-01-02"));
+        assert!(mark_video_applied(root, "old-item", "old.mp4").is_err());
+
+        let new_job = create_job(
+            root,
+            CreateBatchJobInput {
+                job_type: "generation".into(),
+                name: "新任务".into(),
+                document: "01.md".into(),
+                delay_hours: 0,
+                items: vec![sample_item("S001")],
+            },
+        )
+        .unwrap();
+        let item_id = &new_job.items[0].item_id;
+        let connection = generation::open_database(root).unwrap();
+        connection
+            .execute(
+                "UPDATE batch_job_items SET status = 'completed', local_file = 'new.mp4'
+                  WHERE item_id = ?1",
+                [item_id],
+            )
+            .unwrap();
+        drop(connection);
+        assert!(get_job(root, &new_job.job_id).unwrap().items[0]
+            .applied_at
+            .is_none());
+        assert!(mark_video_applied(root, item_id, "wrong.mp4").is_err());
+        mark_video_applied(root, item_id, "new.mp4").unwrap();
+        assert!(get_job(root, &new_job.job_id).unwrap().items[0]
+            .applied_at
+            .is_some());
+        assert!(mark_video_applied(root, item_id, "new.mp4").is_err());
+    }
 
     fn sample_item(shot: &str) -> BatchJobItemInput {
         BatchJobItemInput {

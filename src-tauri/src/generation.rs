@@ -116,6 +116,7 @@ pub(crate) fn open_database(root: &Path) -> Result<Connection> {
                submitted_at TEXT,
                local_file TEXT,
                error TEXT,
+               applied_at TEXT,
                sort_order INTEGER NOT NULL,
                created_at TEXT NOT NULL,
                updated_at TEXT NOT NULL
@@ -129,6 +130,31 @@ pub(crate) fn open_database(root: &Path) -> Result<Connection> {
         "ALTER TABLE batch_job_items ADD COLUMN submitted_at TEXT",
         [],
     );
+    let has_applied_at = connection
+        .prepare("PRAGMA table_info(batch_job_items)")
+        .and_then(|mut statement| {
+            statement
+                .query_map([], |row| row.get::<_, String>(1))?
+                .collect::<std::result::Result<Vec<_>, _>>()
+        })
+        .map_err(|e| AppError::new("database", e.to_string()))?
+        .iter()
+        .any(|column| column == "applied_at");
+    if !has_applied_at {
+        connection
+            .execute_batch(
+                "BEGIN;
+                   ALTER TABLE batch_job_items ADD COLUMN applied_at TEXT;
+                   UPDATE batch_job_items
+                      SET applied_at = updated_at
+                    WHERE status = 'completed'
+                      AND job_id IN (
+                        SELECT job_id FROM batch_jobs WHERE job_type = 'generation'
+                      );
+                   COMMIT;",
+            )
+            .map_err(|e| AppError::new("database", e.to_string()))?;
+    }
     let _ = connection.execute(
         "ALTER TABLE generations ADD COLUMN image_refs TEXT NOT NULL DEFAULT '[]'",
         [],

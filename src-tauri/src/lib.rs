@@ -896,6 +896,17 @@ fn sync_batch_jobs(state: State<Sessions>, handle: String) -> Result<Vec<batch::
     with_root(&state, &handle, batch::sync_jobs)
 }
 #[tauri::command]
+fn mark_batch_video_applied(
+    state: State<Sessions>,
+    handle: String,
+    item_id: String,
+    local_file: String,
+) -> Result<()> {
+    with_root(&state, &handle, |root| {
+        batch::mark_video_applied(root, &item_id, &local_file)
+    })
+}
+#[tauri::command]
 async fn advance_batch_jobs(
     app: tauri::AppHandle,
     state: State<'_, Sessions>,
@@ -958,6 +969,7 @@ pub fn run() {
             cancel_batch_job,
             cancel_batch_job_item,
             sync_batch_jobs,
+            mark_batch_video_applied,
             advance_batch_jobs,
             advance_audio_jobs
         ])
