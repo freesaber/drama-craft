@@ -37,6 +37,7 @@ jobs:
           }
 
       - run: npm ci
+      - run: npm run ffmpeg:download
       - run: npm test
       - run: npm run docs:check
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
