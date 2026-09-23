@@ -1,0 +1,54 @@
+name: Release Windows installer
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Verify tag matches application version
+        shell: pwsh
+        run: |
+          $packageVersion = (Get-Content package.json | ConvertFrom-Json).version
+          $tauriVersion = (Get-Content src-tauri/tauri.conf.json | ConvertFrom-Json).version
+          $expectedTag = "v$packageVersion"
+          if ($tauriVersion -ne $packageVersion) {
+            throw "package.json ($packageVersion) and tauri.conf.json ($tauriVersion) versions differ"
+          }
+          if ("${{ github.ref_name }}" -ne $expectedTag) {
+            throw "Tag ${{ github.ref_name }} does not match application version $expectedTag"
+          }
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run docs:check
+      - run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+      - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: DramaCraft ${{ github.ref_name }}
+          releaseBody: Download the Windows NSIS installer from the assets below.
+          generateReleaseNotes: true
+          releaseDraft: false
+          prerelease: false

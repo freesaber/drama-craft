@@ -126,9 +126,8 @@ fn rejects_traversal_reserved_names_and_overwrites() {
     assert!(agents.contains(
         "The target video uses [replace with the visual style confirmed with the user, written in concise English]."
     ));
-    assert!(agents.contains(
-        "Maintain that style and the rendering of <Picture 1> throughout the video."
-    ));
+    assert!(agents
+        .contains("Maintain that style and the rendering of <Picture 1> throughout the video."));
     assert!(!agents.contains("禁止转成 3D、写实或其他未确认风格"));
     assert!(agents.contains("删掉破折号不够"));
     assert!(agents.contains("不要用破折号串联动作或代替正常标点"));

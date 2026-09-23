@@ -40,6 +40,10 @@ npm run tauri build -- --no-bundle
 
 最后一条命令生成 Windows 可执行文件；`npm run tauri build` 生成 NSIS 安装包。依赖锁文件纳入版本管理。
 
+## 发布安装包
+
+版本号同时维护在 `package.json` 和 `src-tauri/tauri.conf.json`。向 GitHub 推送与版本号一致的 tag（例如当前 `v0.1.0`）后，`Release Windows installer` 工作流会先运行测试和格式检查，再构建 Windows NSIS 安装包，并把 `.exe` 上传到对应的 GitHub Release。tag 与应用版本不一致时发布会明确失败，避免错误标记安装包。
+
 ## 使用方式
 
 1. 点击“创建项目”，选择父目录和项目名称。声音目录会自动填入客户端内置样本，可在资源管理器中打开，也可改选自己的目录；角色目录可留空。指定角色目录时，请直接用角色名命名文件，后续生成短剧剧本会把文件名作为角色名。

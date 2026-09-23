@@ -565,7 +565,11 @@ pub fn rename_project(root: &Path, name: &str, rename_folder: bool) -> Result<Pa
     let (_, metadata_file) = metadata_paths(&root)?;
     let mut metadata: ProjectMeta = serde_json::from_slice(&fs::read(&metadata_file)?)?;
     metadata.name = name.to_owned();
-    atomic_write(&metadata_file, &serde_json::to_vec_pretty(&metadata)?, false)?;
+    atomic_write(
+        &metadata_file,
+        &serde_json::to_vec_pretty(&metadata)?,
+        false,
+    )?;
     if !rename_folder {
         return Ok(root);
     }
