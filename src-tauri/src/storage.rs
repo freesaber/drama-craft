@@ -1106,25 +1106,21 @@ GPT附件：**图片1＝场景母版（`01 素材_场景.png`）；图片2＝角
 **视频提示词｜duration=5，resolution=480p横**
 
 \```text
-<Picture 1> is the first frame of [Shot 1]。
-<Picture 2>：角色A的外貌与服饰参考图。
-<Picture 3>：角色B的外貌与服饰参考图。
-<Picture 4>：内门跟班群像的外貌与服饰参考图。
-
-<Subject 1>：角色A，外貌与服饰来自<Picture 2>。
-<Subject 2>：角色B，外貌与服饰来自<Picture 3>。
-<Subject 3>：远景中的内门跟班群像，外貌与服饰来自<Picture 4>。
-<Audio 1> is the voice-timbre reference for <Subject 1> (S1), containing a spoken Chinese vocal layer. Do not copy the source dialogue.
+<Picture 1> is the first frame of [Shot 1].
+<Subject 1> is the young apprentice in <Picture 2>, with a blue-gray work robe and a worn cloth bag.
+<Subject 2> is the other young apprentice in <Picture 3>, with a light-cyan work outfit and dark wrist guards.
+<Subject 3> is the group of attendants in <Picture 4>, wearing matching dark work robes.
+<Audio 1> is the voice-timbre reference for <Subject 1> (S1). Do not copy the source dialogue.
 
 detailed_description:
 The target video uses [replace with the visual style confirmed with the user, written in concise English]. Maintain that style and the rendering of <Picture 1> throughout the video.
 
 [Shot 1] The shot begins from <Picture 1>, preserving its scene, lighting, and opening composition. The camera remains fixed, with no zoom or cuts.
 
-0—3.5秒：<Subject 1>（角色A）手指指着<Subject 2>（角色B），表情愤怒。<Subject 1> (S1)参考<Audio 1>的音色在画内说（暴躁训斥）：<d>[Chinese] 你又迟到了！</d> <Subject 2>低头点头，保持沉默；<Subject 3>仍立在远景。
-3.5—5秒：<Subject 1>闭口转身走开；<Subject 2>缓缓抬头。
+From 0 to 3.5 seconds, <Subject 1> points at <Subject 2> with an angry expression. <Subject 1> (S1) speaks on screen in an irritated voice, using the timbre of <Audio 1>: <d>[Chinese] 你又迟到了！</d> <Subject 2> lowers their head and nods silently; <Subject 3> remains in the background.
+From 3.5 to 5 seconds, <Subject 1> closes their mouth and turns away. <Subject 2> slowly raises their head.
 
-无字幕或水印。
+No subtitles or watermark.
 
 overall_soundscape:
 Soft indoor room tone continues throughout, quieter than the dialogue.
@@ -1153,45 +1149,44 @@ N/A
 > - 同一作品沿用已确认的核心风格；镜头仍可根据剧情调整景别、光线和气氛。写提示词前核对本镜参考素材，避免新增与素材冲突的风格词。
 
 > **H3 Ref2VA 主体与音色引用（逐条视频请求独立定义）**：
-> - 本模板采用官方标签语义的简化格式，保留中文动作时间线，便于编辑。它不是完整官方六节英文格式；不能保证消除串音。官方原文：https://raw.githubusercontent.com/MiniMax-AI/MiniMax-H3/main/skills/h3-prompt-writing/references/ref-en.txt 。完整格式依次为 `subject_definitions`、`summary`、`retention_analysis`、`detailed_description`、`overall_soundscape`、`non_diegetic_music`，正文英文，台词与画面文字保留原语言。
-> - `<Picture N>` 是上传图片引用；`<Subject N>` 是从参考素材中指定的可见主体，可为人物、动物、群像、物件或场景。本模板要求在实际发送给 H3 的视频提示词代码块内，先逐行写明所有上传图片的编号与用途，包括首帧、角色图、场景图和群像图；不能只在代码块外的上传映射表中说明。然后定义 Subject 并引用相应图片，例如 `<Picture 2>：秦墨外貌与服饰参考图。`、`<Subject 1>：秦墨，外貌与服饰来自<Picture 2>。`。这是便于阅读的中文简化约定；官方完整格式允许仅在 Subject 定义中引用角色参考图。每个需要持续追踪的主体有稳定标签；首次出场说明位置与特征，后续动作继续引用同一标签。
-> - Subject 不是上传素材，不添加 `ref_subject_N` 参数或 Subject 映射行。原上传表仍使用 `ref_image_0` → `<Picture 1>`、`ref_audio_0` → `<Audio 1>`；一个 Subject 可引用多张图片，一张图片也可定义多个主体。首帧 GPT 附件的一图一文件规则不变。
-> - `(S1)`、`(S2)` 是本条目标视频的发声者编号，按实际首次发声顺序分配；无发声角色不分配。它与项目镜号 `S001`、角色 ID `C001`、Subject 编号及 Audio 编号分别编号，无须数字相同。同一视频内部切镜、画内转画外仍沿用同一发声者 ID；下一条独立请求重新定义。
-> - 标签定义行遵循官方格式并使用英文；不得将 `<Audio N>` 定义行写成中文。例如 `<Audio 1> is the voice-timbre reference for <Subject 2> (S1).`。每句台词处仍可用中文动作描述，例如 `<Subject 2> (S1)参考<Audio 1>的音色在画内说（语气）：<d>[Chinese] 台词。</d>`。多人发声分别绑定，不能靠素材排列顺序猜测音色归属。只借音色时明确不复制样本原对白，不把完整台词重复写进定义、音效或总结。
-> - 没有可见主体的系统声或旁白，用稳定名称、声音描述与 `(Sx)` 绑定 Audio，不虚构 Subject 或参考图；其 Audio 定义仍用英文，例如 `<Audio 2> is the voice-timbre reference for the off-screen system voice (S2).`，发声写 `提示系统(S2)参考<Audio 2>在画外播报：<d>[Chinese] 通道已开启。</d>`。若声音属于已有可见主体，即使画外发声也保留其 `<Subject N> (Sx)`。
-> - 内心独白标明“画外内心独白”，并说明对应可见角色嘴唇保持闭合。英文完整格式使用 `says in an off-screen voiceover`。不要把主体 ID、情绪、动作或音色说明放进 `<d>`。
-> - `<d>[Chinese] 台词</d>` 必须配对闭合；`<Picture N>`、`<Subject N>`、`<Audio N>`、`<Video N>` 是引用标签，没有结束标签。不要在 `</d>` 后追加 Audio 充当封口，也不添加 VOICE FENCE、NO SPEECH、END OF SPEECH 等自创控制标记。正常换行、自然语言动作即可；这不代表模型会严格执行声音边界。
-> - 全镜无台词时不编造发声者 ID、台词或配音参考；仍保留需要的 Subject 和物理环境音描述。非语言人声如笑声可按剧情明确指定主体，不能把一切人声都禁止。
+> - 实际发送给 H3 的视频提示词中，标签定义、动作、运镜、音效描述使用英文；中文对白只保留在 `<d>[Chinese] ...</d>` 中，可见的中文文字可保留原文。剧本标题、角色表、故事走向、首帧图片提示词等项目文档仍可使用中文。本模板保留 `detailed_description` 等精简结构，不等同于官方六节完整格式；真实生成效果仍需验证。官方原文：https://raw.githubusercontent.com/MiniMax-AI/MiniMax-H3/main/skills/h3-prompt-writing/references/ref-en.txt 。
+> - `<Picture N>` 仍对应上传映射表的图片编号。首帧图是具体画面锚点，单独定义 `<Picture 1> is the first frame of [Shot 1].`，并在镜头开头引用。某张图片若只提供人物、场景、服装或道具的外观，不为它额外写独立 `<Picture N>` 定义行；直接在相应 Subject 定义中写来源，例如 `<Subject 1> is the young apprentice in <Picture 2>, with a blue-gray robe and a worn cloth bag.`。若图片本身还充当关键帧、尾帧或分镜构图锚点，才单独定义它的用途。
+> - 每个需要追踪的可见主体使用稳定的 `<Subject N>`，定义其身份、外观特征和参考图片；一张图片可以提供多个 Subject，一个 Subject 也可以综合多张图片。视频正文用 `<Subject N>` 指代已定义的人物或物件，在首次出现时说明画面位置与动作，不反复插入中文人名。人物中文名保留在代码围栏外的角色绑定表、素材映射和故事走向中；若姓名确实被说出或显示在画面中，保留在相应台词或可见文字里。
+> - Subject 不是上传素材，不添加 `ref_subject_N` 参数或 Subject 映射行。上传表仍用 `ref_image_0` → `<Picture 1>`、`ref_audio_0` → `<Audio 1>`，编号与视频提示词一致。首帧 GPT 附件的一图一文件规则不变。
+> - `(S1)`、`(S2)` 是本条视频的实际发声者编号，按首次发声顺序分配；无发声角色不分配。它与镜号、角色 ID、Subject 编号及 Audio 编号分别编号。切镜或画内转画外时沿用同一发声者 ID；下一条独立请求重新定义。
+> - Audio 定义使用官方英文句式，例如 `<Audio 1> is the voice-timbre reference for <Subject 2> (S1).`。只借音色时明确不复制样本原对白；每句台词在对应镜头动作中再次引用 `<Audio N>`，例如 `<Subject 2> (S1) speaks on screen in a firm voice, using the timbre of <Audio 1>: <d>[Chinese] 台词。</d>`。多人发声分别绑定，不能靠素材顺序推测音色归属。
+> - 没有可见主体的系统声或旁白，用稳定的英文声音描述和 `(Sx)` 绑定 Audio，不虚构 Subject，例如 `<Audio 2> is the voice-timbre reference for the off-screen system voice (S2).`。画外发声正文也用英文描述；若声音属于已有可见主体，继续使用其 `<Subject N> (Sx)`。
+> - 内心独白写明 off-screen voiceover，并说明可见角色闭口。`<d>[Chinese] 台词。</d>` 成对闭合；`<Picture N>`、`<Subject N>`、`<Audio N>`、`<Video N>` 是引用标签，没有结束标签。不要增加自创控制标记。无台词镜头不编造 Audio 或发声者 ID。
 
 > **视频提示词画面与发声规则（必须遵守）**：
 > - 清楚区分动作描述与实际台词，按上述 Subject、发声者 ID、Audio 绑定规则写明谁说什么。格式正确仍需实际生成验证，不能把串音直接归因为中文或某一种标点。
 > - **只写镜头能拍到、耳朵能听到的东西**：场景与道具状态、人物动作与走位、脸上和手上的可见变化、光线与摄影机行为、环境音效。不要写小说作者对读者的讲解。
-> - **不要用破折号串联动作或代替正常标点。** `起始—结束秒` 中表示时间范围的单个 `—` 保留；视频提示词正文默认不用 `—` 或 `——` 分隔连续动作、补充说明、转折或因果，应改用逗号、句号、分号和完整句，必要时补出动作主体及先后关系。人物台词只有确实表现突然中断时才可偶尔使用破折号，不能把它当作节奏标点反复出现。
+> - **不要用破折号串联动作或代替正常标点。** 视频提示词正文用英文 `From X to Y seconds, ...` 标示时间段；不用 `—` 或 `——` 分隔动作、补充说明、转折或因果，应改用逗号、句号、分号和完整句，必要时补出动作主体及先后关系。人物台词只有确实表现突然中断时才可偶尔使用破折号，不能把它当作节奏标点反复出现。
 > - **错误·破折号串动作**：`0—3秒：秦墨抬手——掌心亮起蓝光——石门随即打开。`
-> - **正确·自然标点**：`0—3秒：秦墨抬起右手，掌心亮起蓝光。蓝光扫过石门后，石门向两侧打开。`
-> - **`### 故事走向` 可以写心理、回忆、设定、因果。** 写视频提示词时必须翻译成可见动作，或交给角色发出；禁止把故事走向里的解释句原样搬进 `起始—结束秒`。
+> - **正确·自然标点**：`From 0 to 3 seconds, <Subject 1> raises his right hand. Blue light appears in his palm, sweeps across the stone gate, and the gate opens to both sides.`
+> - **`### 故事走向` 可以写心理、回忆、设定、因果。** 写视频提示词时必须翻译成可见动作，或交给角色发出；禁止把故事走向里的解释句原样搬进英文动作时间段。
 > - **关键因果不能只留在故事走向里**：按「叙事清晰与单集容量」核对信息与镜号。删去小说说明后，必须仍有能传达必要信息的画面证据或台词；不能用皱眉、握拳等泛化反应代替具体事实。
 > - **删掉破折号不够。** 「动作——解释」里，破折号只是记号。把「——」改成逗号或句号，但留下「仿佛在回忆某件往事」「东西还在，它真的没有消失」「那是兴奋和难以置信」「这在以前绝不可能」「即使前路再难，他也决不后退」这类句子，模型照样会念。禁止的是说明本身，不是某个标点。
 > - **禁止出现的内容**（无论有没有破折号）：观众看不见的心理分析、回忆内容、设定注解、作者评论；用「仿佛…」「心中涌起…」「他能感受到…」「那是…」「这在以前…」「即使…他也…」带出的讲解；抽象情绪后面再跟一句解释。
-> - **需要交代的信息必须有发声主体**：此要求适用于选择用语言传达的信息；画面已清楚表达的事实不必再念一遍。需用语言补足时，让画面中的角色画内说出，或标明为内心独白（画外、不张嘴）。必须写清角色名、画内或画外、使用 `<Audio N>`、语气，台词放进 `<d>[Chinese] …</d>`。没有主体的叙述不能当台词用。
+> - **需要交代的信息必须有发声主体**：此要求适用于选择用语言传达的信息；画面已清楚表达的事实不必再念一遍。需用语言补足时，让画面中的角色画内说出，或标明为内心独白（画外、不张嘴）。必须写清 `<Subject N> (Sx)` 或稳定的画外声音名称、画内或画外、使用 `<Audio N>`、语气，台词放进 `<d>[Chinese] …</d>`。没有主体的叙述不能当台词用。
 > - **错误**（后半句会被念出来）：`2—4秒：王建国猛地睁开眼，瞳孔放大，惊喜与震惊交织。东西还在，它真的没有消失。他深呼吸，努力让自己冷静下来。`
-> - **正确·只写画面**：`2—4秒：王建国猛地睁开眼，低头看自己的双手，随即又闭上眼确认；再睁开时嘴角绷出一丝笑，胸口起伏，把呼吸压稳。`
-> - **正确·信息改由角色发出（内心独白）**（已定义秦墨为 Subject 1、发声者 S1，并绑定 Audio 1）：`2—4秒：<Subject 1>（秦墨）猛地睁开眼，低头看自己的双手。<Subject 1> (S1)参考<Audio 1>的音色在画外念出（内心独白，压低、不敢相信）：<d>[Chinese] 还在……真的还在。</d> 秦墨嘴唇保持闭合。`
-> - **正确·信息改由角色发出（画内说）**（同上绑定）：`1—3秒：<Subject 1>（秦墨）握紧拳头。<Subject 1> (S1)参考<Audio 1>的音色在画内说（压着嗓子）：<d>[Chinese] 成了……真的成了。</d>`
+> - **正确·只写画面**：`From 2 to 4 seconds, <Subject 1> opens his eyes sharply and studies his hands. He briefly closes his eyes, opens them again with a small smile, and steadies his breathing.`
+> - **正确·信息改由角色发出（内心独白）**（已定义秦墨为 Subject 1、发声者 S1，并绑定 Audio 1）：`From 2 to 4 seconds, <Subject 1> opens his eyes sharply and looks at his hands. <Subject 1> (S1) speaks in a low, disbelieving off-screen voiceover, using the timbre of <Audio 1>: <d>[Chinese] 还在……真的还在。</d> <Subject 1> keeps his lips closed.`
+> - **正确·信息改由角色发出（画内说）**（同上绑定）：`From 1 to 3 seconds, <Subject 1> clenches his fist. <Subject 1> (S1) speaks on screen in a hushed voice, using the timbre of <Audio 1>: <d>[Chinese] 成了……真的成了。</d>`
 > - **写完自检**：把未包在 `<d>` 里的句子大声念一遍。若听起来像小说作者在讲解，而不是导演在说「谁做什么」，必须删掉或改成有主体的台词。
 
 > **视频提示词对白合写规则（必须遵守）**：
-> - **同一时间段的说话动作与对白合写一段**：直接包含正式角色名称、动作、画内或画外、使用 `<Audio N>` 的音色、必要语气及完整台词。
+> - **同一时间段的说话动作与对白合写一段**：直接包含 `<Subject N> (Sx)`、动作、画内或画外、使用 `<Audio N>` 的音色、必要语气及完整台词；正文用英文，台词保留中文。
 > - **禁止**先写「嘴在说话／开口训斥」等动作，再另起一段「某某画内对白（起止秒…）」重复同一时间段。
-> - **正确示例**（先定义角色A为 Subject 1、角色B为 Subject 2，Audio 1 绑定 Subject 1 的发声者 S1）：`0—3.5秒：<Subject 1>指着<Subject 2>，表情愤怒。<Subject 1> (S1)参考<Audio 1>的音色在画内说（暴躁训斥）：<d>[Chinese] 你又迟到了！</d> <Subject 2>低头点头。`
+> - **正确示例**（先定义角色A为 Subject 1、角色B为 Subject 2，Audio 1 绑定 Subject 1 的发声者 S1）：`From 0 to 3.5 seconds, <Subject 1> points angrily at <Subject 2>. <Subject 1> (S1) speaks on screen in an irritated voice, using the timbre of <Audio 1>: <d>[Chinese] 你又迟到了！</d> <Subject 2> lowers their head and nods.`
 > - **错误示例**：时间线只写「嘴在说话」，文末再单列 `王建国画内对白（0.5—3.5秒…）：<d>…</d>`。
 > - 人物对话、画内对白、同场画外对白及人物内心独白，都写进对应时间段；每句人物台词在本镜视频提示词中只出现一次。内心独白须标明为内心发声，不写成开口说话。
 > - 用户确认使用旁白时，**旁白**可在同一围栏内单独成段（写明发声区间、音色、语气、内容），也可合入时间段；人物内心独白与画外说话不能改标为旁白后单列。用户确认不使用旁白时，视频提示词中不写旁白段落，也不引用旁白音色。
 > - 章首声音安排表仍保留，与提示词中的台词和发声区间一致。
 
 > **时间分段规则**：
-> - 按本镜动作与台词节奏自行划分秒数，**不要**每镜固定套用 `0—0.5秒：静态保持`。
-> - 需要短暂起势时可写（如「0—0.5秒：保持首帧起势」），不需要则动作从 0 秒直接开始。
+> - 按本镜动作与台词节奏自行划分秒数，**不要**每镜固定套用 `From 0 to 0.5 seconds, the frame holds still.`。
+> - 需要短暂起势时可写英文提示词（如 `From 0 to 0.5 seconds, hold the opening pose.`），不需要则动作从 0 秒直接开始。
 > - 分段只服务于可见动作的起势、发展与结果；不为凑时长硬加空白停顿。
 
 ### 格式要点汇总
@@ -1209,10 +1204,10 @@ N/A
 11. `出图文件名：` 和 `视频文件名：` 独占一段，附件说明另起段落
 12. 默认文件名：`集号 首帧_S编号.png`、`集号 S编号.mp4`、`集号 素材_名称.png`
 13. 素材映射编号：`ref_image_0` → `<Picture 1>`，`ref_audio_0` → `<Audio 1>`；编号连续递增
-14. 动作时间线用 `起始—结束秒` 分段描述，**按节奏自定**，不强制前 0.5 秒静态；**人物对白合入对应时间段**，不另起「画内对白」段
+14. 动作时间线用英文 `From X to Y seconds, ...` 分段描述，**按节奏自定**，不强制前 0.5 秒静态；**人物对白合入对应时间段**，不另起「画内对白」段
 15. 台词用 `<d>[Chinese] 内容</d>` 包裹，嵌在该秒数动作句中；可见发声者使用已定义的 `<Subject N> (Sx)`，无可见主体的声音使用稳定名称与 `(Sx)`，逐句引用对应 `<Audio N>`
 16. **视频时间线只写可拍画面与有发声主体的台词**；禁止小说式说明、心理讲解、无主体叙述（删破折号留下原句同样禁止）
-17. **除 `起始—结束秒` 的时间范围外，正文默认不用 `—` 或 `——` 串动作或代替正常标点**；改用自然中文完整句，台词仅在确需表现突然中断时偶尔使用
+17. **视频提示词正文不用 `—` 或 `——` 串动作或代替正常标点**；改用自然英文完整句，台词仅在确需表现突然中断时偶尔使用
 18. 角色图由角色表管理，素材表不重复列入正式角色图；**群像进素材表**
 19. 每镜 `角色：` 字段必填，与角色表使用镜号一致
 20. **GPT附件每个 `图片N` 只对应一个文件**；多角色用分号分隔并连续编号，提示词按角色点名对应编号
@@ -1248,12 +1243,12 @@ N/A
 - [ ] **群像有素材图**：会跨镜出现的跟班、村民、看客等已进素材表并挂群像参考图；各镜 GPT 附件引用该图，不只写空名。
 - [ ] **相邻镜可承接**：切到另一主体时，必要时用远景保留上一镜关键人物与群像，避免画面突然只剩两人。
 - [ ] **视频提示词已写入已确认的画面风格**：`detailed_description` 开头已将用户确认的风格翻成简短英文，并明确沿用 `<Picture 1>` 的风格与渲染；没有遗留方括号占位文字，也没有自行预设用户未确认的风格。
-- [ ] **主体与发声者对应明确**：Subject 均能追溯到参考素材；Audio 定义与每句台词中的 Subject、(Sx) 对应一致；纯画外声音有稳定名称；本条请求内发声者编号不随切镜改变。Subject 未被写入上传映射表，所有 Picture/Audio 引用均能在该表找到，未添加不存在的素材。
+- [ ] **主体与发声者对应明确**：首帧 `<Picture 1>` 单独定义；仅用于外观参考的 Picture 不单独定义，而是在英文 Subject 定义中引用；视频正文用 Subject 标签，除台词和画面文字外使用英文；Subject 均能追溯到参考素材；Audio 定义与每句台词中的 Subject、(Sx) 对应一致；纯画外声音有稳定名称；本条请求内发声者编号不随切镜改变。Subject 未被写入上传映射表，所有 Picture/Audio 引用均能在该表找到，未添加不存在的素材。
 - [ ] **台词边界正确**：每句实际台词只有一对 `<d>...</d>`，没有引用标签的伪结束标签或句尾 Audio；内心独白明确闭口，台词未在音效等段落重复。
-- [ ] **对白合入时间段**：视频提示词里人物说话动作与台词写在同一 `起始—结束秒` 段落（含角色名、画内/画外、`<Audio N>`、语气、`<d>[Chinese]…</d>`）；禁止时间线只写「嘴在说话」再另列「某某画内对白」段。旁白允许单独成段。
+- [ ] **对白合入时间段**：视频提示词里人物说话动作与台词写在同一英文时间段（含 `<Subject N> (Sx)`、画内/画外、`<Audio N>`、语气、`<d>[Chinese]…</d>`）；禁止时间线只写「嘴在说话」再另列「某某画内对白」段。旁白允许单独成段。
 - [ ] **时间线无小说说明**：未包在 `<d>` 里的句子只描述可拍画面与音效，没有心理分析、回忆讲解、设定注解或作者评论；需要交代的信息已改成画内对白或标明的内心独白，且有发声主体。只删破折号、留下原句视为未通过。
-- [ ] **正文未滥用破折号**：除 `起始—结束秒` 的时间范围外，没有用 `—` 或 `——` 串联动作、补充说明、转折或因果；正文使用自然标点和完整句，台词中的破折号只用于确实的突然中断且不反复出现。
-- [ ] **时间分段按节奏**：不要每镜固定写 `0—0.5秒：静态保持`；需要起势再写，不需要则动作从 0 秒开始。
+- [ ] **正文未滥用破折号**：英文动作时间段没有用 `—` 或 `——` 串联动作、补充说明、转折或因果；正文使用自然标点和完整句，台词中的破折号只用于确实的突然中断且不反复出现。
+- [ ] **时间分段按节奏**：不要每镜固定写 `From 0 to 0.5 seconds, the frame holds still.`；需要起势再写，不需要则动作从 0 秒开始。
 - [ ] **复用素材文件名逐字相同**：本集引用已有角色图或场景/道具时，文件名必须与首现集（或已锁定的素材登记）完全一致，禁止改集号前缀。
 - [ ] **本集首现素材有提示词**：本集第一次出现的角色图或素材，必须在 `## 本集新增素材生成提示词` 下有可匹配的 `### 标题` 和 `text` 围栏；只在分镜总表占位不算已创建。
 
