@@ -1056,6 +1056,19 @@ export default function App() {
               </div>
               <div className="project-location-actions">
                 <button
+                  title={ui.copyPath}
+                  aria-label={ui.copyPath}
+                  onClick={() => {
+                    const documentPath = `${project.root.replace(/[\\/]+$/, "")}\\${path.replace(/^[/\\]+/, "").replaceAll("/", "\\")}`;
+                    void navigator.clipboard
+                      .writeText(documentPath.replace(/^\\\\\?\\/, ""))
+                      .then(() => setNotice(ui.pathCopied))
+                      .catch((e) => setError(errorMessage(e)));
+                  }}
+                >
+                  ⧉
+                </button>
+                <button
                   disabled={busy}
                   title={ui.openInTerminal}
                   aria-label={ui.openInTerminal}

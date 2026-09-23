@@ -2153,10 +2153,11 @@ select:focus {
 }
 .panel-heading > div:first-child {
   min-width: 0;
-  flex: 0 1 auto;
+  flex: 0 0 112px;
 }
 .chapter-nav {
   display: flex;
+  flex: 0 0 54px;
   flex-direction: column;
   align-items: stretch;
   gap: 2px;
