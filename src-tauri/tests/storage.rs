@@ -156,6 +156,11 @@ fn rejects_traversal_reserved_names_and_overwrites() {
     assert!(agents.contains("先写完分镜，再反向生成使用镜号"));
     assert!(agents.contains("使用镜号由分镜反向生成并双向一致"));
     assert!(agents.contains("视频提示词已写入已确认的画面风格"));
+    assert!(agents.contains("首帧提示词画面风格写法（硬性规则）"));
+    assert!(agents.contains("每个首帧图片提示词在画幅比后直接写出用户确认的完整核心风格词"));
+    assert!(agents.contains("附件负责锁定场景、外貌和服饰，不替代文字风格锚点"));
+    assert!(agents.contains("16:9横向单幅画面。3D写实，PBR材质，电影级光照。"));
+    assert!(agents.contains("首帧已显式写入画面风格"));
     assert!(agents.contains("H3 Ref2VA 主体与音色引用"));
     assert!(agents.contains("<Subject 1> is the young apprentice in <Picture 2>"));
     assert!(agents.contains(

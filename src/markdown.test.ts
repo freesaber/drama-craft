@@ -88,6 +88,9 @@ describe("existing Markdown compatibility", () => {
     const template = documentTemplate("episode", "03 渡口.md");
     expect(template).toContain("### 首帧生成");
     expect(template).toContain("### 视频生成");
+    expect(template).toContain(
+      "在此逐字写入用户已确认的完整核心画面风格词",
+    );
     expect(analyzeMarkdown(template).shots).toHaveLength(1);
     expect(analyzeMarkdown(template).references).toContain("03 S001.mp4");
   });
