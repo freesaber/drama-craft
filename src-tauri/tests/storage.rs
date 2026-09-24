@@ -112,9 +112,20 @@ fn rejects_traversal_reserved_names_and_overwrites() {
     let project = create_project(&root, "中文 项目", None, &voices).unwrap();
     assert!(create_project(&root, "中文 项目", None, &voices).is_err());
     assert!(project.join("剧本大纲.md").exists());
+    let dialogue = fs::read_to_string(project.join("全剧人物与对白.md")).unwrap();
+    assert!(dialogue.contains("## 全剧人物登记"));
+    assert!(dialogue.contains(
+        "| 场次 | 发言序号 | 角色ID | 角色名称 | 发声方式 | 中文台词 | 必要动作或反应 |"
+    ));
+    assert!(!dialogue.contains("<!-- drama-craft:episode:v1 -->"));
     let outline = fs::read_to_string(project.join("剧本大纲.md")).unwrap();
     assert!(outline.contains("旁白决定：待与用户确认（使用 / 不使用）"));
     let agents = fs::read_to_string(project.join("AGENTS.md")).unwrap();
+    assert!(
+        agents.find("### 第四步：先完成全剧人物与对白").unwrap()
+            < agents.find("### 第五步：逐集生成分镜剧本").unwrap()
+    );
+    assert!(agents.contains("N ≥ ceil(2 × D)"));
     assert!(agents.contains("是否使用旁白？"));
     assert!(agents.contains("旁白选择同样是全剧约束"));
     assert!(agents.contains("全剧不创建旁白角色"));
@@ -164,7 +175,7 @@ fn project_identity_moves_while_external_library_configuration_is_preserved() {
     create_document(&project, "assets/补充.md", "unknown sections\n").unwrap();
     let metadata = fs::read(project.join(".drama-craft/project.json")).unwrap();
     assert!(String::from_utf8_lossy(&metadata).contains("测试声音库"));
-    assert_eq!(scan(&project).unwrap().documents.len(), 4);
+    assert_eq!(scan(&project).unwrap().documents.len(), 5);
     assert_eq!(
         metadata,
         fs::read(project.join(".drama-craft/project.json")).unwrap()
