@@ -14,12 +14,14 @@ import {
 import { ui } from "./i18n";
 import Storyboard from "./BoardView";
 import TaskListView from "./TaskListView";
+import { retryGenerationDownload } from "./generationRetry";
 import { applySourcePatch, fieldPatch, parseStoryboard } from "./storyboard";
 import { applyBatchVideoDocument } from "./batchVideo";
 import { useUnsavedChanges } from "./useUnsavedChanges";
 import type {
   ApiProfile,
   BatchJob,
+  BatchJobItem,
   Candidate,
   DocumentEntry,
   GenerationSettings,
@@ -719,6 +721,31 @@ export default function App() {
     const jobs = await api.syncBatchJobs(project.handle);
     setBatchJobs(jobs);
   }, [project]);
+  const retryBatchGenerationDownload = useCallback(
+    async (job: BatchJob, item: BatchJobItem) => {
+      if (!project || !item.generationTaskId) return;
+      const record = await retryGenerationDownload(
+        item.generationTaskId,
+        (taskId) => api.pollGeneration(project.handle, taskId),
+      );
+      const applied = await applyBatchVideo(
+        job.document,
+        item.shotId,
+        record.localFile,
+        true,
+      );
+      if (applied) {
+        await api.markBatchVideoApplied(
+          project.handle,
+          item.itemId,
+          record.localFile,
+        );
+        appliedBatchItems.current.add(item.itemId);
+      }
+      setBatchJobs(await api.syncBatchJobs(project.handle));
+    },
+    [project, applyBatchVideo],
+  );
   useEffect(() => {
     if (!project) return;
     let cancelled = false;
@@ -1135,6 +1162,7 @@ export default function App() {
               onBack={() => setWorkspaceView("storyboard")}
               onRefresh={refreshBatchJobs}
               onJobsChange={setBatchJobs}
+              onRetryGeneration={retryBatchGenerationDownload}
             />
           ) : (
             <main className="workspace storyboard-workspace">

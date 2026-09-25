@@ -12,6 +12,10 @@ import {
   type InputAsset,
 } from "./generationInputs";
 import { Asset } from "./Preview";
+import {
+  canRetryGenerationDownload,
+  retryGenerationDownload,
+} from "./generationRetry";
 import VideoPlayerModal from "./VideoPlayerModal";
 import VideoTrimModal from "./VideoTrimModal";
 import { ui } from "./i18n";
@@ -132,6 +136,7 @@ export default function GenerationPanel({
   const [task, setTask] = useState<GenerationRecord | null>(null);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [retryingTaskId, setRetryingTaskId] = useState<string | null>(null);
   const [preview, setPreview] = useState<InputAsset | null>(null);
   const [playingVideo, setPlayingVideo] = useState<GenerationRecord | null>(
     null,
@@ -361,6 +366,27 @@ export default function GenerationPanel({
     }
   };
 
+  const retryDownload = async (record: GenerationRecord) => {
+    setRetryingTaskId(record.taskId);
+    setError("");
+    try {
+      const next = await retryGenerationDownload(record.taskId, (taskId) =>
+        api.pollGeneration(project.handle, taskId),
+      );
+      setTask(next);
+      setHistory((items) => [
+        next,
+        ...items.filter((item) => item.taskId !== next.taskId),
+      ]);
+      applied.current.add(next.taskId);
+      await useVideo(next.localFile);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setRetryingTaskId(null);
+    }
+  };
+
   return (
     <section className="shot-main generation-panel">
       <div className="shot-narrative">
@@ -527,6 +553,22 @@ export default function GenerationPanel({
                     )}
                   </div>
                   <div className="generation-history-actions">
+                    {canRetryGenerationDownload(record) && (
+                      <button
+                        type="button"
+                        disabled={
+                          busy ||
+                          submitting ||
+                          retryingTaskId !== null ||
+                          !!(task && running(task.status))
+                        }
+                        onClick={() => void retryDownload(record)}
+                      >
+                        {retryingTaskId === record.taskId
+                          ? ui.generation.retryingDownload
+                          : ui.generation.retryDownload}
+                      </button>
+                    )}
                     {record.localFile && (
                       <button
                         type="button"

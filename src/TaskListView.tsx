@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, errorMessage } from "./api";
 import { ui } from "./i18n";
+import { canRetryGenerationDownload } from "./generationRetry";
 import type { BatchJob, BatchJobItem, Project } from "./types";
 import VideoPlayerModal from "./VideoPlayerModal";
 
@@ -30,6 +31,7 @@ export default function TaskListView({
   onBack,
   onRefresh,
   onJobsChange,
+  onRetryGeneration,
 }: {
   project: Project;
   jobs: BatchJob[];
@@ -37,6 +39,7 @@ export default function TaskListView({
   onBack: () => void;
   onRefresh: () => Promise<void>;
   onJobsChange: (jobs: BatchJob[]) => void;
+  onRetryGeneration: (job: BatchJob, item: BatchJobItem) => Promise<void>;
 }) {
   const [filter, setFilter] = useState<
     "all" | "generation" | "audio" | "merge"
@@ -364,6 +367,23 @@ export default function TaskListView({
                               {ui.generation.play}
                             </button>
                           )}
+                          {detail.jobType === "generation" &&
+                            item.generationTaskId &&
+                            canRetryGenerationDownload(item) && (
+                              <button
+                                type="button"
+                                disabled={busy || acting}
+                                onClick={() =>
+                                  void run(() =>
+                                    onRetryGeneration(detail, item),
+                                  )
+                                }
+                              >
+                                {acting
+                                  ? ui.generation.retryingDownload
+                                  : ui.generation.retryDownload}
+                              </button>
+                            )}
                           {detail.jobType !== "merge" &&
                             item.status === "pending" && (
                               <button

@@ -206,6 +206,8 @@ export const ui = {
     generating: "视频生成中",
     history: "历史生成版本",
     regeneration: "重新生成",
+    retryDownload: "重试下载",
+    retryingDownload: "正在重试…",
     submittedPrompt: "本次提交的视频提示词",
     taskId: "任务 ID",
     createdAt: "创建时间",
