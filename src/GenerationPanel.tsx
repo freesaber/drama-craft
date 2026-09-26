@@ -136,6 +136,7 @@ export default function GenerationPanel({
   const [task, setTask] = useState<GenerationRecord | null>(null);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [promptCopied, setPromptCopied] = useState(false);
   const [retryingTaskId, setRetryingTaskId] = useState<string | null>(null);
   const [preview, setPreview] = useState<InputAsset | null>(null);
   const [playingVideo, setPlayingVideo] = useState<GenerationRecord | null>(
@@ -161,6 +162,7 @@ export default function GenerationPanel({
 
   useEffect(() => {
     setReviewOpen(false);
+    setPromptCopied(false);
   }, [card.id, document]);
 
   const imageInputs = useMemo(
@@ -394,7 +396,23 @@ export default function GenerationPanel({
           <section className="board-field generation-prompt-field">
             <div className="generation-prompt-heading">
               <span>{ui.board.videoPrompt}</span>
-              <small>{ui.generation.promptEditOnSubmit}</small>
+              <button
+                type="button"
+                disabled={!card.fields.videoPrompt.value}
+                onClick={() => {
+                  void navigator.clipboard
+                    .writeText(card.fields.videoPrompt.value)
+                    .then(() => {
+                      setPromptCopied(true);
+                      window.setTimeout(() => setPromptCopied(false), 1500);
+                    })
+                    .catch((e) => setError(errorMessage(e)));
+                }}
+              >
+                {promptCopied
+                  ? ui.generation.promptCopied
+                  : ui.generation.copyPrompt}
+              </button>
             </div>
             <div
               className="generation-prompt-readonly"

@@ -185,7 +185,8 @@ export const ui = {
       "勾选本次提交的素材；首帧必须提交。取消素材后，后续 Picture / Audio 标签会连续重排，右侧仅影响本次请求，不改写 Markdown。",
     regenerationReviewHint:
       "素材按当前分镜完整列出，勾选状态来自这条提交历史；首帧必须提交。调整勾选后，Picture / Audio 标签会连续重排，右侧仅影响本次请求。",
-    promptEditOnSubmit: "只读 · 生成时可编辑",
+    copyPrompt: "复制",
+    promptCopied: "已复制",
     firstFrameLocked: "Picture 1 · 首帧必须提交",
     renumberedPicture: (before: number, after: number) =>
       before === after

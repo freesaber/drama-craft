@@ -204,8 +204,16 @@ export default function BoardView({
             onClick={() => select(index)}
           >
             <header className="shot-card-heading">
-              <span className="shot-number">{card.id}</span>
-              <div className="shot-title">{field(card, "title")}</div>
+              <div className="shot-identity">
+                <span className="shot-number">{card.id}</span>
+                <div className="shot-title">{field(card, "title")}</div>
+              </div>
+              <div
+                className={`shot-story ${card.fields.story.value.trim() ? "" : "is-empty"}`}
+                title={card.fields.story.value.trim() || ui.board.emptyStory}
+              >
+                {card.fields.story.value.trim() || ui.board.emptyStory}
+              </div>
               <div
                 className="shot-actions"
                 onClick={(event) => event.stopPropagation()}

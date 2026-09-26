@@ -446,6 +446,12 @@
   background: #fcfdf9;
   border-bottom: 1px solid #e6ebdf;
 }
+.shot-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 220px;
+}
 .shot-number {
   color: #47653a;
   background: #eaf0e3;
@@ -471,6 +477,20 @@
 }
 .shot-title input:hover {
   border-color: #d7dfd6;
+}
+.shot-story {
+  flex: 1;
+  min-width: 0;
+  padding: 7px;
+  line-height: 1.5;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow-wrap: anywhere;
+}
+.shot-story.is-empty {
+  color: #97a390;
 }
 .shot-actions {
   display: flex;
@@ -612,10 +632,9 @@
   justify-content: space-between;
   gap: 12px;
 }
-.generation-prompt-heading small {
-  color: #97a390;
-  font-size: 10px;
-  font-weight: 400;
+.generation-prompt-heading button {
+  padding: 3px 10px;
+  font-size: 11px;
 }
 .generation-prompt-readonly {
   height: 300px;

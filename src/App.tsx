@@ -399,17 +399,27 @@ export default function App() {
             replaceDocument(path, disk);
             setNotice(ui.externalReloaded);
           }
-        } else if (!automatic) setNotice(ui.saved);
+        }
       } catch (e) {
         if (dirty) setConflict(true);
         throw e;
       }
     });
-  const callbacks = useRef({ save, refresh });
-  callbacks.current = { save, refresh };
+  const refreshIfChanged = async () => {
+    if (!project || !path || !snapshot || busyRef.current) return;
+    try {
+      const disk = await api.read(project.handle, path);
+      if (disk.hash !== snapshot.hash) await refresh(true);
+    } catch (e) {
+      if (dirtyRef.current) setConflict(true);
+      else setError(errorMessage(e));
+    }
+  };
+  const callbacks = useRef({ save, refreshIfChanged });
+  callbacks.current = { save, refreshIfChanged };
   useEffect(() => {
     const focus = () => {
-      if (!busyRef.current) void callbacks.current.refresh(true);
+      void callbacks.current.refreshIfChanged();
     };
     const key = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
