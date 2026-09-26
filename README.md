@@ -42,7 +42,7 @@ npm run tauri build -- --no-bundle
 
 ## 发布安装包
 
-版本号同时维护在 `package.json` 和 `src-tauri/tauri.conf.json`。向 GitHub 推送与版本号一致的 tag（例如当前 `v0.1.0`）后，`Release Windows installer` 工作流会先运行测试和格式检查，再构建 Windows NSIS 安装包，并把 `.exe` 上传到对应的 GitHub Release。tag 与应用版本不一致时发布会明确失败，避免错误标记安装包。
+发布前同步更新 `package.json`、`package-lock.json`（顶层及根包版本）和 `src-tauri/tauri.conf.json`，提交这些修改后，再向 GitHub 推送指向该提交且与应用版本一致的 tag（例如 `0.1.6` 对应 `v0.1.6`）。`Release Windows installer` 工作流会先运行测试和格式检查，再构建 Windows NSIS 安装包，并把 `.exe` 上传到对应的 GitHub Release。tag 与应用版本不一致时发布会明确失败，避免错误标记安装包。若 tag 已指向版本号错误的提交，仅重跑旧任务不会包含后续修复；需要让发布 tag 指向修复后的提交再触发构建。
 
 ## 使用方式
 
