@@ -481,7 +481,7 @@
 .shot-story {
   flex: 1;
   min-width: 0;
-  padding: 7px;
+  padding: 0 7px;
   line-height: 1.5;
   overflow: hidden;
   display: -webkit-box;
@@ -834,10 +834,20 @@
   background: #f2f7ee;
   border-color: #cdddc4;
 }
+.generation-history article > div:first-child {
+  min-width: 0;
+}
 .generation-history article strong,
 .generation-history article small {
   display: block;
   font-size: 10px;
+}
+.generation-history article small.generation-error {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  overflow-wrap: anywhere;
 }
 .generation-history article small {
   margin-top: 3px;
