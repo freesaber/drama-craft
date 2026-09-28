@@ -116,8 +116,10 @@ fn rejects_traversal_reserved_names_and_overwrites() {
     let dialogue = fs::read_to_string(project.join("全剧人物与对白.md")).unwrap();
     assert!(dialogue.contains("## 全剧人物登记"));
     assert!(dialogue.contains(
-        "| 场次 | 发言序号 | 角色ID | 角色名称 | 发声方式 | 中文台词 | 必要动作或反应 |"
+        "| 镜号 | 预计时长（秒） | 角色ID | 角色名称 | 发声方式 | 中文台词 | 必要动作或反应 |"
     ));
+    assert!(dialogue.contains("每镜预计时长为 1—15 秒"));
+    assert!(!dialogue.contains("| 场次 |"));
     assert!(!dialogue.contains("<!-- drama-craft:episode:v1 -->"));
     let outline = fs::read_to_string(project.join("剧本大纲.md")).unwrap();
     assert!(outline.contains("旁白决定：待与用户确认（使用 / 不使用）"));
@@ -128,6 +130,9 @@ fn rejects_traversal_reserved_names_and_overwrites() {
             < agents.find("### 第五步：逐集生成分镜剧本").unwrap()
     );
     assert!(agents.contains("N ≥ ceil(2 × D)"));
+    assert!(agents.contains("S 镜号是一条 1—15 秒的独立视频生成请求"));
+    assert!(agents.contains("不能把一整场对话直接标成一个 S 镜号"));
+    assert!(agents.contains("有效字数必须从已写出的台词逐行重算"));
     assert!(agents.contains("是否使用旁白？"));
     assert!(agents.contains("旁白选择同样是全剧约束"));
     assert!(agents.contains("全剧不创建旁白角色"));
