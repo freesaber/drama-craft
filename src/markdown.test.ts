@@ -58,13 +58,13 @@ describe("existing Markdown compatibility", () => {
     expect(result.shots).toHaveLength(2);
     expect(result.diagnostics).toHaveLength(1);
   });
-  it("sorts numbered episodes naturally after the outline and overview", () => {
+  it("sorts numbered episodes naturally after the outline and dialogue draft", () => {
     const names = [
       "10 十.md",
       "2 二.md",
       "AGENTS.md",
       "剧本大纲.md",
-      "分镜总表.md",
+      "全剧人物与对白.md",
     ];
     expect(
       sortDocuments(names.map((name) => ({ name, path: name }))).map(
@@ -72,7 +72,7 @@ describe("existing Markdown compatibility", () => {
       ),
     ).toEqual([
       "剧本大纲.md",
-      "分镜总表.md",
+      "全剧人物与对白.md",
       "2 二.md",
       "10 十.md",
       "AGENTS.md",
@@ -80,8 +80,8 @@ describe("existing Markdown compatibility", () => {
   });
   it("recognizes overview documents by basename", () => {
     expect(isOverviewDocument("剧本大纲.md")).toBe(true);
-    expect(isOverviewDocument("资料/分镜总表.md")).toBe(true);
-    expect(isOverviewDocument("01 分镜总表.md")).toBe(false);
+    expect(isOverviewDocument("资料/全剧人物与对白.md")).toBe(true);
+    expect(isOverviewDocument("01 全剧人物与对白.md")).toBe(false);
     expect(isOverviewDocument("01 共仓无根.md")).toBe(false);
   });
   it("creates a standalone episode with separate first-frame and video sections", () => {

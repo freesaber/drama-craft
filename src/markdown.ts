@@ -125,7 +125,7 @@ export function sortDocuments(documents: DocumentEntry[]): DocumentEntry[] {
   const rank = (name: string) =>
     name === "剧本大纲.md"
       ? 0
-      : name === "分镜总表.md"
+      : name === "全剧人物与对白.md"
         ? 1
         : /^\d+/.test(name)
           ? 2
@@ -138,7 +138,7 @@ export function sortDocuments(documents: DocumentEntry[]): DocumentEntry[] {
 }
 export function isOverviewDocument(path: string): boolean {
   const filename = path.split(/[\\/]/).at(-1);
-  return filename === "剧本大纲.md" || filename === "分镜总表.md";
+  return filename === "剧本大纲.md" || filename === "全剧人物与对白.md";
 }
 export function documentTemplate(
   kind: string,
@@ -148,8 +148,6 @@ export function documentTemplate(
   const title = filename.replace(/\.md$/i, "");
   if (kind === "outline")
     return `# ${title}\n\n## 故事背景\n\n## 人物与目标\n\n## 完整故事\n\n## 分集规划\n`;
-  if (kind === "table")
-    return `# ${title}\n\n| 镜号 | 集 | 镜头名 | 秒数 | 备注 |\n|---|---|---|---:|---|\n`;
   if (kind === "blank") return `# ${title}\n\n`;
   const number = /^(\d+)/.exec(title)?.[1].padStart(2, "0") ?? "01";
   return createEpisodeTemplate(title, number, defaultResolution);
