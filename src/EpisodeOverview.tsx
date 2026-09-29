@@ -1,14 +1,17 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, chooseMedia, desktop, errorMessage } from "./api";
+import { indexedGenerationPrompt, parseAssetIndex } from "./assetIndex";
 import { dialogueCharacterName, formatDialogueColumn } from "./episodeFormat";
 import { ui } from "./i18n";
 import { isProjectRelativeImage } from "./markdown";
-import type { EpisodeData, Project } from "./types";
+import type { DocumentEntry, EpisodeData, Project } from "./types";
 
 export default function EpisodeOverview({
   episode,
   project,
   document,
+  documents,
+  source,
   busy = false,
   asset,
   onMediaPlaced,
@@ -16,6 +19,8 @@ export default function EpisodeOverview({
   episode: EpisodeData;
   project: Project;
   document: string;
+  documents: DocumentEntry[];
+  source: string;
   busy?: boolean;
   asset: (
     reference: string,
@@ -27,8 +32,19 @@ export default function EpisodeOverview({
     "roles",
   );
   const [availability, setAvailability] = useState<Record<string, boolean>>({});
-  const [prompt, setPrompt] = useState<{ name: string; text: string } | null>(
-    null,
+  const [prompt, setPrompt] = useState<{
+    name: string;
+    text: string;
+    firstDocument?: string;
+    loading?: boolean;
+    error?: string;
+  } | null>(null);
+  const promptRequest = useRef(0);
+  useEffect(
+    () => () => {
+      promptRequest.current += 1;
+    },
+    [project.handle, document],
   );
   const [promptCopied, setPromptCopied] = useState(false);
   const [dialogueCopied, setDialogueCopied] = useState(false);
@@ -44,10 +60,68 @@ export default function EpisodeOverview({
     setAvailability((current) =>
       current[key] === exists ? current : { ...current, [key]: exists },
     );
-  const openPromptModal = (name: string, text: string) => {
+  const closePromptModal = () => {
+    promptRequest.current += 1;
     setPromptCopied(false);
-    setPrompt({ name, text });
+    setPrompt(null);
   };
+  const openPromptModal = async (
+    id: string,
+    name: string,
+    text: string,
+    reference: string | null,
+  ) => {
+    const request = ++promptRequest.current;
+    setPromptCopied(false);
+    setPrompt({ name, text, loading: true });
+    try {
+      const raw = await api.assetIndex(project.handle);
+      if (request !== promptRequest.current) return;
+      const index = parseAssetIndex(
+        raw,
+        documents.map((item) => item.path),
+      );
+      const matches = index.assets.filter(
+        (item) => item.id === id && item.name === name,
+      );
+      if (matches.length !== 1) {
+        setPrompt({ name, text });
+        return;
+      }
+      const firstDocument = matches[0].firstDocument;
+      if (!documents.some((item) => item.path === firstDocument)) {
+        setPrompt({
+          name,
+          text,
+          firstDocument,
+          error: ui.episodeData.indexDocumentMissing,
+        });
+        return;
+      }
+      const source =
+        firstDocument === document
+          ? { text: sourceText.current }
+          : await api.read(project.handle, firstDocument);
+      if (request !== promptRequest.current) return;
+      const found = indexedGenerationPrompt(
+        index.assets,
+        id,
+        name,
+        reference,
+        source.text,
+      );
+      setPrompt(
+        found
+          ? { name, text: found.prompt, firstDocument: found.firstDocument }
+          : { name, text, firstDocument, error: ui.episodeData.indexMismatch },
+      );
+    } catch (cause) {
+      if (request === promptRequest.current)
+        setPrompt({ name, text, error: errorMessage(cause) });
+    }
+  };
+  const sourceText = useRef(source);
+  sourceText.current = source;
   const keyboardClick = (event: React.KeyboardEvent, click: () => void) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
@@ -121,7 +195,12 @@ export default function EpisodeOverview({
             {episode.characters.map((role, index) => {
               const key = `role-${role.id}-${index}`;
               const openPrompt = () =>
-                openPromptModal(role.name, role.imagePrompt);
+                void openPromptModal(
+                  role.id,
+                  role.name,
+                  role.imagePrompt,
+                  role.image,
+                );
               const canPlace =
                 !!role.imagePrompt && isProjectRelativeImage(role.image);
               return (
@@ -178,7 +257,13 @@ export default function EpisodeOverview({
           <div role="tabpanel" className="episode-material-row">
             {materialAssets.map((item, index) => {
               const key = `asset-${item.id}-${index}`;
-              const openPrompt = () => openPromptModal(item.name, item.prompt);
+              const openPrompt = () =>
+                void openPromptModal(
+                  item.id,
+                  item.name,
+                  item.prompt,
+                  item.reference,
+                );
               const canPlace =
                 !!item.prompt && isProjectRelativeImage(item.reference);
               return (
@@ -305,13 +390,7 @@ export default function EpisodeOverview({
         )}
       </div>
       {prompt && (
-        <div
-          className="modal-backdrop"
-          onMouseDown={() => {
-            setPromptCopied(false);
-            setPrompt(null);
-          }}
-        >
+        <div className="modal-backdrop" onMouseDown={closePromptModal}>
           <section
             className="modal generation-prompt-modal"
             role="dialog"
@@ -323,23 +402,32 @@ export default function EpisodeOverview({
               type="button"
               className="modal-close"
               aria-label={ui.cancel}
-              onClick={() => {
-                setPromptCopied(false);
-                setPrompt(null);
-              }}
+              onClick={closePromptModal}
             >
               ×
             </button>
             <h2 id="generation-prompt-title">
               {prompt.name} · {ui.episodeData.generationPrompt}
             </h2>
+            {prompt.firstDocument && (
+              <p className="generation-prompt-source">
+                {ui.episodeData.firstDefinedIn}：{prompt.firstDocument}
+              </p>
+            )}
+            {prompt.error && (
+              <p className="diagnostic" role="alert">
+                {prompt.error}
+              </p>
+            )}
             <pre className="plain-prompt">
-              {prompt.text || ui.episodeData.noGenerationPrompt}
+              {prompt.loading
+                ? ui.episodeData.loadingPrompt
+                : prompt.text || ui.episodeData.noGenerationPrompt}
             </pre>
             <div className="modal-actions">
               <button
                 type="button"
-                disabled={!prompt.text}
+                disabled={!prompt.text || prompt.loading}
                 onClick={() => {
                   void navigator.clipboard.writeText(prompt.text).then(() => {
                     setPromptCopied(true);
@@ -351,13 +439,7 @@ export default function EpisodeOverview({
                   ? ui.episodeData.promptCopied
                   : ui.episodeData.copyPrompt}
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setPromptCopied(false);
-                  setPrompt(null);
-                }}
-              >
+              <button type="button" onClick={closePromptModal}>
                 {ui.confirm}
               </button>
             </div>

@@ -13,6 +13,7 @@ export function Asset({
   reference,
   refreshKey,
   hero = false,
+  compact = false,
   onAvailability,
 }: {
   project: Project;
@@ -20,6 +21,7 @@ export function Asset({
   reference: string;
   refreshKey: number;
   hero?: boolean;
+  compact?: boolean;
   onAvailability?: (exists: boolean) => void;
 }) {
   const [media, setMedia] = useState<Media | null>(null);
@@ -57,19 +59,25 @@ export function Asset({
       )
     : "";
   return (
-    <article className="asset-card">
-      <div className="asset-name" title={reference}>
-        {reference.replace(/.*[/\\]/, "")}
-      </div>
-      <div className="asset-path" title={reference}>
-        {reference}
-      </div>
+    <article className={`asset-card${compact ? " compact" : ""}`}>
+      {!compact && (
+        <>
+          <div className="asset-name" title={reference}>
+            {reference.replace(/.*[/\\]/, "")}
+          </div>
+          <div className="asset-path" title={reference}>
+            {reference}
+          </div>
+        </>
+      )}
       {error && <p className="warning-text">{error}</p>}
       {media && (
         <>
-          <span className={`asset-state ${media.exists ? "" : "missing"}`}>
-            {media.exists ? ui.available : ui.missing}
-          </span>
+          {!compact && (
+            <span className={`asset-state ${media.exists ? "" : "missing"}`}>
+              {media.exists ? ui.available : ui.missing}
+            </span>
+          )}
           {hero && !media.exists && (
             <div className="media-placeholder">
               <span>▧</span>

@@ -1363,6 +1363,11 @@
   width: min(760px, 94vw);
   position: relative;
 }
+.generation-preview .asset-card.compact {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
 .generation-preview .asset-card img,
 .generation-preview .asset-card video {
   max-height: 65vh;

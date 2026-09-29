@@ -1,17 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import Preview, { Asset } from "./Preview";
-import { analyzeMarkdown, isProjectRelativeImage, normalizeReference } from "./markdown";
+import {
+  analyzeMarkdown,
+  isProjectRelativeImage,
+  normalizeReference,
+} from "./markdown";
 import { fieldPatch } from "./storyboard";
 import { ui } from "./i18n";
 import { api, chooseMedia, desktop, errorMessage } from "./api";
 import EpisodeOverview from "./EpisodeOverview";
 import GenerationPanel from "./GenerationPanel";
-import {
-  alignResolutionOption,
-  type VideoApiOptions,
-} from "./videoWorkflows";
+import { alignResolutionOption, type VideoApiOptions } from "./videoWorkflows";
 import type {
   BoardField,
+  DocumentEntry,
   Project,
   ShotCard,
   SourceField,
@@ -54,6 +56,7 @@ export default function BoardView({
   board,
   project,
   document,
+  documents,
   refreshKey,
   busy,
   apply,
@@ -73,6 +76,7 @@ export default function BoardView({
   board: Board;
   project: Project;
   document: string;
+  documents: DocumentEntry[];
   refreshKey: number;
   busy: boolean;
   apply: (patch: SourcePatch, nextIndex?: number) => boolean;
@@ -148,6 +152,8 @@ export default function BoardView({
           episode={board.episode}
           project={project}
           document={document}
+          documents={documents}
+          source={board.source}
           busy={busy}
           asset={asset}
           onMediaPlaced={onMediaPlaced}

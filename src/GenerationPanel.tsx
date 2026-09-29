@@ -952,6 +952,7 @@ export default function GenerationPanel({
               reference={preview.reference}
               refreshKey={refreshKey}
               hero
+              compact
             />
             <div className="modal-actions">
               <button type="button" onClick={() => setPreview(null)}>

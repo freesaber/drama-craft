@@ -52,8 +52,9 @@ export default function App() {
   const [currentProjectPage, setCurrentProjectPage] = useState(1);
   const [pendingRecentRemoval, setPendingRecentRemoval] =
     useState<Recent | null>(null);
-  const [pendingRecentRename, setPendingRecentRename] =
-    useState<Recent | null>(null);
+  const [pendingRecentRename, setPendingRecentRename] = useState<Recent | null>(
+    null,
+  );
   const [renameName, setRenameName] = useState("");
   const [renameFolder, setRenameFolder] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -62,9 +63,9 @@ export default function App() {
   const [notice, setNotice] = useState("");
   const [conflict, setConflict] = useState(false);
   const [mode, setMode] = useState<"board" | "source">("board");
-  const [workspaceView, setWorkspaceView] = useState<"storyboard" | "tasks" | "assets">(
-    "storyboard",
-  );
+  const [workspaceView, setWorkspaceView] = useState<
+    "storyboard" | "tasks" | "assets"
+  >("storyboard");
   const [batchJobs, setBatchJobs] = useState<BatchJob[]>([]);
   const [showBatchDialog, setShowBatchDialog] = useState(false);
   const [showAudioBatchDialog, setShowAudioBatchDialog] = useState(false);
@@ -1155,7 +1156,12 @@ export default function App() {
               >
                 {ui.batch.tasks}
               </button>
-              <button disabled={busy} onClick={() => setWorkspaceView("assets")}>{ui.assetIndex.open}</button>
+              <button
+                disabled={busy}
+                onClick={() => setWorkspaceView("assets")}
+              >
+                {ui.assetIndex.open}
+              </button>
             </div>
           )}
           {conflict && (
@@ -1247,22 +1253,38 @@ export default function App() {
                           : ui.board.read}
                     </small>
                   </div>
-                  <div className="chapter-nav" aria-label={ui.chapterNavigation}>
+                  <div
+                    className="chapter-nav"
+                    aria-label={ui.chapterNavigation}
+                  >
                     <button
                       type="button"
-                      disabled={busy || documents.findIndex((doc) => doc.path === path) <= 0}
+                      disabled={
+                        busy ||
+                        documents.findIndex((doc) => doc.path === path) <= 0
+                      }
                       onClick={() => {
-                        const index = documents.findIndex((doc) => doc.path === path);
-                        if (index > 0) void selectDocument(documents[index - 1].path);
+                        const index = documents.findIndex(
+                          (doc) => doc.path === path,
+                        );
+                        if (index > 0)
+                          void selectDocument(documents[index - 1].path);
                       }}
                     >
                       {ui.previousChapter}
                     </button>
                     <button
                       type="button"
-                      disabled={busy || documents.findIndex((doc) => doc.path === path) < 0 || documents.findIndex((doc) => doc.path === path) >= documents.length - 1}
+                      disabled={
+                        busy ||
+                        documents.findIndex((doc) => doc.path === path) < 0 ||
+                        documents.findIndex((doc) => doc.path === path) >=
+                          documents.length - 1
+                      }
                       onClick={() => {
-                        const index = documents.findIndex((doc) => doc.path === path);
+                        const index = documents.findIndex(
+                          (doc) => doc.path === path,
+                        );
                         if (index >= 0 && index < documents.length - 1)
                           void selectDocument(documents[index + 1].path);
                       }}
@@ -1372,6 +1394,7 @@ export default function App() {
                     board={board}
                     project={project}
                     document={path}
+                    documents={documents}
                     refreshKey={refreshKey}
                     busy={busy}
                     apply={apply}
@@ -1940,7 +1963,12 @@ export default function App() {
       )}
       {pendingRecentRename && (
         <div className="modal-backdrop">
-          <section className="modal confirmation-modal" role="dialog" aria-modal="true" aria-labelledby="rename-recent-title">
+          <section
+            className="modal confirmation-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="rename-recent-title"
+          >
             <h2 id="rename-recent-title">{ui.renameProject}</h2>
             <label>
               {ui.projectName}
@@ -1959,7 +1987,10 @@ export default function App() {
               {ui.renameFolderToo}
             </label>
             <div className="modal-actions">
-              <button disabled={busy} onClick={() => setPendingRecentRename(null)}>
+              <button
+                disabled={busy}
+                onClick={() => setPendingRecentRename(null)}
+              >
                 {ui.cancel}
               </button>
               <button

@@ -24,7 +24,13 @@ export const ui = {
     checked: "已按需核对首现集表格。",
     checking: "正在核对首现集表格…",
     openFirst: "打开首现集",
-    types: { character: "角色", scene: "场景", prop: "道具", crowd: "群像", variant: "状态变体" },
+    types: {
+      character: "角色",
+      scene: "场景",
+      prop: "道具",
+      crowd: "群像",
+      variant: "状态变体",
+    },
   },
   episodeData: {
     roleTab: "角色",
@@ -48,6 +54,12 @@ export const ui = {
     copyDialogueColumn: "复制台词列",
     generationPrompt: "生成提示词",
     noGenerationPrompt: "文档中尚未填写对应的生成提示词。",
+    loadingPrompt: "正在查找首现集提示词…",
+    firstDefinedIn: "索引记录的首现文件",
+    indexMismatch:
+      "资产索引与首现集的名称或文件引用不一致；已显示本集内容，请核对索引。",
+    indexDocumentMissing:
+      "索引记录的首现文件不存在；已显示本集内容，请核对索引。",
     copyPrompt: "复制",
     promptCopied: "已复制",
     uploadImage: "上传",
