@@ -14,6 +14,7 @@ import {
 import { ui } from "./i18n";
 import Storyboard from "./BoardView";
 import TaskListView from "./TaskListView";
+import AssetLibraryView from "./AssetLibraryView";
 import { retryGenerationDownload } from "./generationRetry";
 import { applySourcePatch, fieldPatch, parseStoryboard } from "./storyboard";
 import { applyBatchVideoDocument } from "./batchVideo";
@@ -61,7 +62,7 @@ export default function App() {
   const [notice, setNotice] = useState("");
   const [conflict, setConflict] = useState(false);
   const [mode, setMode] = useState<"board" | "source">("board");
-  const [workspaceView, setWorkspaceView] = useState<"storyboard" | "tasks">(
+  const [workspaceView, setWorkspaceView] = useState<"storyboard" | "tasks" | "assets">(
     "storyboard",
   );
   const [batchJobs, setBatchJobs] = useState<BatchJob[]>([]);
@@ -1154,6 +1155,7 @@ export default function App() {
               >
                 {ui.batch.tasks}
               </button>
+              <button disabled={busy} onClick={() => setWorkspaceView("assets")}>{ui.assetIndex.open}</button>
             </div>
           )}
           {conflict && (
@@ -1173,6 +1175,16 @@ export default function App() {
               onRefresh={refreshBatchJobs}
               onJobsChange={setBatchJobs}
               onRetryGeneration={retryBatchGenerationDownload}
+            />
+          ) : workspaceView === "assets" ? (
+            <AssetLibraryView
+              project={project}
+              documents={documents}
+              onBack={() => setWorkspaceView("storyboard")}
+              onOpen={(document) => {
+                setWorkspaceView("storyboard");
+                void selectDocument(document);
+              }}
             />
           ) : (
             <main className="workspace storyboard-workspace">

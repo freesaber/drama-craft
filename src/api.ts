@@ -46,6 +46,8 @@ export const api = {
     }),
   read: (handle: string, path: string) =>
     invoke<Snapshot>("read_document", { handle, path }),
+  assetIndex: (handle: string) =>
+    invoke<string | null>("read_asset_index", { handle }),
   save: (handle: string, path: string, text: string, expectedHash: string) =>
     invoke<Snapshot>("save_document", { handle, path, text, expectedHash }),
   listDiscardedShots: (handle: string, document: string) =>

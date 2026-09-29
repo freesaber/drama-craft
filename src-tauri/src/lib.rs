@@ -252,6 +252,10 @@ fn read_document(
     with_root(&state, &handle, |root| storage::read_document(root, &path))
 }
 #[tauri::command]
+fn read_asset_index(state: State<Sessions>, handle: String) -> Result<Option<String>> {
+    with_root(&state, &handle, storage::read_asset_index)
+}
+#[tauri::command]
 fn save_document(
     app: tauri::AppHandle,
     state: State<Sessions>,
@@ -937,6 +941,7 @@ pub fn run() {
             create_project,
             scan_project,
             read_document,
+            read_asset_index,
             save_document,
             list_discarded_shots,
             set_shot_discarded,

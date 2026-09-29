@@ -92,6 +92,6 @@ describe("existing Markdown compatibility", () => {
       "在此逐字写入用户已确认的完整核心画面风格词",
     );
     expect(analyzeMarkdown(template).shots).toHaveLength(1);
-    expect(analyzeMarkdown(template).references).toContain("03 S001.mp4");
+    expect(analyzeMarkdown(template).references).toContain("03 S0001.mp4");
   });
 });

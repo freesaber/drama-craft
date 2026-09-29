@@ -112,6 +112,10 @@ fn rejects_traversal_reserved_names_and_overwrites() {
     let project = create_project(&root, "中文 项目", None, &voices).unwrap();
     assert!(create_project(&root, "中文 项目", None, &voices).is_err());
     assert!(project.join("剧本大纲.md").exists());
+    assert_eq!(
+        read_asset_index(&project).unwrap().as_deref(),
+        Some("{\n  \"schemaVersion\": 1,\n  \"assets\": []\n}\n")
+    );
     assert!(!project.join("分镜总表.md").exists());
     let dialogue = fs::read_to_string(project.join("全剧人物与对白.md")).unwrap();
     assert!(dialogue.contains("## 全剧人物登记"));
@@ -152,8 +156,14 @@ fn rejects_traversal_reserved_names_and_overwrites() {
     assert!(agents.contains("正文未滥用破折号"));
     assert!(agents.contains("需要交代的信息必须有发声主体"));
     assert!(agents.contains("时间线无小说说明"));
-    assert!(agents.contains("先样片、再一次写完剩余集"));
-    assert!(agents.contains("到目前为止的全部角色/素材登记"));
+    assert!(agents.contains("严格逐集完成正式分镜"));
+    assert!(agents.contains("写第 N 集前先读取"));
+    assert!(agents.contains("每集写完立即更新索引"));
+    assert!(!agents.contains("一次生成**全部剩余集**"));
+    assert!(agents.contains("C0001"));
+    assert!(agents.contains("A0001"));
+    assert!(agents.contains("N0001"));
+    assert!(agents.contains("S0001"));
     assert!(agents.contains("全剧验收（所有集写完后必须做）"));
     assert!(agents.contains("跨集同一素材 ID / 同一名称，文件名必须逐字相同"));
     assert!(
@@ -174,6 +184,28 @@ fn rejects_traversal_reserved_names_and_overwrites() {
         "<Subject 1> (S1) speaks on screen in an irritated voice, using the timbre of <Audio 1>:"
     ));
     assert!(agents.contains("没有可见主体的系统声或旁白"));
+}
+
+#[test]
+fn asset_index_is_optional_for_old_projects_and_rejects_links() {
+    let temp = workspace();
+    let root = root(&temp);
+    assert!(read_asset_index(&root).unwrap().is_none());
+    fs::write(
+        root.join("assets.json"),
+        "{\"schemaVersion\":1,\"assets\":[]}",
+    )
+    .unwrap();
+    assert!(read_asset_index(&root).unwrap().is_some());
+    #[cfg(windows)]
+    {
+        let other = root.join("other.json");
+        fs::write(&other, "{}").unwrap();
+        fs::remove_file(root.join("assets.json")).unwrap();
+        if std::os::windows::fs::symlink_file(&other, root.join("assets.json")).is_ok() {
+            assert_eq!(read_asset_index(&root).unwrap_err().code, "path");
+        }
+    }
 }
 #[test]
 fn project_identity_moves_while_external_library_configuration_is_preserved() {
@@ -502,21 +534,21 @@ fn external_workspace_readonly_check() {
 fn shot_discard_flags_do_not_rewrite_markdown() {
     let temp = workspace();
     let root = root(&temp);
-    create_document(&root, "01 示例.md", "# S001 测试\n").unwrap();
+    create_document(&root, "01 示例.md", "# S0001 测试\n").unwrap();
     let before = fs::read(root.join("01 示例.md")).unwrap();
     assert!(list_discarded_shots(&root, "01 示例.md")
         .unwrap()
         .is_empty());
     assert_eq!(
-        set_shot_discarded(&root, "01 示例.md", "S002", true).unwrap(),
-        vec!["S002".to_string()]
+        set_shot_discarded(&root, "01 示例.md", "S0002", true).unwrap(),
+        vec!["S0002".to_string()]
     );
     assert_eq!(
         list_discarded_shots(&root, "01 示例.md").unwrap(),
-        vec!["S002".to_string()]
+        vec!["S0002".to_string()]
     );
     assert_eq!(
-        set_shot_discarded(&root, "01 示例.md", "S002", false).unwrap(),
+        set_shot_discarded(&root, "01 示例.md", "S0002", false).unwrap(),
         Vec::<String>::new()
     );
     assert!(list_discarded_shots(&root, "01 示例.md")

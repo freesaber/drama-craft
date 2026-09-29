@@ -971,7 +971,7 @@ mod tests {
 
         let project = tempfile::tempdir().unwrap();
         let root = storage::canonical_directory(project.path()).unwrap();
-        storage::create_document(&root, "01 测试.md", "# S001 测试\n").unwrap();
+        storage::create_document(&root, "01 测试.md", "# S0001 测试\n").unwrap();
         fs::write(root.join("frame.png"), b"synthetic-image").unwrap();
         fs::write(root.join("voice.mp3"), b"synthetic-audio").unwrap();
         let submit_url = format!("http://{address}/submit");
@@ -987,7 +987,7 @@ mod tests {
             &settings,
             GenerationInput {
                 document: "01 测试.md".into(),
-                shot_id: "S001".into(),
+                shot_id: "S0001".into(),
                 prompt: "向前走".into(),
                 duration: 5,
                 resolution: "768p横(1376*768)".into(),
@@ -1007,10 +1007,10 @@ mod tests {
             tauri::async_runtime::block_on(poll(&root, &settings, &record.task_id)).unwrap();
         assert_eq!(completed.status, "completed");
         let file = completed.local_file.unwrap();
-        assert!(file.starts_with("01 S001_"), "{file}");
+        assert!(file.starts_with("01 S0001_"), "{file}");
         assert!(file.ends_with(".mp4"), "{file}");
         assert_eq!(fs::read(root.join(&file)).unwrap(), b"synthetic-video");
-        let records = history(&root, "01 测试.md", "S001").unwrap();
+        let records = history(&root, "01 测试.md", "S0001").unwrap();
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].prompt, "向前走");
         assert_eq!(records[0].image_refs, vec!["frame.png"]);

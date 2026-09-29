@@ -15,27 +15,27 @@ const template = documentTemplate("episode", "01 灯火.md");
 describe("storyboard structure", () => {
   it("reads output filenames before inline saving and attachment instructions", () => {
     const source =
-      "## S001 点灯\n\n### 首帧生成\n\n出图文件名：`01 首帧_S001.png`。保存位置：与本集文档同目录。GPT附件：**图片1＝场景（`场景.png`）**。\n\n### 视频生成\n\n视频文件名：`01 S001.mp4`。保存位置：与本集文档同目录。\n";
+      "## S0001 点灯\n\n### 首帧生成\n\n出图文件名：`01 首帧_S0001.png`。保存位置：与本集文档同目录。GPT附件：**图片1＝场景（`场景.png`）**。\n\n### 视频生成\n\n视频文件名：`01 S0001.mp4`。保存位置：与本集文档同目录。\n";
     const card = parseStoryboard(source).cards[0];
-    expect(card.fields.frameFile.value).toBe("01 首帧_S001.png");
-    expect(card.fields.videoFile.value).toBe("01 S001.mp4");
+    expect(card.fields.frameFile.value).toBe("01 首帧_S0001.png");
+    expect(card.fields.videoFile.value).toBe("01 S0001.mp4");
     expect(card.frameAssets).toEqual([
       { label: "图片1", name: "场景", reference: "场景.png" },
     ]);
     expect(edit(source, "videoFile", "新视频.mp4")).toBe(
-      source.replace("01 S001.mp4", "新视频.mp4"),
+      source.replace("01 S0001.mp4", "新视频.mp4"),
     );
   });
   it("reads video upload slots from the API mapping table", () => {
     const source = `${documentTemplate("episode", "01 灯火.md").replace(
-      "| `ref_image_0` | `<Picture 1>` | `01 首帧_S001.png` |",
-      "| `ref_image_0` | `<Picture 1>` | `01 首帧_S001.png` |\n| `ref_image_1` | `<Picture 2>` | `01 素材_苏铭.png` |\n| `ref_audio_0` | `<Audio 1>` | `F:/voices/旁白.MP3` |",
+      "| `ref_image_0` | `<Picture 1>` | `01 首帧_S0001.png` |",
+      "| `ref_image_0` | `<Picture 1>` | `01 首帧_S0001.png` |\n| `ref_image_1` | `<Picture 2>` | `01 素材_苏铭.png` |\n| `ref_audio_0` | `<Audio 1>` | `F:/voices/旁白.MP3` |",
     )}`;
     expect(parseStoryboard(source).cards[0].videoInputs).toEqual([
       {
         param: "ref_image_0",
         tag: "<Picture 1>",
-        reference: "01 首帧_S001.png",
+        reference: "01 首帧_S0001.png",
         kind: "image",
       },
       {
@@ -56,12 +56,12 @@ describe("storyboard structure", () => {
     const source = documentTemplate("episode", "01 灯火.md")
       .replace(
         "|---|---|---|---|---|",
-        "|---|---|---|---|---|\n| C001 | 苏铭 | `01 素材_苏铭.png` | `F:/voices/苏铭.mp3` | S001 |",
+        "|---|---|---|---|---|\n| C0001 | 苏铭 | `01 素材_苏铭.png` | `F:/voices/苏铭.mp3` | S0001 |",
       )
-      .replace("角色：—", "角色：C001")
+      .replace("角色：—", "角色：C0001")
       .replace(
-        "| `ref_image_0` | `<Picture 1>` | `01 首帧_S001.png` |",
-        "| `ref_image_0` | `<Picture 1>` | `01 首帧_S001.png` |\n| `ref_image_1` | `<Picture 2>` | `01 素材_苏铭.png` |",
+        "| `ref_image_0` | `<Picture 1>` | `01 首帧_S0001.png` |",
+        "| `ref_image_0` | `<Picture 1>` | `01 首帧_S0001.png` |\n| `ref_image_1` | `<Picture 2>` | `01 素材_苏铭.png` |",
       );
     const card = parseStoryboard(source).cards[0];
     expect(card.videoInputs.map((item) => item.kind)).toEqual([
@@ -72,7 +72,7 @@ describe("storyboard structure", () => {
   });
   it("extracts named GPT attachments only from the first-frame section", () => {
     const source =
-      "## S007 私粮\n\n### 首帧生成\n\n出图文件名：`01 首帧_S007.png`。保存位置：同目录。GPT附件：**图片1＝白石村寨空粮仓（`01 素材_空粮仓.png`）；图片2＝大猩猩拳师参考图（[0071 大猩猩拳师.png](<F:/角色/0071 大猩猩拳师.png>)）**。\n\n**首帧图片提示词**\n\n```text\n静态画面\n```\n\n### 视频生成\n\n`不应出现.png`\n";
+      "## S0007 私粮\n\n### 首帧生成\n\n出图文件名：`01 首帧_S0007.png`。保存位置：同目录。GPT附件：**图片1＝白石村寨空粮仓（`01 素材_空粮仓.png`）；图片2＝大猩猩拳师参考图（[0071 大猩猩拳师.png](<F:/角色/0071 大猩猩拳师.png>)）**。\n\n**首帧图片提示词**\n\n```text\n静态画面\n```\n\n### 视频生成\n\n`不应出现.png`\n";
     expect(parseStoryboard(source).cards[0].frameAssets).toEqual([
       {
         label: "图片1",
@@ -88,14 +88,14 @@ describe("storyboard structure", () => {
   });
   it("recognizes only top-level standalone markers including titleless headings", () => {
     const source =
-      "# 本集\n\nS1 起点\n\n正文\n\n## s002\n\n```md\n## S999 假标题\n```\n\n> S003 引用\n\n| S004 表格 |\n|---|\n\n这里提到 S005\n\nS006 连续正文\n不应该拆分\n\n### S007 终点\n";
+      "# 本集\n\nS1 起点\n\n正文\n\n## s002\n\n```md\n## S0999 假标题\n```\n\n> S0003 引用\n\n| S0004 表格 |\n|---|\n\n这里提到 S0005\n\nS006 连续正文\n不应该拆分\n\n### S0007 终点\n";
     const board = parseStoryboard(source);
-    expect(board.cards.map((c) => c.id)).toEqual(["S1", "S002", "S007"]);
+    expect(board.cards.map((c) => c.id)).toEqual(["S1", "S002", "S0007"]);
     expect(board.cards[1].title).toBe("");
   });
   it("retains all bytes and independent sections in source order", () => {
     const source =
-      "# 本集资料\r\n\r\n## S001 一\r\n正文\r\n\r\n## 场景资料\r\n原样保留\r\n\r\nS002 二\r\n\r\n正文\r\n\r\n# 附录\r\n";
+      "# 本集资料\r\n\r\n## S0001 一\r\n正文\r\n\r\n## 场景资料\r\n原样保留\r\n\r\nS002 二\r\n\r\n正文\r\n\r\n# 附录\r\n";
     const board = parseStoryboard(source);
     expect(
       board.sections
@@ -111,14 +111,14 @@ describe("storyboard structure", () => {
     ).toBe(source);
   });
   it("retains duplicate cards separately", () => {
-    const board = parseStoryboard("## S001 一\n\n## s001 二\n");
+    const board = parseStoryboard("## S0001 一\n\n## s0001 二\n");
     expect(board.cards).toHaveLength(2);
     expect(board.diagnostics).toHaveLength(1);
     const next = applySourcePatch(
       board.source,
       fieldPatch(board, board.cards[1].fields.title, "只修改第二张"),
     );
-    expect(next).toBe("## S001 一\n\n## s001 只修改第二张\n");
+    expect(next).toBe("## S0001 一\n\n## s0001 只修改第二张\n");
   });
   it("binds template fields without guessing arbitrary code blocks", () => {
     const fields = parseStoryboard(template).cards[0].fields;
@@ -126,11 +126,11 @@ describe("storyboard structure", () => {
     expect(fields.videoPrompt.value).toContain("摄影机");
     expect(fields.duration.value).toBe("5");
     expect(fields.resolution.value).toBe("480p横(864*480)");
-    expect(fields.frameFile.value).toBe("01 首帧_S001.png");
-    expect(fields.videoFile.value).toBe("01 S001.mp4");
+    expect(fields.frameFile.value).toBe("01 首帧_S0001.png");
+    expect(fields.videoFile.value).toBe("01 S0001.mp4");
     expect(fields.story.range).toBeDefined();
     expect(
-      parseStoryboard("## S001 一\n\n### 首帧生成\n\n```\n自定义\n```\n")
+      parseStoryboard("## S0001 一\n\n### 首帧生成\n\n```\n自定义\n```\n")
         .cards[0].fields.framePrompt.ambiguous,
     ).toBe(true);
   });
@@ -145,13 +145,13 @@ describe("storyboard structure", () => {
       ).toBe(true);
     }
     expect(
-      parseStoryboard("## S001 一\n\n**视频提示词**\n\n```text\n未闭合")
+      parseStoryboard("## S0001 一\n\n**视频提示词**\n\n```text\n未闭合")
         .cards[0].fields.videoPrompt.ambiguous,
     ).toBe(true);
   });
   it("uses whole-document definitions and preserves Chinese/space paths", () => {
     const source =
-      "[图]: <素材/角色 一.png>\n\n## S001 一\n\n![角色][图]\n\n`声音 一.wav`\n\n## S002 二\n\n[图][图]\n";
+      "[图]: <素材/角色 一.png>\n\n## S0001 一\n\n![角色][图]\n\n`声音 一.wav`\n\n## S0002 二\n\n[图][图]\n";
     const board = parseStoryboard(source);
     expect(board.cards[0].references.map((r) => r.reference)).toEqual([
       "素材/角色 一.png",
@@ -174,7 +174,7 @@ describe("source patches", () => {
     const board = parseStoryboard(template);
     const patch = fieldPatch(board, board.cards[0].fields.title, "点灯");
     expect(applySourcePatch(template, patch)).toBe(
-      template.replace("## S001 镜头名", "## S001 点灯"),
+      template.replace("## S0001 镜头名", "## S0001 点灯"),
     );
     expect(() => applySourcePatch("\n" + template, patch)).toThrow();
   });
@@ -199,8 +199,8 @@ describe("source patches", () => {
     );
   });
   it("grows fences for embedded markdown without creating false shots", () => {
-    const value = "```\n## S999 仍在提示词内\n```";
-    for (const source of [template, "## S001 一\n"]) {
+    const value = "```\n## S0999 仍在提示词内\n```";
+    for (const source of [template, "## S0001 一\n"]) {
       const next = edit(source, "videoPrompt", value);
       expect(parseStoryboard(next).cards).toHaveLength(1);
       expect(parseStoryboard(next).cards[0].fields.videoPrompt.value).toBe(
@@ -225,26 +225,26 @@ describe("source patches", () => {
     );
     expect(edit(empty, "frameFile", "新 图.png")).toBe(
       template.replace(
-        "出图文件名：`01 首帧_S001.png`",
+        "出图文件名：`01 首帧_S0001.png`",
         "出图文件名：`新 图.png`",
       ),
     );
   });
   it("inserts missing fields without changing existing content", () => {
-    const source = "S001\n\n未知段落。\n";
+    const source = "S0001\n\n未知段落。\n";
     const next = edit(source, "title", "第一镜");
-    expect(next).toBe("S001 第一镜\n\n未知段落。\n");
+    expect(next).toBe("S0001 第一镜\n\n未知段落。\n");
     expect(edit(next, "frameFile", "首帧.png").startsWith(next)).toBe(true);
   });
   it("does not interpret remote media or executable references", () => {
     const board = parseStoryboard(
-      "## S001 一\n\n![图](https://example.com/a.png)\n\n`run.exe`\n",
+      "## S0001 一\n\n![图](https://example.com/a.png)\n\n`run.exe`\n",
     );
     expect(board.cards[0].references).toEqual([]);
   });
   it("preserves complex link destinations and prose resembling a parameter label", () => {
     const board = parseStoryboard(
-      "## S001 一\n\n[图](frame(1).png)\n\n视频提示词说明：请自由编辑。\n",
+      "## S0001 一\n\n[图](frame(1).png)\n\n视频提示词说明：请自由编辑。\n",
     );
     expect(board.cards[0].references[0].reference).toBe("frame(1).png");
     expect(board.cards[0].references[0].field.ambiguous).toBe(true);
