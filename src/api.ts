@@ -13,6 +13,7 @@ import type {
   GenerationRecord,
   GenerationSettings,
   Media,
+  FrameVersion,
   Project,
   Recent,
   Snapshot,
@@ -78,6 +79,15 @@ export const api = {
       reference,
       source,
     }),
+  replaceFrameImage: (
+    handle: string, document: string, shotId: string, reference: string, source: string,
+  ) => invoke<Media>("replace_frame_image", { handle, document, shotId, reference, source }),
+  frameImageHistory: (
+    handle: string, document: string, shotId: string, reference: string,
+  ) => invoke<FrameVersion[]>("frame_image_history", { handle, document, shotId, reference }),
+  restoreFrameImage: (
+    handle: string, document: string, shotId: string, reference: string, versionId: string,
+  ) => invoke<Media>("restore_frame_image", { handle, document, shotId, reference, versionId }),
   openMedia: (handle: string, document: string, reference: string) =>
     invoke<void>("open_media", { handle, document, reference }),
   preferences: () =>

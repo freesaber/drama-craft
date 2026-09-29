@@ -36,6 +36,11 @@ export interface Media {
   kind: "image" | "audio" | "video";
   revision?: string | null;
 }
+export interface FrameVersion {
+  id: string;
+  archivedReference: string;
+  archivedAt: string;
+}
 export type ApiPlatformType = "autodl";
 
 export interface ApiProfile {

@@ -15,6 +15,7 @@ import type {
   BoardField,
   DocumentEntry,
   Project,
+  FrameVersion,
   ShotCard,
   SourceField,
   SourcePatch,
@@ -275,13 +276,14 @@ export default function BoardView({
             <section className="shot-details shot-frame-area">
               <h3>{ui.board.frameImage}</h3>
               <FrameImageTabs
-                key={`${document}-${index}`}
+                key={`${document}-${card.id}`}
                 assets={card.frameAssets}
                 frameFile={card.fields.frameFile.value.trim()}
                 place={
                   <FrameFilePlace
                     project={project}
                     document={document}
+                    shotId={card.id}
                     frameFile={card.fields.frameFile.value.trim()}
                     refreshKey={refreshKey}
                     busy={busy}
@@ -315,6 +317,7 @@ export default function BoardView({
 function FrameFilePlace({
   project,
   document,
+  shotId,
   frameFile,
   refreshKey,
   busy,
@@ -322,6 +325,7 @@ function FrameFilePlace({
 }: {
   project: Project;
   document: string;
+  shotId: string;
   frameFile: string;
   refreshKey: number;
   busy: boolean;
@@ -330,6 +334,10 @@ function FrameFilePlace({
   const [exists, setExists] = useState(false);
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState("");
+  const [history, setHistory] = useState<FrameVersion[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyBusy, setHistoryBusy] = useState(false);
+  const [historyError, setHistoryError] = useState("");
   const canPlace = desktop && isProjectRelativeImage(frameFile);
   useEffect(() => {
     if (!canPlace) {
@@ -349,13 +357,38 @@ function FrameFilePlace({
       alive = false;
     };
   }, [canPlace, project.handle, document, frameFile, refreshKey]);
+  const loadHistory = async () => {
+    setHistoryBusy(true);
+    setHistoryError("");
+    try {
+      setHistory(await api.frameImageHistory(project.handle, document, shotId, frameFile));
+    } catch (cause) {
+      setHistoryError(errorMessage(cause));
+    } finally {
+      setHistoryBusy(false);
+    }
+  };
+  const restore = async (versionId: string) => {
+    setHistoryBusy(true);
+    setHistoryError("");
+    try {
+      await api.restoreFrameImage(project.handle, document, shotId, frameFile, versionId);
+      setExists(true);
+      setHistory(await api.frameImageHistory(project.handle, document, shotId, frameFile));
+      onPlaced?.();
+    } catch (cause) {
+      setHistoryError(errorMessage(cause));
+    } finally {
+      setHistoryBusy(false);
+    }
+  };
   if (!canPlace) return null;
   return (
     <div className="shot-frame-place">
       <button
         type="button"
         className="episode-material-place shot-frame-place-button"
-        title={`${ui.episodeData.mediaPlaceHint}：${frameFile}`}
+        title={`${ui.board.frameReplaceHint}：${frameFile}`}
         disabled={busy || placing}
         onClick={() => {
           void (async () => {
@@ -364,9 +397,10 @@ function FrameFilePlace({
             try {
               const selected = await chooseMedia("image");
               if (!selected) return;
-              await api.placeDocumentMedia(
+              await api.replaceFrameImage(
                 project.handle,
                 document,
+                shotId,
                 frameFile,
                 selected,
               );
@@ -386,7 +420,42 @@ function FrameFilePlace({
             ? ui.episodeData.replaceImage
             : ui.episodeData.uploadImage}
       </button>
+      <button
+        type="button"
+        className="episode-material-place shot-frame-history-button"
+        disabled={busy || placing}
+        onClick={() => {
+          setHistoryOpen(true);
+          void loadHistory();
+        }}
+      >
+        {ui.board.frameHistory}
+      </button>
       {error && <p className="diagnostic">{error}</p>}
+      {historyOpen && (
+        <div className="modal-backdrop" onMouseDown={() => { if (!historyBusy) setHistoryOpen(false); }}>
+          <section className="modal frame-history-modal" role="dialog" aria-modal="true" aria-labelledby="frame-history-title" onMouseDown={(event) => event.stopPropagation()}>
+            <button type="button" className="modal-close" aria-label={ui.cancel} disabled={historyBusy} onClick={() => setHistoryOpen(false)}>×</button>
+            <h2 id="frame-history-title">{ui.board.frameHistory} · {shotId}</h2>
+            <p className="muted">{ui.board.frameHistoryHint}</p>
+            {historyError && <p className="diagnostic" role="alert">{historyError}</p>}
+            {historyBusy && !history.length && <p className="muted">{ui.busy}</p>}
+            <div className="frame-history-list">
+              {history.map((version) => (
+                <article key={version.id} className="frame-history-item">
+                  <Asset project={project} document={document} reference={version.archivedReference} refreshKey={refreshKey} compact />
+                  <div>
+                    <strong>{new Date(version.archivedAt).toLocaleString("zh-CN")}</strong>
+                    <small title={version.archivedReference}>{version.archivedReference}</small>
+                    <button type="button" disabled={historyBusy || busy} onClick={() => void restore(version.id)}>{ui.board.frameRestore}</button>
+                  </div>
+                </article>
+              ))}
+              {!historyBusy && !history.length && !historyError && <p className="muted">{ui.board.noFrameHistory}</p>}
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

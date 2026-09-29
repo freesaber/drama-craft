@@ -1515,7 +1515,7 @@ fn overwrite_in_place(path: &Path, bytes: &[u8]) -> Result<()> {
 /// Windows cannot `MoveFileExW(REPLACE_EXISTING)` while WebView still has the
 /// displayed image open. Displace the original first, then fall back to an
 /// in-place truncate write so the Markdown name never changes.
-fn replace_file(path: &Path, bytes: &[u8]) -> Result<()> {
+pub(crate) fn replace_file(path: &Path, bytes: &[u8]) -> Result<()> {
     if !path.exists() {
         return atomic_write(path, bytes, true);
     }

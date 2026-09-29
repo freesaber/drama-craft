@@ -1,6 +1,7 @@
 pub mod audio;
 pub mod batch;
 pub mod ffmpeg;
+pub mod frame_versions;
 pub mod generation;
 pub mod settings;
 pub mod storage;
@@ -320,6 +321,58 @@ fn place_document_media(
 ) -> Result<storage::Media> {
     let media = with_root(&state, &handle, |root| {
         storage::place_document_media(root, &document, &reference, &source)
+    })?;
+    if let Some(path) = &media.path {
+        app.asset_protocol_scope()
+            .allow_file(path)
+            .map_err(|e| AppError::new("media", e.to_string()))?;
+    }
+    Ok(media)
+}
+#[tauri::command]
+fn replace_frame_image(
+    app: tauri::AppHandle,
+    state: State<Sessions>,
+    handle: String,
+    document: String,
+    shot_id: String,
+    reference: String,
+    source: String,
+) -> Result<storage::Media> {
+    let media = with_root(&state, &handle, |root| {
+        frame_versions::replace(root, &document, &shot_id, &reference, &source)
+    })?;
+    if let Some(path) = &media.path {
+        app.asset_protocol_scope()
+            .allow_file(path)
+            .map_err(|e| AppError::new("media", e.to_string()))?;
+    }
+    Ok(media)
+}
+#[tauri::command]
+fn frame_image_history(
+    state: State<Sessions>,
+    handle: String,
+    document: String,
+    shot_id: String,
+    reference: String,
+) -> Result<Vec<frame_versions::FrameVersion>> {
+    with_root(&state, &handle, |root| {
+        frame_versions::history(root, &document, &shot_id, &reference)
+    })
+}
+#[tauri::command]
+fn restore_frame_image(
+    app: tauri::AppHandle,
+    state: State<Sessions>,
+    handle: String,
+    document: String,
+    shot_id: String,
+    reference: String,
+    version_id: String,
+) -> Result<storage::Media> {
+    let media = with_root(&state, &handle, |root| {
+        frame_versions::restore(root, &document, &shot_id, &reference, &version_id)
     })?;
     if let Some(path) = &media.path {
         app.asset_protocol_scope()
@@ -960,6 +1013,9 @@ pub fn run() {
             set_shot_discarded,
             resolve_media,
             place_document_media,
+            replace_frame_image,
+            frame_image_history,
+            restore_frame_image,
             open_media,
             get_preferences,
             remove_recent,
