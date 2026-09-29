@@ -43,6 +43,55 @@ jobs:
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
       - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
 
+      - name: Import Windows code signing certificate
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $configPath = "src-tauri/tauri.windows.conf.json"
+          if (Test-Path $configPath) { Remove-Item $configPath }
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE)) {
+            Write-Warning "未配置 WINDOWS_CERTIFICATE。本次安装包不会签名，SmartScreen 仍会显示发布者未知。"
+            exit 0
+          }
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)) {
+            throw "已配置 WINDOWS_CERTIFICATE，但缺少 WINDOWS_CERTIFICATE_PASSWORD。"
+          }
+          $certDir = Join-Path $env:RUNNER_TEMP "dramacraft-cert"
+          New-Item -ItemType Directory -Force -Path $certDir | Out-Null
+          $encodedPath = Join-Path $certDir "certificate.txt"
+          $pfxPath = Join-Path $certDir "certificate.pfx"
+          try {
+            [System.IO.File]::WriteAllText($encodedPath, $env:WINDOWS_CERTIFICATE.Trim())
+            & certutil -decode $encodedPath $pfxPath
+            if ($LASTEXITCODE -ne 0) {
+              throw "certutil 无法解码 WINDOWS_CERTIFICATE。请使用 certutil -encode certificate.pfx 的完整输出作为机密。"
+            }
+            $secure = ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD -Force -AsPlainText
+            $imported = @(Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $secure)
+            $signing = $imported | Where-Object { $_.HasPrivateKey } | Select-Object -First 1
+            if (-not $signing) { $signing = $imported | Select-Object -First 1 }
+            $thumbprint = $signing.Thumbprint
+            if ([string]::IsNullOrWhiteSpace($thumbprint)) {
+              throw "证书已导入，但没有读到指纹。"
+            }
+            $config = @{
+              bundle = @{
+                windows = @{
+                  certificateThumbprint = $thumbprint
+                  digestAlgorithm = "sha256"
+                  timestampUrl = "http://timestamp.digicert.com"
+                  tsp = $true
+                }
+              }
+            } | ConvertTo-Json -Depth 6
+            [System.IO.File]::WriteAllText((Join-Path (Get-Location) $configPath), $config)
+            Write-Host "已启用 Windows 代码签名。"
+          } finally {
+            Remove-Item $certDir -Recurse -Force -ErrorAction SilentlyContinue
+          }
+
       - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

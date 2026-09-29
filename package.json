@@ -1,6 +1,6 @@
 {
   "name": "drama-craft",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,6 +12,7 @@
     "format": "prettier --write src scripts *.json vite.config.ts index.html",
     "tauri": "tauri",
     "ffmpeg:download": "node scripts/download-ffmpeg.mjs",
+    "icon": "node scripts/generate-icon.mjs",
     "docs:check": "node scripts/check-docs.mjs"
   },
   "dependencies": {

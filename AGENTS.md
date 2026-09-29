@@ -30,6 +30,7 @@
 - `cargo check --manifest-path src-tauri/Cargo.toml`
 - `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`
 - `npm run tauri build -- --no-bundle` creates the Windows executable.
+- `npm run icon` regenerates icon sizes from `src-tauri/icons/source.png`.
 
 ## Documentation and review
 - Keep numbered documents in `doc/`. Update the root README.md when entry points change.
