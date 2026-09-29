@@ -1167,7 +1167,7 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 12px 44px 12px 18px;
+  padding: 12px 64px 12px 18px;
   border-bottom: 1px solid #27332c;
   position: relative;
 }
@@ -1200,8 +1200,20 @@
   font-size: 11px;
 }
 .video-trim-studio .modal-close {
+  top: 10px;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  line-height: 1;
   color: #c5d0c0;
   background: transparent;
+}
+.video-trim-studio .modal-close:hover:not(:disabled) {
+  background: #26352b;
+  border-color: transparent;
 }
 .video-trim-stage {
   min-height: 280px;
@@ -1231,6 +1243,7 @@
 .video-trim-transport {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 8px;
 }
@@ -1252,8 +1265,26 @@
   min-width: 64px;
 }
 .video-trim-hint {
+  margin-left: auto;
   color: #7a8776;
   font-size: 11px;
+}
+.video-trim-seek {
+  padding: 4px 7px;
+  border: 1px solid #3d4f42;
+  border-radius: 4px;
+  background: #1d2821;
+  color: #d7e0d4;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.video-trim-seek:disabled {
+  opacity: 0.5;
+}
+.video-trim-position {
+  color: #f0d48a;
+  font-size: 11px;
+  white-space: nowrap;
 }
 .video-trim-track {
   position: relative;
@@ -1352,6 +1383,36 @@
   background: #d7b25c;
   border-color: #d7b25c;
   color: #241c08;
+}
+.video-trim-studio button:not(.modal-close):not(.video-trim-handle):not(.primary-button) {
+  border-color: #3d4f42;
+  background: #1d2821;
+  color: #e9f0e4;
+}
+.video-trim-studio button:not(.modal-close):not(.video-trim-handle):not(.primary-button):hover:not(:disabled) {
+  border-color: #69866b;
+  background: #304233;
+  color: #fff;
+}
+.video-trim-studio button:not(.modal-close):not(.video-trim-handle):not(.primary-button):disabled {
+  border-color: #354338;
+  background: #1b251e;
+  color: #a3b0a2;
+}
+.video-trim-studio .video-trim-actions .primary-button:hover:not(:disabled) {
+  border-color: #ebce83;
+  background: #ebce83;
+  color: #241c08;
+}
+.video-trim-studio .video-trim-actions .primary-button:disabled {
+  border-color: #75643b;
+  background: #75643b;
+  color: #d4c59c;
+}
+.video-trim-studio button:focus-visible {
+  outline: 2px solid #d7b25c;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px #101610;
 }
 .video-trim-studio .generation-error {
   margin: 0 0 8px;

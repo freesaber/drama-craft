@@ -114,6 +114,117 @@ pub fn trim_video(
     storage::resolve_media(root, document, reference)
 }
 
+pub fn export_frame(
+    root: &Path,
+    document: &str,
+    reference: &str,
+    time: f64,
+    destination: &str,
+) -> Result<()> {
+    let source = resolve_project_video(root, document, reference)?;
+    let duration = probe_duration(&source)?;
+    if !time.is_finite() || time < 0.0 || time > duration + 0.05 {
+        return Err(AppError::new("input", "导出帧的时间无效"));
+    }
+    let destination = validate_frame_destination(root, Path::new(destination))?;
+    let parent = destination
+        .parent()
+        .ok_or_else(|| AppError::new("path", "导出位置缺少父目录"))?;
+    let temp = tempfile::tempdir_in(parent)?;
+    let output = temp.path().join("frame.png");
+    let ffmpeg = ffmpeg_binary()?;
+    if time >= duration - 0.05 {
+        // Seeking to the container duration returns no frame. Decode the tail
+        // and let image2 update the same temporary PNG with the last frame.
+        let tail = format_seconds(duration.min(0.5));
+        run(
+            &ffmpeg,
+            &[
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-sseof",
+                &format!("-{tail}"),
+                "-i",
+                path_arg(&source)?,
+                "-map",
+                "0:v:0",
+                "-an",
+                "-vsync",
+                "0",
+                "-c:v",
+                "png",
+                "-f",
+                "image2",
+                "-update",
+                "1",
+                path_arg(&output)?,
+            ],
+        )?;
+    } else {
+        let position = format_seconds(time);
+        run(
+            &ffmpeg,
+            &[
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-i",
+                path_arg(&source)?,
+                "-ss",
+                &position,
+                "-map",
+                "0:v:0",
+                "-an",
+                "-frames:v",
+                "1",
+                "-c:v",
+                "png",
+                "-f",
+                "image2",
+                path_arg(&output)?,
+            ],
+        )?;
+    }
+    let bytes =
+        fs::read(&output).map_err(|_| AppError::new("ffmpeg", "未能提取该时间点的画面帧"))?;
+    if bytes.is_empty() {
+        return Err(AppError::new("ffmpeg", "未能提取该时间点的画面帧"));
+    }
+    storage::atomic_write(&destination, &bytes, true)
+}
+
+fn validate_frame_destination(root: &Path, destination: &Path) -> Result<PathBuf> {
+    if !destination.is_absolute()
+        || destination
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(str::to_ascii_lowercase)
+            .as_deref()
+            != Some("png")
+    {
+        return Err(AppError::new("path", "请选择项目外的 PNG 文件保存位置"));
+    }
+    let parent = destination
+        .parent()
+        .ok_or_else(|| AppError::new("path", "导出位置缺少父目录"))?;
+    let parent = fs::canonicalize(parent)?;
+    if !parent.is_dir() || parent.starts_with(root) {
+        return Err(AppError::new("path", "导出位置必须在当前项目之外"));
+    }
+    let name = destination
+        .file_name()
+        .ok_or_else(|| AppError::new("path", "导出文件名无效"))?;
+    storage::validate_name(&name.to_string_lossy())?;
+    let output = parent.join(name);
+    if output.exists() {
+        return Err(AppError::new("conflict", "目标文件已存在，请另选文件名"));
+    }
+    Ok(output)
+}
+
 pub fn merge_output_name(document: &Path, timestamp: &str) -> String {
     let name = document
         .file_stem()
@@ -584,6 +695,61 @@ mod tests {
         assert_eq!(fs::read_to_string(markdown).unwrap(), original_md);
         let duration = probe_duration(&video).unwrap();
         assert!(duration > 0.9 && duration < 1.5, "{duration}");
+    }
+
+    #[test]
+    fn exports_selected_and_last_frame_outside_project_without_changing_source() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("project");
+        let export_dir = temp.path().join("exports");
+        fs::create_dir(&root).unwrap();
+        fs::create_dir(&export_dir).unwrap();
+        let root = fs::canonicalize(root).unwrap();
+        let markdown = root.join("01.md");
+        let video = root.join("S001.mp4");
+        fs::write(&markdown, "# 原稿\n").unwrap();
+        assert!(write_test_clip(&video, 3), "未找到打包的 FFmpeg");
+        let original = fs::read(&video).unwrap();
+        for (time, filename) in [(0.4, "selected.png"), (3.0, "last.png")] {
+            let destination = export_dir.join(filename);
+            export_frame(
+                &root,
+                "01.md",
+                "S001.mp4",
+                time,
+                path_arg(&destination).unwrap(),
+            )
+            .unwrap();
+            assert!(fs::read(&destination)
+                .unwrap()
+                .starts_with(b"\x89PNG\r\n\x1a\n"));
+        }
+        assert_eq!(fs::read(video).unwrap(), original);
+        assert_eq!(fs::read_to_string(markdown).unwrap(), "# 原稿\n");
+        assert_eq!(fs::read_dir(root).unwrap().count(), 2);
+    }
+
+    #[test]
+    fn frame_export_rejects_project_destinations_and_existing_files() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("project");
+        fs::create_dir(&root).unwrap();
+        let root = fs::canonicalize(root).unwrap();
+        assert_eq!(
+            validate_frame_destination(&root, &root.join("frame.png"))
+                .unwrap_err()
+                .code,
+            "path"
+        );
+        let existing = temp.path().join("frame.png");
+        fs::write(&existing, b"keep").unwrap();
+        assert_eq!(
+            validate_frame_destination(&root, &existing)
+                .unwrap_err()
+                .code,
+            "conflict"
+        );
+        assert_eq!(fs::read(existing).unwrap(), b"keep");
     }
 
     #[test]

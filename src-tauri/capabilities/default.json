@@ -3,5 +3,5 @@
   "identifier": "main",
   "description": "Local workbench window and native dialogs; filesystem access goes through Rust commands.",
   "windows": ["main"],
-  "permissions": ["core:default", "core:window:allow-close", "core:window:allow-destroy", "dialog:allow-open"]
+  "permissions": ["core:default", "core:window:allow-close", "core:window:allow-destroy", "dialog:allow-open", "dialog:allow-save"]
 }

@@ -1,5 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import type {
   BatchAdvanceResult,
   BatchJob,
@@ -158,6 +158,13 @@ export const api = {
       start,
       end,
     }),
+  exportVideoFrame: (
+    handle: string,
+    document: string,
+    reference: string,
+    time: number,
+    destination: string,
+  ) => invoke<void>("export_video_frame", { handle, document, reference, time, destination }),
   createBatchJob: (handle: string, input: CreateBatchJobInput) =>
     invoke<BatchJob>("create_batch_job", { handle, input }),
   mergeEpisode: (handle: string, input: MergeEpisodeInput) =>
@@ -203,6 +210,14 @@ export async function chooseMedia(
     ],
   });
   return typeof path === "string" ? path : null;
+}
+export async function chooseFrameExport(defaultName: string): Promise<string | null> {
+  if (!desktop) return null;
+  return save({
+    title: ui.generation.exportFrame,
+    defaultPath: defaultName,
+    filters: [{ name: "PNG", extensions: ["png"] }],
+  });
 }
 export function errorMessage(error: unknown): string {
   if (error && typeof error === "object" && "message" in error)

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { api, errorMessage } from "./api";
+import { api, chooseFrameExport, errorMessage } from "./api";
 import { ui } from "./i18n";
 import { withMediaRevision } from "./mediaUrl";
 import type { Project } from "./types";
@@ -55,6 +55,8 @@ export default function VideoTrimModal({
   const [current, setCurrent] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exported, setExported] = useState("");
   const [error, setError] = useState("");
   const [missing, setMissing] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -100,11 +102,11 @@ export default function VideoTrimModal({
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        if (!saving) onClose();
+        if (!saving && !exporting) onClose();
         return;
       }
       const video = videoRef.current;
-      if (!video || saving) return;
+      if (!video || saving || exporting) return;
       if (event.key === " ") {
         event.preventDefault();
         if (video.paused) void video.play();
@@ -125,7 +127,7 @@ export default function VideoTrimModal({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, saving]);
+  }, [onClose, saving, exporting]);
 
   const setRange = (
     nextStart: number,
@@ -182,6 +184,11 @@ export default function VideoTrimModal({
     const next = Math.min(Math.max(time, inPoint), outPoint);
     video.currentTime = next;
     setCurrent(next);
+  };
+
+  const seekToBoundary = (time: number) => {
+    videoRef.current?.pause();
+    seek(time);
   };
 
   const beginDrag = (which: "in" | "out") => (event: PointerEvent) => {
@@ -277,18 +284,41 @@ export default function VideoTrimModal({
     }
   };
 
+  const exportCurrentFrame = async () => {
+    const video = videoRef.current;
+    if (!video || duration <= 0 || exporting || saving) return;
+    video.pause();
+    const time = Math.min(Math.max(video.currentTime, 0), duration);
+    const filename = `${reference.replace(/.*[/\\]/, "").replace(/\.mp4$/i, "")}_frame_${formatTimecode(time).replace(/[.:]/g, "-")}.png`;
+    setExporting(true);
+    setError("");
+    setExported("");
+    try {
+      const destination = await chooseFrameExport(filename);
+      if (!destination) return;
+      await api.exportVideoFrame(project.handle, document, reference, time, destination);
+      setExported(destination.replace(/.*[/\\]/, ""));
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const label = reference.replace(/.*[/\\]/, "");
   const keep = Math.max(end - start, 0);
   const unchanged = trimUnchanged(start, end, duration);
   const inRatio = ratioFromTime(start, duration);
   const outRatio = ratioFromTime(end, duration);
   const playRatio = ratioFromTime(current, duration);
+  const atInPoint = duration > 0 && Math.abs(current - start) < 0.015;
+  const atOutPoint = duration > 0 && Math.abs(current - end) < 0.015;
 
   return (
     <div
       className="modal-backdrop video-trim-backdrop"
       onMouseDown={() => {
-        if (!saving) onClose();
+        if (!saving && !exporting) onClose();
       }}
     >
       <section
@@ -313,7 +343,7 @@ export default function VideoTrimModal({
             type="button"
             className="modal-close"
             aria-label={ui.cancel}
-            disabled={saving}
+            disabled={saving || exporting}
             onClick={onClose}
           >
             ×
@@ -366,7 +396,30 @@ export default function VideoTrimModal({
             >
               {playing ? "❚❚" : "▶"}
             </button>
-            <span className="video-trim-now">{formatTimecode(current)}</span>
+            <span className="video-trim-now" aria-label={`${ui.generation.trimCurrent} ${formatTimecode(current)}`}>
+              {formatTimecode(current)}
+            </span>
+            <button
+              type="button"
+              className="video-trim-seek"
+              disabled={!src || failed || saving || duration <= 0}
+              onClick={() => seekToBoundary(start)}
+            >
+              {ui.generation.trimSeekIn}
+            </button>
+            <button
+              type="button"
+              className="video-trim-seek"
+              disabled={!src || failed || saving || duration <= 0}
+              onClick={() => seekToBoundary(end)}
+            >
+              {ui.generation.trimSeekOut}
+            </button>
+            {(atInPoint || atOutPoint) && (
+              <span className="video-trim-position" role="status">
+                {atOutPoint ? ui.generation.trimAtOut : ui.generation.trimAtIn}
+              </span>
+            )}
             <span className="video-trim-hint">{ui.generation.trimHint}</span>
           </div>
           <div
@@ -429,16 +482,23 @@ export default function VideoTrimModal({
           </div>
         </div>
         <footer className="video-trim-actions">
-          <p>{ui.generation.trimOverwrite}</p>
+          <p>{exported ? ui.generation.frameExported(exported) : ui.generation.trimOverwrite}</p>
           <div>
-            <button type="button" disabled={saving} onClick={onClose}>
+            <button
+              type="button"
+              disabled={saving || exporting || !src || failed || duration <= 0}
+              onClick={() => void exportCurrentFrame()}
+            >
+              {exporting ? ui.generation.exportingFrame : ui.generation.exportFrame}
+            </button>
+            <button type="button" disabled={saving || exporting} onClick={onClose}>
               {ui.cancel}
             </button>
             <button
               type="button"
               className="primary-button"
               disabled={
-                saving ||
+                saving || exporting ||
                 missing ||
                 failed ||
                 !src ||

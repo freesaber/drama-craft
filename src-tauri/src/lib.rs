@@ -852,6 +852,19 @@ fn trim_media(
     })
 }
 #[tauri::command]
+fn export_video_frame(
+    state: State<Sessions>,
+    handle: String,
+    document: String,
+    reference: String,
+    time: f64,
+    destination: String,
+) -> Result<()> {
+    with_root(&state, &handle, |root| {
+        ffmpeg::export_frame(root, &document, &reference, time, &destination)
+    })
+}
+#[tauri::command]
 fn merge_episode(
     state: State<Sessions>,
     handle: String,
@@ -967,6 +980,7 @@ pub fn run() {
             generation_history,
             import_generation_media,
             trim_media,
+            export_video_frame,
             merge_episode,
             create_batch_job,
             list_batch_jobs,
