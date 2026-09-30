@@ -28,7 +28,7 @@ import {
 describe("existing Markdown compatibility", () => {
   it("finds real headings without treating fenced prompts as shots", () => {
     const text =
-      "# 第01集\r\n\r\n## S001 等风\r\n\r\n```text\r\n## S999 not a shot\r\n```\r\n\r\n## S002 出发\r\n";
+      "# 第0001集\r\n\r\n## S001 等风\r\n\r\n```text\r\n## S999 not a shot\r\n```\r\n\r\n## S002 出发\r\n";
     const result = analyzeMarkdown(text);
     expect(result.shots.map((s) => s.id)).toEqual(["S001", "S002"]);
     expect(text.slice(result.shots[1].offset)).toMatch(/^## S002/);
@@ -92,6 +92,6 @@ describe("existing Markdown compatibility", () => {
       "在此逐字写入用户已确认的完整核心画面风格词",
     );
     expect(analyzeMarkdown(template).shots).toHaveLength(1);
-    expect(analyzeMarkdown(template).references).toContain("03 S0001.mp4");
+    expect(analyzeMarkdown(template).references).toContain("0003 S0001.mp4");
   });
 });

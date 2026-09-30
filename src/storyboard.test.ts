@@ -28,14 +28,14 @@ describe("storyboard structure", () => {
   });
   it("reads video upload slots from the API mapping table", () => {
     const source = `${documentTemplate("episode", "01 灯火.md").replace(
-      "| `ref_image_0` | `<Picture 1>` | `01 首帧_S0001.png` |",
-      "| `ref_image_0` | `<Picture 1>` | `01 首帧_S0001.png` |\n| `ref_image_1` | `<Picture 2>` | `01 素材_苏铭.png` |\n| `ref_audio_0` | `<Audio 1>` | `F:/voices/旁白.MP3` |",
+      "| `ref_image_0` | `<Picture 1>` | `0001 首帧_S0001.png` |",
+      "| `ref_image_0` | `<Picture 1>` | `0001 首帧_S0001.png` |\n| `ref_image_1` | `<Picture 2>` | `01 素材_苏铭.png` |\n| `ref_audio_0` | `<Audio 1>` | `F:/voices/旁白.MP3` |",
     )}`;
     expect(parseStoryboard(source).cards[0].videoInputs).toEqual([
       {
         param: "ref_image_0",
         tag: "<Picture 1>",
-        reference: "01 首帧_S0001.png",
+        reference: "0001 首帧_S0001.png",
         kind: "image",
       },
       {
@@ -55,13 +55,13 @@ describe("storyboard structure", () => {
   it("keeps image-only mapping tables without inventing audio slots", () => {
     const source = documentTemplate("episode", "01 灯火.md")
       .replace(
-        "|---|---|---|---|---|",
-        "|---|---|---|---|---|\n| C0001 | 苏铭 | `01 素材_苏铭.png` | `F:/voices/苏铭.mp3` | S0001 |",
+        "|---|---|---|---|",
+        "|---|---|---|---|\n| C0001 | 苏铭 | `01 素材_苏铭.png` | `F:/voices/苏铭.mp3` |",
       )
       .replace("角色：—", "角色：C0001")
       .replace(
-        "| `ref_image_0` | `<Picture 1>` | `01 首帧_S0001.png` |",
-        "| `ref_image_0` | `<Picture 1>` | `01 首帧_S0001.png` |\n| `ref_image_1` | `<Picture 2>` | `01 素材_苏铭.png` |",
+        "| `ref_image_0` | `<Picture 1>` | `0001 首帧_S0001.png` |",
+        "| `ref_image_0` | `<Picture 1>` | `0001 首帧_S0001.png` |\n| `ref_image_1` | `<Picture 2>` | `01 素材_苏铭.png` |",
       );
     const card = parseStoryboard(source).cards[0];
     expect(card.videoInputs.map((item) => item.kind)).toEqual([
@@ -126,8 +126,8 @@ describe("storyboard structure", () => {
     expect(fields.videoPrompt.value).toContain("摄影机");
     expect(fields.duration.value).toBe("5");
     expect(fields.resolution.value).toBe("480p横(864*480)");
-    expect(fields.frameFile.value).toBe("01 首帧_S0001.png");
-    expect(fields.videoFile.value).toBe("01 S0001.mp4");
+    expect(fields.frameFile.value).toBe("0001 首帧_S0001.png");
+    expect(fields.videoFile.value).toBe("0001 S0001.mp4");
     expect(fields.story.range).toBeDefined();
     expect(
       parseStoryboard("## S0001 一\n\n### 首帧生成\n\n```\n自定义\n```\n")
@@ -225,7 +225,7 @@ describe("source patches", () => {
     );
     expect(edit(empty, "frameFile", "新 图.png")).toBe(
       template.replace(
-        "出图文件名：`01 首帧_S0001.png`",
+        "出图文件名：`0001 首帧_S0001.png`",
         "出图文件名：`新 图.png`",
       ),
     );

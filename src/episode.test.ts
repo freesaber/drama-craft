@@ -25,9 +25,9 @@ describe("episode domain adapters", () => {
   it("new templates follow the v1 contract and parse without diagnostics", () => {
     const board = parseStoryboard(documentTemplate("episode", "03 夜航.md"));
     expect(board.episode.format).toBe("v1");
-    expect(board.episode.title).toBe("第03集 夜航");
+    expect(board.episode.title).toBe("第0003集 夜航");
     expect(board.diagnostics).toEqual([]);
-    expect(board.cards[0].fields.videoFile.value).toBe("03 S0001.mp4");
+    expect(board.cards[0].fields.videoFile.value).toBe("0003 S0001.mp4");
   });
   it("resolves dialogue character names for the board table", () => {
     expect(
@@ -71,8 +71,8 @@ describe("episode domain adapters", () => {
   it("parses explicit v1 bindings into the same domain objects", () => {
     const source = documentTemplate("episode", "01 夜航.md")
       .replace(
-        "|---|---|---|---|---|",
-        "|---|---|---|---|---|\n| C0007 | 旅人 | `旅人.png` | `声音.wav` | S0001 |",
+        "|---|---|---|---|",
+        "|---|---|---|---|\n| C0007 | 旅人 | `旅人.png` | `声音.wav` |",
       )
       .replace("角色：—", "角色：C0007");
     const board = parseStoryboard(source);
@@ -85,15 +85,26 @@ describe("episode domain adapters", () => {
     expect(board.episode.castByShot.S0001).toEqual(["C0007"]);
     expect(board.diagnostics).toEqual([]);
   });
+  it("does not accept the removed usage-shot column", () => {
+    const removedColumn = ["使用", "镜号"].join("");
+    const obsoleteTable = `| 角色ID | 名称 | 角色图 | 音色文件 | ${removedColumn} |\n|---|---|---|---|---|\n| C0001 | 旅人 | — | — | S0001 |`;
+    const source = documentTemplate("episode", "01 夜航.md").replace(
+      "| 角色ID | 名称 | 角色图 | 音色文件 |\n|---|---|---|---|",
+      obsoleteTable,
+    );
+    const episode = parseStoryboard(source).episode;
+    expect(episode.characters).toEqual([]);
+    expect(episode.diagnostics.join(" ")).toContain("角色绑定表");
+  });
   it("accepts bare media paths without backticks in role and asset tables", () => {
     const source = documentTemplate("episode", "01 夜航.md")
       .replace(
-        "|---|---|---|---|---|",
-        "|---|---|---|---|---|\n| C0007 | 旅人 | 旅人.png | F:/voices/旅人.wav | S0001 |",
+        "|---|---|---|---|",
+        "|---|---|---|---|\n| C0007 | 旅人 | 旅人.png | F:/voices/旅人.wav |",
       )
       .replace(
-        "## 本集使用素材\n\n| 素材ID | 名称 | 类型 | 文件 | 使用镜号 |\n|---|---|---|---|---|",
-        "## 本集使用素材\n\n| 素材ID | 名称 | 类型 | 文件 | 使用镜号 |\n|---|---|---|---|---|\n| A0001 | 渡口 | 场景 | 01 素材_渡口.png | S0001 |",
+        "## 本集使用素材\n\n| 素材ID | 名称 | 类型 | 文件 |\n|---|---|---|---|",
+        "## 本集使用素材\n\n| 素材ID | 名称 | 类型 | 文件 |\n|---|---|---|---|\n| A0001 | 渡口 | 场景 | 01 素材_渡口.png |",
       )
       .replace("角色：—", "角色：C0007");
     const episode = parseStoryboard(source).episode;
@@ -108,12 +119,12 @@ describe("episode domain adapters", () => {
   it("maps named generation prompts to missing roles and materials", () => {
     const source = documentTemplate("episode", "01 夜航.md")
       .replace(
-        "|---|---|---|---|---|",
-        "|---|---|---|---|---|\n| C0007 | 旅人 | — | `声音.wav` | S0001 |",
+        "|---|---|---|---|",
+        "|---|---|---|---|\n| C0007 | 旅人 | — | `声音.wav` |",
       )
       .replace(
-        "## 本集使用素材\n\n| 素材ID | 名称 | 类型 | 文件 | 使用镜号 |\n|---|---|---|---|---|",
-        "## 本集使用素材\n\n| 素材ID | 名称 | 类型 | 文件 | 使用镜号 |\n|---|---|---|---|---|\n| A0001 | 渡口 | 场景 | — | S0001 |\n\n### 旅人\n\n```text\n旅人角色图提示词\n```\n\n### 渡口\n\n```text\n渡口场景图提示词\n```",
+        "## 本集使用素材\n\n| 素材ID | 名称 | 类型 | 文件 |\n|---|---|---|---|",
+        "## 本集使用素材\n\n| 素材ID | 名称 | 类型 | 文件 |\n|---|---|---|---|\n| A0001 | 渡口 | 场景 | — |\n\n### 旅人\n\n```text\n旅人角色图提示词\n```\n\n### 渡口\n\n```text\n渡口场景图提示词\n```",
       )
       .replace("角色：—", "角色：C0007");
     const episode = parseStoryboard(source).episode;
@@ -125,12 +136,12 @@ describe("episode domain adapters", () => {
   it("matches prefixed generation prompt headings from external agents", () => {
     const source = documentTemplate("episode", "01 夜航.md")
       .replace(
-        "|---|---|---|---|---|",
-        "|---|---|---|---|---|\n| C0007 | 旅人 | — | `声音.wav` | S0001 |",
+        "|---|---|---|---|",
+        "|---|---|---|---|\n| C0007 | 旅人 | — | `声音.wav` |",
       )
       .replace(
-        "## 本集使用素材\n\n| 素材ID | 名称 | 类型 | 文件 | 使用镜号 |\n|---|---|---|---|---|",
-        "## 本集使用素材\n\n| 素材ID | 名称 | 类型 | 文件 | 使用镜号 |\n|---|---|---|---|---|\n| A0001 | 渡口 | 场景 | — | S0001 |\n\n### 角色参考图：旅人\n\n```text\n旅人角色图提示词\n```\n\n### 场景：渡口\n\n```text\n渡口场景图提示词\n```",
+        "## 本集使用素材\n\n| 素材ID | 名称 | 类型 | 文件 |\n|---|---|---|---|",
+        "## 本集使用素材\n\n| 素材ID | 名称 | 类型 | 文件 |\n|---|---|---|---|\n| A0001 | 渡口 | 场景 | — |\n\n### 角色参考图：旅人\n\n```text\n旅人角色图提示词\n```\n\n### 场景：渡口\n\n```text\n渡口场景图提示词\n```",
       )
       .replace("角色：—", "角色：C0007");
     const episode = parseStoryboard(source).episode;
@@ -140,12 +151,12 @@ describe("episode domain adapters", () => {
   it("links a local role image to its material reference prompt", () => {
     const source = documentTemplate("episode", "02 当众立约.md")
       .replace(
-        "|---|---|---|---|---|",
-        "|---|---|---|---|---|\n| C0005 | 山羊师爷 | `02 素材_山羊师爷.png` | `声音.wav` | S0001 |",
+        "|---|---|---|---|",
+        "|---|---|---|---|\n| C0005 | 山羊师爷 | `02 素材_山羊师爷.png` | `声音.wav` |",
       )
       .replace(
-        "## 本集使用素材\n\n| 素材ID | 名称 | 类型 | 文件 | 使用镜号 |\n|---|---|---|---|---|",
-        "## 本集使用素材\n\n| 素材ID | 名称 | 类型 | 文件 | 使用镜号 |\n|---|---|---|---|---|\n| A0003 | 山羊师爷参考图 | 角色 | `02 素材_山羊师爷.png` | S0001 |\n\n### 山羊师爷参考图\n\n```text\n山羊师爷完整角色图提示词\n```",
+        "## 本集使用素材\n\n| 素材ID | 名称 | 类型 | 文件 |\n|---|---|---|---|",
+        "## 本集使用素材\n\n| 素材ID | 名称 | 类型 | 文件 |\n|---|---|---|---|\n| A0003 | 山羊师爷参考图 | 角色 | `02 素材_山羊师爷.png` |\n\n### 山羊师爷参考图\n\n```text\n山羊师爷完整角色图提示词\n```",
       )
       .replace("角色：—", "角色：C0005");
     const episode = parseStoryboard(source).episode;
@@ -185,12 +196,12 @@ describe("episode domain adapters", () => {
   it("skips dialogue rows with placeholder dash in character ID", () => {
     const source = documentTemplate("episode", "01 夜航.md")
       .replace(
-        "|---|---|---|---|---|",
-        "|---|---|---|---|---|\n| C0001 | 旅人 | `旅人.png` | `声音.wav` | S0001 |",
+        "|---|---|---|---|",
+        "|---|---|---|---|\n| C0001 | 旅人 | `旅人.png` | `声音.wav` |",
       )
       .replace(
-        "| 镜号 | 角色ID | 发声方式 | 台词 | 发声区间 |\n|---|---|---|---|---|",
-        "| 镜号 | 角色ID | 发声方式 | 台词 | 发声区间 |\n|---|---|---|---|---|\n| S0001 | C0001 | 画内 | 测试台词 | 1.0—3.0秒 |\n| S0002 | — | — | — | — |",
+        "| 镜号 | 角色ID | 角色名称 | 台词 |\n|---|---|---|---|",
+        "| 镜号 | 角色ID | 角色名称 | 台词 |\n|---|---|---|---|\n| S0001 | C0001 | 旅人 | 测试台词 |\n| S0002 | — | — | — |",
       )
       .replace("角色：—", "角色：C0001");
     const board = parseStoryboard(source);
@@ -203,7 +214,7 @@ describe("episode domain adapters", () => {
     expect(board.diagnostics.filter((d) => d.includes("—"))).toEqual([]);
   });
   it("treats a document without v1 marker as plain document, not legacy", () => {
-    const source = `# 第01集 点灯
+    const source = `# 第0001集 点灯
 
 本集内容：旅人点灯。
 

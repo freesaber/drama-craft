@@ -105,24 +105,24 @@ try {
   );
   const episodeDocument = `<!-- drama-craft:episode:v1 -->
 
-# 第01集 灯火
+# 第0001集 灯火
 
 本集内容：
 
 ## 角色绑定
 
-| 角色ID | 名称 | 角色图 | 音色文件 | 使用镜号 |
-|---|---|---|---|---|
+| 角色ID | 名称 | 角色图 | 音色文件 |
+|---|---|---|---|
 
 ## 本集使用素材
 
-| 素材ID | 名称 | 类型 | 文件 | 使用镜号 |
-|---|---|---|---|---|
+| 素材ID | 名称 | 类型 | 文件 |
+|---|---|---|---|
 
 ## 本集声音安排
 
-| 镜号 | 角色ID | 发声方式 | 台词 | 发声区间 |
-|---|---|---|---|---|
+| 镜号 | 角色ID | 角色名称 | 台词 |
+|---|---|---|---|
 
 ## S001 镜头名
 
@@ -132,7 +132,7 @@ try {
 
 ### 首帧生成
 
-出图文件名：\`01 首帧_S001.png\`。
+出图文件名：\`0001 首帧_S001.png\`。
 
 **首帧图片提示词**
 
@@ -142,11 +142,11 @@ try {
 
 ### 视频生成
 
-视频文件名：\`01 S001.mp4\`。
+视频文件名：\`0001 S001.mp4\`。
 
 | API参数 | 提示词标签 | 上传素材 |
 |---|---|---|
-| \`ref_image_0\` | \`<Picture 1>\` | \`01 首帧_S001.png\` |
+| \`ref_image_0\` | \`<Picture 1>\` | \`0001 首帧_S001.png\` |
 
 **视频提示词｜duration=5，resolution=480p横**
 
@@ -205,12 +205,12 @@ N/A
   await setupEditor.fill(
     (await setupEditor.inputValue())
       .replace(
-        "|---|---|---|---|---|",
-        "|---|---|---|---|---|\n| C001 | 旅人 | `角色 图.png` | `角色 声音.wav` | S001 |",
+        "|---|---|---|---|",
+        "|---|---|---|---|\n| C001 | 旅人 | `角色 图.png` | `角色 声音.wav` |",
       )
       .replace(
-        "## 本集使用素材\n\n| 素材ID | 名称 | 类型 | 文件 | 使用镜号 |\n|---|---|---|---|---|",
-        "## 本集使用素材\n\n| 素材ID | 名称 | 类型 | 文件 | 使用镜号 |\n|---|---|---|---|---|\n| A001 | 渡口 | 场景 | — | S001 |\n\n### 渡口\n\n```text\n晨雾中的古渡口，木码头延伸到水面。\n```",
+        "## 本集使用素材\n\n| 素材ID | 名称 | 类型 | 文件 |\n|---|---|---|---|",
+        "## 本集使用素材\n\n| 素材ID | 名称 | 类型 | 文件 |\n|---|---|---|---|\n| A001 | 渡口 | 场景 | — |\n\n### 渡口\n\n```text\n晨雾中的古渡口，木码头延伸到水面。\n```",
       )
       .replace("角色：—", "角色：C001"),
   );
@@ -391,7 +391,7 @@ N/A
     original.replace("## S001 灯下相逢", "## S001 点亮渡口") +
     "\n### 创作备注\n\n自定义段落：旅人在灯下停步。\n\n[参考图](<参考 图.png>)\n\n`missing.mp4`\n";
   await copyFile("src-tauri/icons/source.png", join(root, "参考 图.png"));
-  await copyFile("src-tauri/icons/source.png", join(root, "01 首帧_S001.png"));
+  await copyFile("src-tauri/icons/source.png", join(root, "0001 首帧_S001.png"));
   await writeFile(join(root, "损坏 图片.png"), "synthetic invalid image");
   // Create an original, silent local video fixture using this WebView's encoder.
   const videoBytes = await page.evaluate(async () => {
@@ -459,7 +459,7 @@ N/A
     /横向单幅画面。旅人站在渡口灯下，双手空着。/,
   );
   await editor.fill(
-    (await editor.inputValue()).replace("01 S001.mp4", "本地样片.webm"),
+    (await editor.inputValue()).replace("0001 S001.mp4", "本地样片.webm"),
   );
   await toBoard();
   await firstCard().getByRole("tab", { name: "提示词", exact: true }).click();

@@ -243,23 +243,20 @@ export interface CharacterData {
   image: string | null;
   imagePrompt: string;
   voice: string | null;
-  shots: string[];
 }
 export interface EpisodeAsset {
   id: string;
   name: string;
   kind: string;
   reference: string | null;
-  shots: string[];
   note: string;
   prompt: string;
 }
 export interface DialogueData {
   shotId: string;
   characterId: string;
-  delivery: string;
+  characterName: string;
   text: string;
-  interval: string;
 }
 export interface EpisodeData {
   format: "v1" | "document" | "unsupported";

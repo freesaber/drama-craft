@@ -5,6 +5,9 @@ describe("createEpisodeTemplate", () => {
   it("leaves the video style dynamic and preserves it from the first frame", () => {
     const template = createEpisodeTemplate("01 示例", "01");
 
+    expect(template).toContain("# 第0001集 示例");
+    expect(template).toContain("0001 首帧_S0001.png");
+    expect(template).toContain("0001 S0001.mp4");
     expect(template).toContain("detailed_description:");
     expect(template).toContain(
       "The target video uses [replace with the visual style confirmed with the user, written in concise English].",

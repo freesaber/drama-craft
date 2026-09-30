@@ -19,7 +19,7 @@
 ## Generated project AGENTS.md template
 - New projects receive a copy of `agents_md()` from `src-tauri/src/storage.rs`. That file is empty of any other history: no prior chat, no user's existing episodes, no repository docs.
 - When adding rules to this template, write self-contained instructions. Do not paste filenames, character names, scene names, or incident details from the current conversation or a user's work. A new project does not contain those files.
-- Teach the pattern with original synthetic names already used in the template (秦墨、王宫大殿、`01 素材_王宫大殿.png`) or describe the failure mode without a real work's proper nouns.
+- Teach the pattern with original synthetic names already used in the template (秦墨、王宫大殿、`0001 素材_王宫大殿.png`) or describe the failure mode without a real work's proper nouns.
 - The same constraint applies to examples in `doc/09` that describe what the template teaches.
 - Video-prompt rules already follow this: the generated AGENTS.md must stand alone and must not rely on repository or chat context.
 

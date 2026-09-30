@@ -226,19 +226,10 @@ fn validate_frame_destination(root: &Path, destination: &Path) -> Result<PathBuf
 }
 
 pub fn merge_output_name(document: &Path, timestamp: &str) -> String {
-    let name = document
-        .file_stem()
-        .and_then(|name| name.to_str())
-        .unwrap_or_default();
-    let number: String = name
-        .trim_start()
-        .chars()
-        .take_while(char::is_ascii_digit)
-        .collect();
-    if number.is_empty() {
-        format!("merge_{timestamp}.mp4")
+    if let Some(number) = crate::naming::episode_number(document) {
+        format!("{number} merge_{timestamp}.mp4")
     } else {
-        format!("{number:0>2} merge_{timestamp}.mp4")
+        format!("merge_{timestamp}.mp4")
     }
 }
 
@@ -826,7 +817,11 @@ mod tests {
     fn merge_output_uses_episode_number() {
         assert_eq!(
             merge_output_name(Path::new("01 重生归来.md"), "20260917-123045"),
-            "01 merge_20260917-123045.mp4"
+            "0001 merge_20260917-123045.mp4"
+        );
+        assert_eq!(
+            merge_output_name(Path::new("123 重生归来.md"), "20260917-123045"),
+            "0123 merge_20260917-123045.mp4"
         );
         assert_eq!(
             merge_output_name(Path::new("大纲.md"), "20260917-123045"),
@@ -848,7 +843,7 @@ mod tests {
         }
         let filename =
             concat_videos(&root, "01 中文.md", &["S001.mp4".into(), "S002.mp4".into()]).unwrap();
-        assert!(filename.starts_with("01 merge_"));
+        assert!(filename.starts_with("0001 merge_"));
         assert!(filename.ends_with(".mp4"));
         let output = root.join(&filename);
         assert!(output.is_file());

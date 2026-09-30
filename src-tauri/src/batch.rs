@@ -1390,7 +1390,7 @@ mod tests {
                      local_file, profile_id, submit_url, created_at, updated_at)
                  VALUES
                     ('audio-finished', '01.md', 'C01', '秦墨', 'SUCCESS',
-                     '01_秦墨.wav', 'fixture', 'https://example.test/submit', ?1, ?1)",
+                     '0001_秦墨.wav', 'fixture', 'https://example.test/submit', ?1, ?1)",
                 [now()],
             )
             .unwrap();
@@ -1402,7 +1402,7 @@ mod tests {
         let synced = get_job(root, &job.job_id).unwrap();
         assert_eq!(synced.status, "cancelled");
         assert_eq!(synced.items[0].status, "completed");
-        assert_eq!(synced.items[0].local_file.as_deref(), Some("01_秦墨.wav"));
+        assert_eq!(synced.items[0].local_file.as_deref(), Some("0001_秦墨.wav"));
     }
 
     fn two_shot_job(root: &std::path::Path) -> BatchJob {
@@ -1576,7 +1576,7 @@ mod tests {
         assert_eq!(job.status, "completed");
         assert_eq!(job.item_completed, 2);
         let filename = job.result_file.expect("result");
-        assert!(filename.starts_with("01 merge_"));
+        assert!(filename.starts_with("0001 merge_"));
         assert!(root.join(&filename).is_file());
         assert_eq!(job.items[0].local_file.as_deref(), Some("S001.mp4"));
         assert_eq!(fs::read_to_string(root.join("01.md")).unwrap(), "# 一集\n");

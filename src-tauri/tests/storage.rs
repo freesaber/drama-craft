@@ -140,7 +140,7 @@ fn rejects_traversal_reserved_names_and_overwrites() {
     assert!(agents.contains("是否使用旁白？"));
     assert!(agents.contains("旁白选择同样是全剧约束"));
     assert!(agents.contains("全剧不创建旁白角色"));
-    assert!(agents.contains("声音安排无「旁白」发声方式"));
+    assert!(agents.contains("声音安排表无旁白台词"));
     assert!(!agents.contains("| N001 | 旁白 |"));
     assert!(agents.contains("视频提示词画面与发声规则"));
     assert!(agents.contains("视频提示词画面风格写法"));
@@ -166,12 +166,13 @@ fn rejects_traversal_reserved_names_and_overwrites() {
     assert!(agents.contains("S0001"));
     assert!(agents.contains("全剧验收（所有集写完后必须做）"));
     assert!(agents.contains("跨集同一素材 ID / 同一名称，文件名必须逐字相同"));
-    assert!(
-        agents.contains("| 角色ID | 名称 | 角色图 | 音色文件 | 使用镜号 |\n|---|---|---|---|---|")
-    );
-    assert!(agents.contains("角色表固定为五列"));
-    assert!(agents.contains("先写完分镜，再反向生成使用镜号"));
-    assert!(agents.contains("使用镜号由分镜反向生成并双向一致"));
+    assert!(agents.contains("| 角色ID | 名称 | 角色图 | 音色文件 |\n|---|---|---|---|"));
+    assert!(agents.contains("角色表固定为四列"));
+    assert!(agents.contains("角色出场关系只在每镜 `角色：` 字段填写"));
+    assert!(agents.contains("不重复登记镜号"));
+    assert!(agents.contains("文件名建议 `0001 集名.md`、`0002 集名.md`"));
+    assert!(agents.contains("`0001 首帧_S0001.png`"));
+    assert!(agents.contains("`0001 S0001.mp4`"));
     assert!(agents.contains("视频提示词已写入已确认的画面风格"));
     assert!(agents.contains("首帧提示词画面风格写法（硬性规则）"));
     assert!(agents.contains("每个首帧图片提示词在画幅比后直接写出用户确认的完整核心风格词"));

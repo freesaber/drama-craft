@@ -64,12 +64,12 @@ describe("asset index", () => {
   it("resolves matching four-digit source rows and keeps old three-digit episodes readable", () => {
     const source = createEpisodeTemplate("01 集名", "01")
       .replace(
-        "|---|---|---|---|---|\n\n## 本集使用素材",
-        "|---|---|---|---|---|\n| C0001 | 秦墨 | `01 素材_秦墨.png` | — | S0001 |\n\n## 本集使用素材",
+        "|---|---|---|---|\n\n## 本集使用素材",
+        "|---|---|---|---|\n| C0001 | 秦墨 | `01 素材_秦墨.png` | — |\n\n## 本集使用素材",
       )
       .replace(
-        "|---|---|---|---|---|\n\n## 本集声音安排",
-        "|---|---|---|---|---|\n| A0001 | 王宫大殿 | 场景 | `01 素材_王宫大殿.png` | S0001 |\n\n## 本集声音安排",
+        "|---|---|---|---|\n\n## 本集声音安排",
+        "|---|---|---|---|\n| A0001 | 王宫大殿 | 场景 | `0001 素材_王宫大殿.png` |\n\n## 本集声音安排",
       )
       .replace("角色：—", "角色：C0001");
     expect(parseStoryboard(source).cards[0].id).toBe("S0001");
@@ -79,15 +79,15 @@ describe("asset index", () => {
     );
     expect(checkAssetSource(parsed.assets[0], source)).toEqual([]);
     expect(checkAssetSource(parsed.assets[1], source)).toEqual([]);
-    const old = `<!-- drama-craft:episode:v1 -->\n\n# 第01集 旧剧本\n\n## 角色绑定\n\n| 角色ID | 名称 | 角色图 | 音色文件 | 使用镜号 |\n|---|---|---|---|---|\n| C001 | 旅人 | — | — | S001 |\n\n## S001 旧镜头\n\n角色：C001\n\n### 故事走向\n\n旅人前行。\n`;
+    const old = `<!-- drama-craft:episode:v1 -->\n\n# 第0001集 旧剧本\n\n## 角色绑定\n\n| 角色ID | 名称 | 角色图 | 音色文件 |\n|---|---|---|---|\n| C001 | 旅人 | — | — |\n\n## S001 旧镜头\n\n角色：C001\n\n### 故事走向\n\n旅人前行。\n`;
     expect(parseStoryboard(old).cards[0].id).toBe("S001");
     expect(parseStoryboard(old).episode.characters[0].id).toBe("C001");
   });
 
   it("reads a reused scene prompt from its indexed first document and rejects a changed file", () => {
     const source = createEpisodeTemplate("01 集名", "01").replace(
-      "|---|---|---|---|---|\n\n## 本集声音安排",
-      "|---|---|---|---|---|\n| A0001 | 王宫大殿 | 场景 | `01 素材_王宫大殿.png` | S0001 |\n\n### 王宫大殿\n\n```text\n王宫大殿完整提示词\n```\n\n## 本集声音安排",
+      "|---|---|---|---|\n\n## 本集声音安排",
+      "|---|---|---|---|\n| A0001 | 王宫大殿 | 场景 | `0001 素材_王宫大殿.png` |\n\n### 王宫大殿\n\n```text\n王宫大殿完整提示词\n```\n\n## 本集声音安排",
     );
     const index = parseAssetIndex(
       JSON.stringify({ schemaVersion: 1, assets: entries }),
@@ -98,7 +98,7 @@ describe("asset index", () => {
         index.assets,
         "A0001",
         "王宫大殿",
-        "01 素材_王宫大殿.png",
+        "0001 素材_王宫大殿.png",
         source,
       ),
     ).toEqual({ prompt: "王宫大殿完整提示词", firstDocument: document });
@@ -116,7 +116,7 @@ describe("asset index", () => {
         index.assets,
         "A0001",
         "别的场景",
-        "01 素材_王宫大殿.png",
+        "0001 素材_王宫大殿.png",
         source,
       ),
     ).toBeNull();

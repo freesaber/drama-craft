@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, chooseMedia, desktop, errorMessage } from "./api";
 import { indexedGenerationPrompt, parseAssetIndex } from "./assetIndex";
-import { dialogueCharacterName, formatDialogueColumn } from "./episodeFormat";
+import { formatDialogueColumn } from "./episodeFormat";
 import { ui } from "./i18n";
 import { isProjectRelativeImage } from "./markdown";
 import type { DocumentEntry, EpisodeData, Project } from "./types";
@@ -325,9 +325,6 @@ export default function EpisodeOverview({
                       <th className="episode-dialogue-role">
                         {ui.episodeData.dialogueRole}
                       </th>
-                      <th className="episode-dialogue-delivery">
-                        {ui.episodeData.dialogueDelivery}
-                      </th>
                       <th className="episode-dialogue-line">
                         <span className="episode-dialogue-line-head">
                           {ui.episodeData.dialogueLine}
@@ -356,9 +353,6 @@ export default function EpisodeOverview({
                           </button>
                         </span>
                       </th>
-                      <th className="episode-dialogue-interval">
-                        {ui.episodeData.dialogueInterval}
-                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -366,18 +360,9 @@ export default function EpisodeOverview({
                       <tr key={`${line.shotId}-${line.characterId}-${index}`}>
                         <td className="episode-dialogue-shot">{line.shotId}</td>
                         <td className="episode-dialogue-role">
-                          {dialogueCharacterName(
-                            line.characterId,
-                            episode.characters,
-                          )}
-                        </td>
-                        <td className="episode-dialogue-delivery">
-                          {line.delivery}
+                          {line.characterName}
                         </td>
                         <td className="episode-dialogue-line">{line.text}</td>
-                        <td className="episode-dialogue-interval">
-                          {line.interval}
-                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -491,9 +476,6 @@ export function ShotCast({
                   )?.name
                 }
               </b>
-              <small>
-                {line.delivery} · {line.interval}
-              </small>
               <span>{line.text}</span>
             </p>
           ))}

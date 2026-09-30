@@ -5,9 +5,6 @@ import type { CharacterData, EpisodeData, Shot } from "./types";
 import { ui } from "./i18n";
 import { ROLE_COLUMNS, ASSET_COLUMNS, DIALOGUE_COLUMNS } from "./episodeFormat";
 
-const ids = (value: string) => [
-  ...new Set((value.match(/S\d+/gi) ?? []).map((id) => id.toUpperCase())),
-];
 const cellText = (cell?: TableCell) => (cell ? plain(cell).trim() : "");
 const empty = (value: string) => !value || value === "—" || value === "-";
 
@@ -134,7 +131,6 @@ export function parseEpisode(
         image: onlyRef(c[2], cellText(c[1]), "image"),
         imagePrompt: generationPrompt(cellText(c[1])),
         voice: onlyRef(c[3], cellText(c[1]), "audio"),
-        shots: ids(cellText(c[4])),
       });
     }
   }
@@ -163,7 +159,6 @@ export function parseEpisode(
           name,
           kind: cellText(c[2]),
           reference: ref,
-          shots: ids(cellText(c[4])),
           note: "",
           prompt: generationPrompt(name),
         });
@@ -178,12 +173,16 @@ export function parseEpisode(
           data.diagnostics.push(ui.episodeData.unknownRole(id));
           continue;
         }
+        const characterName = cellText(c[2]);
+        if (characterName !== matches[0].name)
+          data.diagnostics.push(
+            ui.episodeData.dialogueRoleMismatch(id, characterName),
+          );
         data.dialogues.push({
           shotId: cellText(c[0]).toUpperCase(),
           characterId: matches[0].id,
-          delivery: cellText(c[2]),
+          characterName,
           text: cellText(c[3]),
-          interval: cellText(c[4]),
         });
       }
   }
@@ -198,10 +197,6 @@ export function parseEpisode(
     if (linkedAsset?.prompt) role.imagePrompt = linkedAsset.prompt;
   }
   const shotIds = new Set(shots.map((s) => s.id));
-  for (const role of data.characters)
-    for (const id of role.shots)
-      if (!shotIds.has(id))
-        data.diagnostics.push(ui.episodeData.unknownShot(id));
   for (const line of data.dialogues)
     if (!shotIds.has(line.shotId))
       data.diagnostics.push(ui.episodeData.unknownShot(line.shotId));
@@ -231,9 +226,6 @@ export function parseEpisode(
         data.diagnostics.push(ui.episodeData.unknownRole(id));
     data.castByShot[shot.id] = cast.filter((id) => roleIds.has(id));
     if (data.format === "v1") {
-      for (const role of data.characters)
-        if (role.shots.includes(shot.id) !== cast.includes(role.id))
-          data.diagnostics.push(ui.episodeData.castMismatch(shot.id, role.id));
       const stories = nodes.filter(
         (n) =>
           n.type === "heading" &&

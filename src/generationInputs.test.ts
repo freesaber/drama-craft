@@ -59,6 +59,37 @@ const episode: EpisodeData = {
 };
 
 describe("generationInputs", () => {
+  it("does not auto-add episode materials to a shot without a shot material mapping", () => {
+    const episodeData: EpisodeData = {
+      ...episode,
+      assets: [
+        {
+          id: "A0001",
+          name: "渡口",
+          kind: "场景",
+          reference: "scene.png",
+          note: "",
+          prompt: "",
+        },
+      ],
+      characters: [
+        {
+          id: "C0001",
+          name: "旅人",
+          description: "",
+          image: "traveler.png",
+          imagePrompt: "",
+          voice: "traveler.wav",
+        },
+      ],
+      castByShot: { S0001: ["C0001"] },
+    };
+
+    expect(shotImageInputs(card({ id: "S0001" }), episodeData)).toEqual([
+      { reference: "traveler.png", label: "旅人" },
+    ]);
+  });
+
   it("shows current materials and restores historical checked states", () => {
     const images = ["frame.png", "scene.png", "alice.png", "spider.png"].map(
       (reference, index) => ({

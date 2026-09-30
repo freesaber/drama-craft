@@ -220,13 +220,6 @@ export function shotImageInputs(
   for (const role of episode.characters)
     if (cast.has(role.id) && role.image)
       items.push({ reference: role.image, label: role.name });
-  for (const asset of episode.assets)
-    if (
-      asset.reference &&
-      asset.shots.includes(card.id) &&
-      mediaKind(asset.reference) === "image"
-    )
-      items.push({ reference: asset.reference, label: asset.name });
   for (const entry of card.references)
     if (mediaKind(entry.reference) === "image")
       items.push({

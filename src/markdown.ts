@@ -149,6 +149,6 @@ export function documentTemplate(
   if (kind === "outline")
     return `# ${title}\n\n## 故事背景\n\n## 人物与目标\n\n## 完整故事\n\n## 分集规划\n`;
   if (kind === "blank") return `# ${title}\n\n`;
-  const number = /^(\d+)/.exec(title)?.[1].padStart(2, "0") ?? "01";
+  const number = /^(\d+)/.exec(title)?.[1].padStart(4, "0") ?? "0001";
   return createEpisodeTemplate(title, number, defaultResolution);
 }

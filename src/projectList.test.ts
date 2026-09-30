@@ -15,16 +15,16 @@ const project = (name: string, createdAt?: string): Recent => ({
 describe("project list", () => {
   it("sorts projects by creation time descending and preserves legacy order", () => {
     const items = [
-      project("旧项目甲"),
-      project("旧项目乙"),
+      project("旧项目晨曦"),
+      project("旧项目远山"),
       project("较新", "2026-09-15T08:00:00Z"),
       project("最新", "2026-09-15T09:00:00Z"),
     ];
     expect(filterAndSortProjects(items, "").map((item) => item.name)).toEqual([
       "最新",
       "较新",
-      "旧项目甲",
-      "旧项目乙",
+      "旧项目晨曦",
+      "旧项目远山",
     ]);
   });
 

@@ -191,11 +191,6 @@
   width: 88px;
   white-space: nowrap;
 }
-.episode-dialogue-delivery {
-  width: 148px;
-  color: #6d7c68;
-  white-space: nowrap;
-}
 .episode-dialogue-line {
   width: auto;
   line-height: 1.65;
@@ -216,11 +211,6 @@
   font-weight: 500;
   line-height: 1.5;
   color: #456c4f;
-}
-.episode-dialogue-interval {
-  width: 118px;
-  color: #6d7c68;
-  white-space: nowrap;
 }
 .generation-prompt-modal {
   position: relative;

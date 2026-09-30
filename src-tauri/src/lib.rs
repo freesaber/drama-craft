@@ -3,6 +3,7 @@ pub mod batch;
 pub mod ffmpeg;
 pub mod frame_versions;
 pub mod generation;
+pub mod naming;
 pub mod settings;
 pub mod storage;
 use serde::{Deserialize, Serialize};

@@ -5,15 +5,13 @@ export const ROLE_COLUMNS = [
   "名称",
   "角色图",
   "音色文件",
-  "使用镜号",
 ];
-export const ASSET_COLUMNS = ["素材ID", "名称", "类型", "文件", "使用镜号"];
+export const ASSET_COLUMNS = ["素材ID", "名称", "类型", "文件"];
 export const DIALOGUE_COLUMNS = [
   "镜号",
   "角色ID",
-  "发声方式",
+  "角色名称",
   "台词",
-  "发声区间",
 ];
 export const VIDEO_REF_COLUMNS = ["API参数", "提示词标签", "上传素材"];
 const table = (columns: string[]) =>
@@ -24,6 +22,7 @@ export function createEpisodeTemplate(
   number: string,
   defaultResolution = "480p横(864*480)",
 ) {
+  number = number.padStart(4, "0");
   return `${EPISODE_MARKER}\n\n# 第${number}集 ${title.replace(/^\d+\s*/, "")}\n\n本集内容：\n\n## 角色绑定\n\n${table(ROLE_COLUMNS)}\n\n## 本集使用素材\n\n${table(ASSET_COLUMNS)}\n\n## 本集声音安排\n\n${table(DIALOGUE_COLUMNS)}\n\n## S0001 镜头名\n\n角色：—\n\n### 故事走向\n\n### 首帧生成\n\n出图文件名：\`${number} 首帧_S0001.png\`。\n\n**首帧图片提示词**\n\n\`\`\`text\n16:9横向单幅画面。[在此逐字写入用户已确认的完整核心画面风格词，不得只写“沿用参考图风格”]。场景与正式角色沿用对应参考图；跨镜群像沿用群像素材图。\n构图描述（景别、站位）。相邻镜可远景承接上一镜人物。只画动作开始前的静态一刻，不写心理说明。\n\`\`\`\n\n### 视频生成\n\n视频文件名：\`${number} S0001.mp4\`。\n\n| API参数 | 提示词标签 | 上传素材 |\n|---|---|---|\n| \`ref_image_0\` | \`<Picture 1>\` | \`${number} 首帧_S0001.png\` |\n\n**视频提示词｜duration=5，resolution=${defaultResolution}**\n\n\`\`\`text\n<Picture 1> is the first frame of [Shot 1].\n\ndetailed_description:\nThe target video uses [replace with the visual style confirmed with the user, written in concise English]. Maintain that style and the rendering of <Picture 1> throughout the video.\n\n[Shot 1] The shot begins from <Picture 1>, preserving its scene, lighting, and opening composition.\n在此描述可拍摄的动作、摄影机行为与声音；不要写小说式说明。\n\noverall_soundscape:\n[用简短英文描述持续环境声。]\n\nnon_diegetic_music:\nN/A\n\`\`\`\n`;
 }
 

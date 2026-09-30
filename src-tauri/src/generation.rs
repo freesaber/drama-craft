@@ -532,19 +532,10 @@ fn result_url(data: &Value) -> Option<String> {
 }
 
 fn video_stem(document: &Path, shot_id: &str, timestamp: &str) -> String {
-    let name = document
-        .file_stem()
-        .and_then(|name| name.to_str())
-        .unwrap_or_default();
-    let number: String = name
-        .trim_start()
-        .chars()
-        .take_while(char::is_ascii_digit)
-        .collect();
-    if number.is_empty() {
-        format!("{shot_id}_{timestamp}")
+    if let Some(number) = crate::naming::episode_number(document) {
+        format!("{number} {shot_id}_{timestamp}")
     } else {
-        format!("{number:0>2} {shot_id}_{timestamp}")
+        format!("{shot_id}_{timestamp}")
     }
 }
 
@@ -838,9 +829,10 @@ mod tests {
     #[test]
     fn video_names_use_the_episode_document_number() {
         for (document, expected) in [
-            ("01 测试.md", "01 S007_20260913-222911"),
-            ("episodes/2 测试.md", "02 S007_20260913-222911"),
-            ("episodes/123 测试.md", "123 S007_20260913-222911"),
+            ("01 测试.md", "0001 S007_20260913-222911"),
+            ("episodes/2 测试.md", "0002 S007_20260913-222911"),
+            ("episodes/123 测试.md", "0123 S007_20260913-222911"),
+            ("episodes/10000 测试.md", "10000 S007_20260913-222911"),
             ("01 目录/episode.md", "S007_20260913-222911"),
         ] {
             assert_eq!(
@@ -853,19 +845,24 @@ mod tests {
     #[test]
     fn concurrent_download_of_the_same_result_reuses_the_existing_file() {
         let dir = tempdir().unwrap();
-        let target = dir.path().join("01 S001_20260918-010203.mp4");
+        let target = dir.path().join("0001 S001_20260918-010203.mp4");
         fs::write(&target, b"same-video").unwrap();
         let mut temp = tempfile::NamedTempFile::new_in(dir.path()).unwrap();
         temp.write_all(b"same-video").unwrap();
 
-        let filename =
-            persist_download(temp, dir.path(), "01 S001_20260918-010203", "12345678-task").unwrap();
+        let filename = persist_download(
+            temp,
+            dir.path(),
+            "0001 S001_20260918-010203",
+            "12345678-task",
+        )
+        .unwrap();
 
-        assert_eq!(filename, "01 S001_20260918-010203.mp4");
+        assert_eq!(filename, "0001 S001_20260918-010203.mp4");
         assert_eq!(fs::read(target).unwrap(), b"same-video");
         assert!(!dir
             .path()
-            .join("01 S001_20260918-010203_12345678.mp4")
+            .join("0001 S001_20260918-010203_12345678.mp4")
             .exists());
     }
 
@@ -873,17 +870,22 @@ mod tests {
     fn colliding_download_with_different_contents_uses_a_task_suffix() {
         let dir = tempdir().unwrap();
         fs::write(
-            dir.path().join("01 S001_20260918-010203.mp4"),
+            dir.path().join("0001 S001_20260918-010203.mp4"),
             b"other-video",
         )
         .unwrap();
         let mut temp = tempfile::NamedTempFile::new_in(dir.path()).unwrap();
         temp.write_all(b"new-video").unwrap();
 
-        let filename =
-            persist_download(temp, dir.path(), "01 S001_20260918-010203", "12345678-task").unwrap();
+        let filename = persist_download(
+            temp,
+            dir.path(),
+            "0001 S001_20260918-010203",
+            "12345678-task",
+        )
+        .unwrap();
 
-        assert_eq!(filename, "01 S001_20260918-010203_12345678.mp4");
+        assert_eq!(filename, "0001 S001_20260918-010203_12345678.mp4");
         assert_eq!(fs::read(dir.path().join(&filename)).unwrap(), b"new-video");
     }
 
@@ -1007,7 +1009,7 @@ mod tests {
             tauri::async_runtime::block_on(poll(&root, &settings, &record.task_id)).unwrap();
         assert_eq!(completed.status, "completed");
         let file = completed.local_file.unwrap();
-        assert!(file.starts_with("01 S0001_"), "{file}");
+        assert!(file.starts_with("0001 S0001_"), "{file}");
         assert!(file.ends_with(".mp4"), "{file}");
         assert_eq!(fs::read(root.join(&file)).unwrap(), b"synthetic-video");
         let records = history(&root, "01 测试.md", "S0001").unwrap();

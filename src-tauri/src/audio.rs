@@ -346,20 +346,7 @@ fn safe_name(value: &str) -> String {
 }
 
 fn audio_stem(document: &Path, character_name: &str, timestamp: &str) -> String {
-    let stem = document
-        .file_stem()
-        .and_then(|value| value.to_str())
-        .unwrap_or_default();
-    let number: String = stem
-        .trim_start()
-        .chars()
-        .take_while(char::is_ascii_digit)
-        .collect();
-    let episode = if number.is_empty() {
-        "00".into()
-    } else {
-        format!("{number:0>2}")
-    };
+    let episode = crate::naming::episode_number(document).unwrap_or_else(|| "0000".into());
     format!("{episode}_{}_{timestamp}", safe_name(character_name))
 }
 
@@ -658,7 +645,7 @@ mod tests {
     fn audio_name_uses_episode_character_and_timestamp() {
         assert_eq!(
             audio_stem(Path::new("002 终焉.md"), "林/小北", "20260918-120000"),
-            "002_林_小北_20260918-120000"
+            "0002_林_小北_20260918-120000"
         );
     }
 
@@ -740,7 +727,7 @@ mod tests {
         let completed = tauri::async_runtime::block_on(poll(&root, &settings, "audio-1")).unwrap();
         assert_eq!(completed.status, "completed");
         let file = completed.local_file.unwrap();
-        assert!(file.starts_with("02_秦墨_"), "{file}");
+        assert!(file.starts_with("0002_秦墨_"), "{file}");
         assert!(file.ends_with(".wav"), "{file}");
         assert_eq!(fs::read(root.join(file)).unwrap(), b"synthetic-wav");
         server.join().unwrap();
