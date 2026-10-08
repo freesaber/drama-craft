@@ -133,7 +133,13 @@ fn rejects_traversal_reserved_names_and_overwrites() {
         agents.find("### 第四步：先完成全剧人物与对白").unwrap()
             < agents.find("### 第五步：逐集生成分镜剧本").unwrap()
     );
-    assert!(agents.contains("N ≥ ceil(2 × D)"));
+    assert!(!agents.contains("N ≥ ceil(2 × D)"));
+    assert!(agents.contains("不规定每镜最低字数"));
+    assert!(agents.contains("```text\n上一镜尾帧\n```"));
+    assert!(!agents.contains("首帧来源："));
+    assert!(agents.contains("用户生成上一镜视频后"));
+    assert!(dialogue.contains("## 逐集对白正文"));
+    assert!(!dialogue.contains("精简重写台词"));
     assert!(agents.contains("S 镜号是一条 1—15 秒的独立视频生成请求"));
     assert!(agents.contains("不能把一整场对话直接标成一个 S 镜号"));
     assert!(agents.contains("有效字数必须从已写出的台词逐行重算"));
