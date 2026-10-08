@@ -98,6 +98,22 @@ try {
   await expect(page.getByLabel("Markdown 文档编辑器")).not.toBeVisible();
   const root = join(testRoot, "01 原创 渡口");
   await access(join(root, ".drama-craft", "project.json"));
+  await page.getByRole("button", { name: "▤ AGENTS.md", exact: true }).click();
+  await expect(
+    page.locator(".board-document summary", { hasText: "素材引用" }),
+  ).toHaveCount(0);
+  await expect(
+    page.locator('.markdown-body input[type="checkbox"]'),
+  ).toHaveCount(0);
+  const checklistItem = page
+    .locator(".markdown-body li", { hasText: /^标准 Markdown/ })
+    .first();
+  await expect(checklistItem).toBeVisible();
+  assert.equal(
+    await checklistItem.evaluate((item) => getComputedStyle(item).listStyleType),
+    "disc",
+  );
+  await page.getByRole("button", { name: "▤ 剧本大纲.md", exact: true }).click();
   assert.ok(
     (
       await readFile(join(root, ".drama-craft", "project.json"), "utf8")

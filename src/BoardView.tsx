@@ -94,6 +94,8 @@ export default function BoardView({
   onMediaPlaced?: () => void;
   onMediaChanged?: () => void;
 }) {
+  const isAgentDocument =
+    document.split(/[\\/]/).at(-1)?.toLowerCase() === "agents.md";
   const asset = (
     reference: string,
     onAvailability?: (exists: boolean) => void,
@@ -185,7 +187,7 @@ export default function BoardView({
                 )}
               </div>
               <Preview text={raw} />
-              {showSourceActions && (
+              {showSourceActions && !isAgentDocument && (
                 <details className="shot-details">
                   <summary>{ui.assets}</summary>
                   <PublicAssets

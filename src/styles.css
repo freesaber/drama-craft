@@ -2422,6 +2422,16 @@ select:focus {
   color: #5a6752;
   overflow-wrap: anywhere;
 }
+.markdown-body .task-list-item {
+  list-style-type: none;
+}
+.markdown-body .task-list-item input[type="checkbox"] {
+  width: 1em;
+  height: 1em;
+  padding: 0;
+  margin: 0 0.5em 0 -1.5em;
+  vertical-align: middle;
+}
 .markdown-body h1 {
   font-size: 23px;
   line-height: 1.5;
