@@ -3293,27 +3293,3 @@ select:focus {
     padding-top: 50px;
   }
 }
-.asset-library-view {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: 24px;
-}
-.asset-library-header, .asset-library-filters, .asset-library-results {
-  display: flex;
-  gap: 16px;
-}
-.asset-library-header { justify-content: space-between; align-items: start; }
-.asset-library-header h2 { margin: 0; }
-.asset-library-filters { align-items: center; margin: 20px 0; }
-.asset-library-filters input { flex: 1; min-width: 180px; }
-.asset-library-list { min-width: 300px; width: 42%; display: grid; align-content: start; gap: 6px; }
-.asset-library-list button { text-align: left; padding: 10px; }
-.asset-library-list small { display: block; margin-top: 4px; }
-.asset-library-detail { flex: 1; padding: 16px; border: 1px solid var(--border, #ccc); border-radius: 10px; }
-.asset-library-detail pre { white-space: pre-wrap; overflow-wrap: anywhere; }
-.asset-index-diagnostics { padding: 12px; border: 1px solid #b7813d; border-radius: 8px; }
-@media (max-width: 700px) {
-  .asset-library-header, .asset-library-results { flex-direction: column; }
-  .asset-library-list { width: 100%; min-width: 0; }
-}
