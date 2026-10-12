@@ -41,6 +41,8 @@ struct Recent {
 struct Preferences {
     recent: Vec<Recent>,
     #[serde(default)]
+    new_project_directories: Option<NewProjectDirectories>,
+    #[serde(default)]
     preview_visible: Option<bool>,
     #[serde(default)]
     generation_base_url: String,
@@ -53,16 +55,25 @@ struct Preferences {
     #[serde(default)]
     audio_authorizations: HashMap<String, String>,
 }
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NewProjectDirectories {
+    parent: String,
+    character_directory: Option<String>,
+    voice_directory: String,
+}
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PublicPreferences {
     recent: Vec<Recent>,
+    new_project_directories: Option<NewProjectDirectories>,
     #[serde(skip_serializing_if = "Option::is_none")]
     preview_visible: Option<bool>,
 }
 fn public_preferences(prefs: &Preferences) -> PublicPreferences {
     PublicPreferences {
         recent: prefs.recent.clone(),
+        new_project_directories: prefs.new_project_directories.clone(),
         preview_visible: prefs.preview_visible,
     }
 }
@@ -234,12 +245,30 @@ fn create_project(
     voice_directory: String,
 ) -> Result<Opened> {
     let root = storage::create_project(
-        &PathBuf::from(parent),
+        &PathBuf::from(&parent),
         &name,
         character_directory.as_deref().map(std::path::Path::new),
         std::path::Path::new(&voice_directory),
     )?;
-    open_project(app, state, root.to_string_lossy().into_owned(), None, None)
+    let opened = open_project(
+        app.clone(),
+        state,
+        root.to_string_lossy().into_owned(),
+        None,
+        None,
+    )?;
+    let mut prefs = read_prefs(&app)?;
+    prefs.new_project_directories = Some(NewProjectDirectories {
+        parent,
+        character_directory,
+        voice_directory,
+    });
+    storage::atomic_write(
+        &prefs_path(&app)?,
+        &serde_json::to_vec_pretty(&prefs)?,
+        false,
+    )?;
+    Ok(opened)
 }
 #[tauri::command]
 fn scan_project(state: State<Sessions>, handle: String) -> Result<storage::Scan> {
@@ -551,6 +580,50 @@ mod tests {
                 .unwrap();
         assert_eq!(prefs.recent.len(), 1);
         assert_eq!(prefs.recent[0].updated_at, None);
+        assert_eq!(prefs.new_project_directories, None);
+    }
+
+    #[test]
+    fn new_project_directories_survive_preferences_round_trip() {
+        let mut prefs = Preferences::default();
+        prefs.new_project_directories = Some(NewProjectDirectories {
+            parent: r"C:\synthetic\projects".into(),
+            character_directory: Some(r"C:\synthetic\characters".into()),
+            voice_directory: r"C:\synthetic\voices".into(),
+        });
+        for characters in [Some(r"C:\synthetic\characters".to_string()), None] {
+            prefs
+                .new_project_directories
+                .as_mut()
+                .unwrap()
+                .character_directory = characters;
+            let restored: Preferences =
+                serde_json::from_slice(&serde_json::to_vec(&prefs).unwrap()).unwrap();
+            assert_eq!(
+                restored.new_project_directories,
+                prefs.new_project_directories
+            );
+            let public = serde_json::to_value(public_preferences(&restored)).unwrap();
+            assert_eq!(
+                public["newProjectDirectories"]["parent"],
+                r"C:\synthetic\projects"
+            );
+            assert_eq!(
+                public["newProjectDirectories"]["voiceDirectory"],
+                r"C:\synthetic\voices"
+            );
+            assert_eq!(
+                public["newProjectDirectories"]["characterDirectory"],
+                serde_json::to_value(
+                    &prefs
+                        .new_project_directories
+                        .as_ref()
+                        .unwrap()
+                        .character_directory
+                )
+                .unwrap()
+            );
+        }
     }
 
     #[test]

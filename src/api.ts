@@ -91,7 +91,15 @@ export const api = {
   openMedia: (handle: string, document: string, reference: string) =>
     invoke<void>("open_media", { handle, document, reference }),
   preferences: () =>
-    invoke<{ recent: Recent[]; previewVisible?: boolean }>("get_preferences"),
+    invoke<{
+      recent: Recent[];
+      previewVisible?: boolean;
+      newProjectDirectories?: {
+        parent: string;
+        characterDirectory: string | null;
+        voiceDirectory: string;
+      } | null;
+    }>("get_preferences"),
   removeRecent: (path: string) =>
     invoke<{ recent: Recent[] }>("remove_recent", { path }),
   renameRecent: (path: string, name: string, renameFolder: boolean) =>

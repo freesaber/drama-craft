@@ -516,7 +516,7 @@ export default function App() {
       } else if (modal === "project") {
         if (!parent || !name.trim() || !voiceDirectory.trim()) return;
         const created = await api.create(
-          parent,
+          parent.trim(),
           name.trim(),
           characterDirectory.trim() || undefined,
           voiceDirectory.trim(),
@@ -927,13 +927,15 @@ export default function App() {
               disabled={!desktop || busy}
               onClick={() => {
                 void run(async () => {
+                  const { newProjectDirectories: directories } =
+                    await api.preferences();
                   const voices =
+                    directories?.voiceDirectory ||
                     defaultVoiceDirectory ||
                     (await api.defaultVoiceDirectory());
-                  setDefaultVoiceDirectory(voices);
                   setName("");
-                  setParent("");
-                  setCharacterDirectory("");
+                  setParent(directories?.parent ?? "");
+                  setCharacterDirectory(directories?.characterDirectory ?? "");
                   setVoiceDirectory(voices);
                   setModal("project");
                 });
