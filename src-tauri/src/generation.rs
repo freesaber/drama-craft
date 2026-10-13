@@ -237,6 +237,157 @@ fn get(root: &Path, task_id: &str) -> Result<GenerationRecord> {
         .map_err(|e| AppError::new("database", e.to_string()))
 }
 
+/// Delete a finished version and its project-local download. Markdown references
+/// remain authoritative: a referenced video must be replaced before deletion.
+pub fn delete(root: &Path, document: &str, shot_id: &str, task_id: &str) -> Result<()> {
+    use std::path::Component;
+    let doc = storage::document_path(root, document, true)?;
+    let record = get(root, task_id)?;
+    if record.document != document || record.shot_id != shot_id {
+        return Err(AppError::new("generation", "生成记录不属于当前分镜"));
+    }
+    if !matches!(
+        record.status.to_lowercase().as_str(),
+        "completed"
+            | "success"
+            | "succeeded"
+            | "failed"
+            | "error"
+            | "cancelled"
+            | "download_failed"
+    ) {
+        return Err(AppError::new("generation", "生成中的版本不能删除"));
+    }
+    let mut connection = database(root)?;
+    let transaction = connection
+        .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+        .map_err(|e| AppError::new("database", e.to_string()))?;
+    let in_batch: bool = transaction
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM batch_job_items WHERE generation_task_id = ?1
+          AND (status NOT IN ('completed', 'failed', 'cancelled')
+               OR (status = 'completed' AND applied_at IS NULL)))",
+            [task_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| AppError::new("database", e.to_string()))?;
+    if in_batch {
+        return Err(AppError::new(
+            "generation",
+            "批量任务仍在使用此版本，请等待任务结束后再删除",
+        ));
+    }
+    let mut video = None;
+    if let Some(reference) = record.local_file.as_deref() {
+        // Downloads are stored beside the episode using a single generated filename.
+        // Do not accept arbitrary paths from a tampered database.
+        let relative = Path::new(reference);
+        if relative.components().count() != 1
+            || !matches!(relative.components().next(), Some(Component::Normal(_)))
+        {
+            return Err(AppError::new("path", "只能删除文档旁的生成视频"));
+        }
+        storage::validate_name(reference)?;
+        if !relative
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("mp4"))
+        {
+            return Err(AppError::new("media", "只能删除生成的 MP4 视频"));
+        }
+        let path = doc.parent().unwrap().join(relative);
+        match fs::symlink_metadata(&path) {
+            Ok(meta) => {
+                if meta.permissions().readonly() {
+                    return Err(AppError::new(
+                        "media",
+                        "视频为只读文件，无法删除；历史记录已保留",
+                    ));
+                }
+                if meta.file_type().is_symlink()
+                    || !meta.is_file()
+                    || !fs::canonicalize(&path)?.starts_with(root)
+                {
+                    return Err(AppError::new("path", "不删除链接文件或项目外视频"));
+                }
+                video = Some(path);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
+        }
+        let scan = storage::scan(root)?;
+        if !scan.warnings.is_empty() {
+            return Err(AppError::new(
+                "media",
+                "无法完整检查项目的视频引用，请检查项目目录权限",
+            ));
+        }
+        for item in scan.documents {
+            // Conservatively protect references, including legacy/unknown Markdown.
+            let text = storage::read_document(root, &item.path)?.text;
+            if text.to_lowercase().contains(&reference.to_lowercase()) {
+                return Err(AppError::new(
+                    "media",
+                    format!("视频仍被 {} 引用，请先切换版本或移除引用", item.path),
+                ));
+            }
+        }
+        let shared: bool = transaction
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM generations WHERE task_id != ?1
+              AND document = ?2 AND local_file = ?3)",
+                params![task_id, document, reference],
+                |row| row.get(0),
+            )
+            .map_err(|e| AppError::new("database", e.to_string()))?;
+        if shared {
+            return Err(AppError::new(
+                "media",
+                "其他生成版本仍在使用此视频，不能删除",
+            ));
+        }
+    }
+    transaction
+        .execute(
+            "DELETE FROM generation_providers WHERE task_id = ?1",
+            [task_id],
+        )
+        .map_err(|e| AppError::new("database", e.to_string()))?;
+    transaction
+        .execute("DELETE FROM generations WHERE task_id = ?1", [task_id])
+        .map_err(|e| AppError::new("database", e.to_string()))?;
+    transaction
+        .execute(
+            "UPDATE batch_job_items SET local_file = NULL WHERE generation_task_id = ?1",
+            [task_id],
+        )
+        .map_err(|e| AppError::new("database", e.to_string()))?;
+    // Stage the file in the same directory so a failed DB commit can restore it.
+    let staged = video
+        .as_ref()
+        .map(|path| path.with_file_name(format!(".~dc-delete-{}.mp4", uuid::Uuid::new_v4())));
+    if let (Some(path), Some(staged)) = (&video, &staged) {
+        fs::rename(path, staged)?;
+    }
+    if let Err(error) = transaction.commit() {
+        if let (Some(path), Some(staged)) = (&video, &staged) {
+            fs::rename(staged, path)?;
+        }
+        return Err(AppError::new("database", error.to_string()));
+    }
+    if let Some(staged) = staged {
+        fs::remove_file(&staged).map_err(|e| {
+            AppError::new(
+                "io",
+                format!(
+                    "记录已删除，但视频清理失败（{}）：{e}",
+                    staged.file_name().unwrap().to_string_lossy()
+                ),
+            )
+        })?;
+    }
+    Ok(())
+}
+
 fn parse_http_url(raw: &str) -> Result<reqwest::Url> {
     let trimmed = raw.trim().trim_end_matches('/');
     let url = reqwest::Url::parse(trimmed)
@@ -744,6 +895,179 @@ mod tests {
         thread,
     };
     use tempfile::tempdir;
+
+    fn deletion_fixture(root: &Path, status: &str, file: Option<&str>) {
+        fs::write(root.join("01.md"), "# 示例剧集\n").unwrap();
+        database(root).unwrap().execute(
+            "INSERT INTO generations (task_id, document, shot_id, status, prompt,
+                duration, resolution, image_refs, audio_refs, local_file, created_at, updated_at)
+             VALUES ('delete-task', '01.md', 'S001', ?1, '示例提示词', 5, '720p', '[]', '[]', ?2, '2026-01-01', '2026-01-01')",
+            params![status, file],
+        ).unwrap();
+        database(root).unwrap().execute(
+            "INSERT INTO generation_providers VALUES ('delete-task', 'profile', 'https://example.test')", [],
+        ).unwrap();
+    }
+
+    #[test]
+    fn delete_generation_removes_video_record_and_provider() {
+        let temp = tempdir().unwrap();
+        let root = fs::canonicalize(temp.path()).unwrap();
+        deletion_fixture(&root, "completed", Some("result.mp4"));
+        fs::write(root.join("result.mp4"), b"video").unwrap();
+        fs::write(root.join("other.mp4"), b"keep").unwrap();
+        delete(&root, "01.md", "S001", "delete-task").unwrap();
+        assert!(!root.join("result.mp4").exists());
+        assert_eq!(fs::read(root.join("other.mp4")).unwrap(), b"keep");
+        assert!(history(&root, "01.md", "S001").unwrap().is_empty());
+        assert!(task_provider(&root, "delete-task").unwrap().is_none());
+        assert_eq!(
+            fs::read_to_string(root.join("01.md")).unwrap(),
+            "# 示例剧集\n"
+        );
+    }
+
+    #[test]
+    fn delete_generation_accepts_missing_or_not_downloaded_video() {
+        for file in [None, Some("missing.mp4")] {
+            let temp = tempdir().unwrap();
+            let root = fs::canonicalize(temp.path()).unwrap();
+            deletion_fixture(&root, "failed", file);
+            delete(&root, "01.md", "S001", "delete-task").unwrap();
+            assert!(history(&root, "01.md", "S001").unwrap().is_empty());
+        }
+    }
+
+    #[test]
+    fn delete_generation_protects_references_in_other_documents() {
+        let temp = tempdir().unwrap();
+        let root = fs::canonicalize(temp.path()).unwrap();
+        deletion_fixture(&root, "completed", Some("result.mp4"));
+        fs::write(root.join("result.mp4"), b"video").unwrap();
+        fs::write(
+            root.join("02.md"),
+            "视频文件：`RESULT.mp4`\n未知字段保持原样",
+        )
+        .unwrap();
+        assert_eq!(
+            delete(&root, "01.md", "S001", "delete-task")
+                .unwrap_err()
+                .code,
+            "media"
+        );
+        assert!(root.join("result.mp4").exists());
+        assert_eq!(history(&root, "01.md", "S001").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn delete_generation_rejects_running_wrong_shot_and_unsafe_paths() {
+        for (status, file, shot) in [
+            ("running", "result.mp4", "S001"),
+            ("completed", "result.mp4", "S002"),
+            ("completed", "../result.mp4", "S001"),
+            ("completed", "C:\\result.mp4", "S001"),
+            ("completed", "folder/result.mp4", "S001"),
+            ("completed", "notes.md", "S001"),
+        ] {
+            let temp = tempdir().unwrap();
+            let root = fs::canonicalize(temp.path()).unwrap();
+            deletion_fixture(&root, status, Some(file));
+            fs::write(root.join("result.mp4"), b"video").unwrap();
+            assert!(delete(&root, "01.md", shot, "delete-task").is_err());
+            assert_eq!(fs::read(root.join("result.mp4")).unwrap(), b"video");
+            assert_eq!(history(&root, "01.md", "S001").unwrap().len(), 1);
+        }
+    }
+
+    #[test]
+    fn delete_generation_database_failure_keeps_video_and_provider() {
+        let temp = tempdir().unwrap();
+        let root = fs::canonicalize(temp.path()).unwrap();
+        deletion_fixture(&root, "completed", Some("result.mp4"));
+        fs::write(root.join("result.mp4"), b"video").unwrap();
+        database(&root)
+            .unwrap()
+            .execute_batch(
+                "CREATE TRIGGER reject_delete BEFORE DELETE ON generations
+             BEGIN SELECT RAISE(ABORT, 'fixture failure'); END;",
+            )
+            .unwrap();
+        assert!(delete(&root, "01.md", "S001", "delete-task").is_err());
+        assert_eq!(fs::read(root.join("result.mp4")).unwrap(), b"video");
+        assert_eq!(history(&root, "01.md", "S001").unwrap().len(), 1);
+        assert!(task_provider(&root, "delete-task").unwrap().is_some());
+    }
+
+    #[test]
+    fn delete_generation_protects_shared_downloads() {
+        let temp = tempdir().unwrap();
+        let root = fs::canonicalize(temp.path()).unwrap();
+        deletion_fixture(&root, "completed", Some("result.mp4"));
+        fs::write(root.join("result.mp4"), b"video").unwrap();
+        database(&root)
+            .unwrap()
+            .execute_batch(
+                "INSERT INTO generations SELECT 'other-task', document, shot_id, status,
+             prompt, duration, resolution, seed, image_refs, audio_refs, remote_url,
+             local_file, error, created_at, updated_at FROM generations;",
+            )
+            .unwrap();
+        assert!(delete(&root, "01.md", "S001", "delete-task").is_err());
+        assert!(root.join("result.mp4").exists());
+    }
+
+    #[test]
+    fn delete_generation_waits_for_batch_application_then_clears_batch_reference() {
+        let temp = tempdir().unwrap();
+        let root = fs::canonicalize(temp.path()).unwrap();
+        deletion_fixture(&root, "completed", Some("result.mp4"));
+        fs::write(root.join("result.mp4"), b"video").unwrap();
+        database(&root).unwrap().execute_batch(
+            "INSERT INTO batch_job_items
+             (item_id, job_id, shot_id, shot_title, status, prompt, duration, resolution,
+              image_refs, audio_refs, generation_task_id, local_file, sort_order, created_at, updated_at)
+             VALUES ('item', 'job', 'S001', '示例', 'completed', '示例', 5, '720p',
+              '[]', '[]', 'delete-task', 'result.mp4', 0, '2026-01-01', '2026-01-01');",
+        ).unwrap();
+        assert!(delete(&root, "01.md", "S001", "delete-task").is_err());
+        assert!(root.join("result.mp4").exists());
+        database(&root)
+            .unwrap()
+            .execute(
+                "UPDATE batch_job_items SET applied_at = '2026-01-01' WHERE item_id = 'item'",
+                [],
+            )
+            .unwrap();
+        delete(&root, "01.md", "S001", "delete-task").unwrap();
+        let file: Option<String> = database(&root)
+            .unwrap()
+            .query_row(
+                "SELECT local_file FROM batch_job_items WHERE item_id = 'item'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(file.is_none());
+        assert!(!root.join("result.mp4").exists());
+    }
+
+    #[test]
+    fn delete_generation_readonly_video_keeps_history() {
+        let temp = tempdir().unwrap();
+        let root = fs::canonicalize(temp.path()).unwrap();
+        deletion_fixture(&root, "completed", Some("result.mp4"));
+        let path = root.join("result.mp4");
+        fs::write(&path, b"video").unwrap();
+        let original = fs::metadata(&path).unwrap().permissions();
+        let mut readonly = original.clone();
+        readonly.set_readonly(true);
+        fs::set_permissions(&path, readonly).unwrap();
+        let result = delete(&root, "01.md", "S001", "delete-task");
+        fs::set_permissions(&path, original).unwrap();
+        assert!(result.is_err());
+        assert_eq!(fs::read(path).unwrap(), b"video");
+        assert_eq!(history(&root, "01.md", "S001").unwrap().len(), 1);
+    }
 
     #[test]
     fn resolves_short_resolution_labels_against_current_list() {

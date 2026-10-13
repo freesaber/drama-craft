@@ -953,6 +953,18 @@ fn generation_history(
     })
 }
 #[tauri::command]
+fn delete_generation(
+    state: State<Sessions>,
+    handle: String,
+    document: String,
+    shot_id: String,
+    task_id: String,
+) -> Result<()> {
+    with_root(&state, &handle, |root| {
+        generation::delete(root, &document, &shot_id, &task_id)
+    })
+}
+#[tauri::command]
 fn import_generation_media(
     state: State<Sessions>,
     handle: String,
@@ -1108,6 +1120,7 @@ pub fn run() {
             poll_generation,
             poll_audio,
             generation_history,
+            delete_generation,
             import_generation_media,
             trim_media,
             export_video_frame,

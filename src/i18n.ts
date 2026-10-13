@@ -210,6 +210,13 @@ export const ui = {
     submitting: "正在提交…",
     generating: "视频生成中",
     history: "历史生成版本",
+    deleteVersion: "删除",
+    deletingVersion: "正在删除…",
+    deleteVersionTitle: "删除生成版本",
+    deleteVersionHint:
+      "确认删除这条历史记录及对应的本地视频文件？删除后无法恢复。",
+    deleteCurrentHint: "请先将其他版本设为当前，再删除此版本。",
+    confirmDeleteVersion: "确认删除",
     regeneration: "重新生成",
     retryDownload: "重试下载",
     retryingDownload: "正在重试…",

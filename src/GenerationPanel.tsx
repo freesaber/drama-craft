@@ -138,6 +138,10 @@ export default function GenerationPanel({
   const [submitting, setSubmitting] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
   const [retryingTaskId, setRetryingTaskId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<GenerationRecord | null>(
+    null,
+  );
+  const [deleting, setDeleting] = useState(false);
   const [preview, setPreview] = useState<InputAsset | null>(null);
   const [playingVideo, setPlayingVideo] = useState<GenerationRecord | null>(
     null,
@@ -162,6 +166,7 @@ export default function GenerationPanel({
 
   useEffect(() => {
     setReviewOpen(false);
+    setDeleteTarget(null);
     setPromptCopied(false);
   }, [card.id, document]);
 
@@ -386,6 +391,35 @@ export default function GenerationPanel({
       setError(errorMessage(e));
     } finally {
       setRetryingTaskId(null);
+    }
+  };
+
+  const deleteVersion = async () => {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
+    setError("");
+    try {
+      await api.deleteGeneration(
+        project.handle,
+        document,
+        card.id,
+        deleteTarget.taskId,
+      );
+      setHistory((items) =>
+        items.filter((item) => item.taskId !== deleteTarget.taskId),
+      );
+      setTask((current) =>
+        current?.taskId === deleteTarget.taskId ? null : current,
+      );
+      applied.current.delete(deleteTarget.taskId);
+      setDeleteTarget(null);
+      onMediaChanged?.();
+    } catch (e) {
+      setError(errorMessage(e));
+      // A filesystem cleanup error can occur after the record was removed.
+      await loadHistory().catch(() => undefined);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -634,6 +668,35 @@ export default function GenerationPanel({
                         </button>
                       </>
                     )}
+                    <button
+                      type="button"
+                      className="danger-button"
+                      disabled={
+                        busy ||
+                        submitting ||
+                        deleting ||
+                        retryingTaskId !== null ||
+                        !!trimmingVideo ||
+                        !!playingVideo ||
+                        running(record.status) ||
+                        !!(
+                          record.localFile &&
+                          record.localFile === card.fields.videoFile.value
+                        )
+                      }
+                      title={
+                        record.localFile &&
+                        record.localFile === card.fields.videoFile.value
+                          ? ui.generation.deleteCurrentHint
+                          : ui.generation.deleteVersionTitle
+                      }
+                      onClick={() => {
+                        setError("");
+                        setDeleteTarget(record);
+                      }}
+                    >
+                      {ui.generation.deleteVersion}
+                    </button>
                   </div>
                 </article>
               ))}
@@ -653,6 +716,66 @@ export default function GenerationPanel({
             onMediaChanged?.();
           }}
         />
+      )}
+      {deleteTarget && (
+        <div
+          className="modal-backdrop"
+          onMouseDown={() => {
+            if (!deleting) setDeleteTarget(null);
+          }}
+        >
+          <section
+            className="modal"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby={`generation-delete-${card.id}`}
+            aria-describedby={`generation-delete-hint-${card.id}`}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <h2 id={`generation-delete-${card.id}`}>
+              {ui.generation.deleteVersionTitle}
+            </h2>
+            <p id={`generation-delete-hint-${card.id}`}>
+              {ui.generation.deleteVersionHint}
+            </p>
+            <p>{new Date(deleteTarget.createdAt).toLocaleString("zh-CN")}</p>
+            {deleteTarget.localFile && <p>{deleteTarget.localFile}</p>}
+            {error && (
+              <p className="generation-error" role="alert">
+                {error}
+              </p>
+            )}
+            <div className="modal-actions">
+              <button
+                type="button"
+                autoFocus
+                disabled={deleting}
+                onClick={() => setDeleteTarget(null)}
+              >
+                {ui.cancel}
+              </button>
+              <button
+                type="button"
+                className="danger-button"
+                disabled={
+                  deleting ||
+                  busy ||
+                  submitting ||
+                  retryingTaskId !== null ||
+                  !!(
+                    deleteTarget.localFile &&
+                    deleteTarget.localFile === card.fields.videoFile.value
+                  )
+                }
+                onClick={() => void deleteVersion()}
+              >
+                {deleting
+                  ? ui.generation.deletingVersion
+                  : ui.generation.confirmDeleteVersion}
+              </button>
+            </div>
+          </section>
+        </div>
       )}
       {playingVideo && (
         <VideoPlayerModal

@@ -148,6 +148,12 @@ export const api = {
       document,
       shotId,
     }),
+  deleteGeneration: (
+    handle: string,
+    document: string,
+    shotId: string,
+    taskId: string,
+  ) => invoke<void>("delete_generation", { handle, document, shotId, taskId }),
   importGenerationMedia: (
     handle: string,
     document: string,
