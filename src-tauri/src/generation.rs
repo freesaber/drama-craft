@@ -402,8 +402,8 @@ pub async fn submit(
     settings: &GenerationSettings,
     input: GenerationInput,
 ) -> Result<GenerationRecord> {
-    if input.prompt.trim().is_empty() || input.prompt.chars().count() > 10_000 {
-        return Err(AppError::new("input", "视频提示词须为 1—10000 个字符"));
+    if input.prompt.trim().is_empty() || input.prompt.chars().count() > 20_000 {
+        return Err(AppError::new("input", "视频提示词须为 1—20000 个字符"));
     }
     if !(1..=15).contains(&input.duration) {
         return Err(AppError::new("input", "视频时长须为 1—15 秒"));
