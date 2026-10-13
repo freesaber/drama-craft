@@ -3293,3 +3293,12 @@ select:focus {
     padding-top: 50px;
   }
 }
+
+.generation-batch-modal {
+  width: min(920px, 94vw);
+}
+.batch-shot-table .batch-shot-status {
+  width: 220px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

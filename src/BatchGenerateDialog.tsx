@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, errorMessage } from "./api";
-import { hasSelectedVideo, shotGenerationPayload } from "./generationInputs";
+import {
+  batchGenerationCandidates,
+  type BatchGenerationCandidate,
+} from "./batchGeneration";
 import { ui } from "./i18n";
 import type { VideoApiOptions } from "./videoWorkflows";
-import type { BatchJobItemInput, Project, Storyboard } from "./types";
+import type { Project, Storyboard } from "./types";
 
-type Candidate = BatchJobItemInput & { missing: string[] };
+type Candidate = BatchGenerationCandidate;
 
 export default function BatchGenerateDialog({
   project,
@@ -34,48 +37,25 @@ export default function BatchGenerateDialog({
   useEffect(() => {
     let alive = true;
     setChecking(true);
+    setSelected(new Set());
     setError("");
     void (async () => {
       try {
-        const next: Candidate[] = [];
-        for (const card of board.cards) {
-          const videoRef = card.fields.videoFile.value.trim();
-          if (videoRef) {
-            try {
-              const video = await api.media(project.handle, document, videoRef);
-              if (hasSelectedVideo(card, video.exists)) continue;
-            } catch {
-              // Unreadable planned names are treated as not yet generated.
-            }
-          }
-          const payload = shotGenerationPayload(card, board.episode, {
-            maxImages: videoWorkflow.maxImages,
-            defaultResolution: videoWorkflow.defaultResolution,
-            resolutions: videoWorkflow.resolutions,
-          });
-          if (!payload) continue;
-          const missing: string[] = [];
-          for (const reference of [
-            ...payload.imageRefs,
-            ...payload.audioRefs,
-          ]) {
-            try {
-              const media = await api.media(
-                project.handle,
-                document,
-                reference,
-              );
-              if (!media.exists) missing.push(reference);
-            } catch {
-              missing.push(reference);
-            }
-          }
-          next.push({ ...payload, missing });
-        }
+        const next = await batchGenerationCandidates(
+          project.handle,
+          document,
+          board,
+          videoWorkflow,
+        );
         if (!alive) return;
-        const ready = next.filter((item) => !item.missing.length);
-        setCandidates(ready);
-        setSelected(new Set(ready.map((item) => item.shotId)));
+        setCandidates(next);
+        setSelected(
+          new Set(
+            next
+              .filter((item) => !item.missing.length && !item.hasVideo)
+              .map((item) => item.shotId),
+          ),
+        );
       } catch (e) {
         if (alive) setError(errorMessage(e));
       } finally {
@@ -91,9 +71,10 @@ export default function BatchGenerateDialog({
     () => Array.from({ length: 13 }, (_, hour) => hour),
     [],
   );
+  const selectable = candidates.filter((item) => !item.missing.length);
   const allSelected =
-    candidates.length > 0 &&
-    candidates.every((item) => selected.has(item.shotId));
+    selectable.length > 0 &&
+    selectable.every((item) => selected.has(item.shotId));
   const someSelected = candidates.some((item) => selected.has(item.shotId));
   const selectAllRef = useRef<HTMLInputElement>(null);
 
@@ -102,21 +83,24 @@ export default function BatchGenerateDialog({
       selectAllRef.current.indeterminate = someSelected && !allSelected;
   }, [allSelected, someSelected]);
 
-  const toggle = (shotId: string) =>
+  const toggle = (shotId: string) => {
+    if (!selectable.some((item) => item.shotId === shotId)) return;
     setSelected((current) => {
       const next = new Set(current);
       if (next.has(shotId)) next.delete(shotId);
       else next.add(shotId);
       return next;
     });
+  };
 
   const toggleAll = () =>
     setSelected(
-      allSelected ? new Set() : new Set(candidates.map((item) => item.shotId)),
+      allSelected ? new Set() : new Set(selectable.map((item) => item.shotId)),
     );
 
   const submit = async () => {
-    const items = candidates.filter((item) => selected.has(item.shotId));
+    if (checking || busy || submitting) return;
+    const items = selectable.filter((item) => selected.has(item.shotId));
     if (!items.length) return;
     setSubmitting(true);
     setError("");
@@ -161,7 +145,7 @@ export default function BatchGenerateDialog({
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div
-        className="modal batch-modal"
+        className="modal batch-modal generation-batch-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="batch-generate-title"
@@ -181,7 +165,7 @@ export default function BatchGenerateDialog({
                       ref={selectAllRef}
                       type="checkbox"
                       checked={allSelected}
-                      disabled={busy || submitting}
+                      disabled={busy || submitting || !selectable.length}
                       aria-label={ui.batch.selectAll}
                       onChange={toggleAll}
                     />
@@ -193,24 +177,32 @@ export default function BatchGenerateDialog({
                     {ui.batch.resolution}
                   </th>
                   <th className="batch-shot-images">{ui.batch.images}</th>
+                  <th className="batch-shot-status">{ui.batch.statusLabel}</th>
                 </tr>
               </thead>
               <tbody>
                 {candidates.map((item) => {
                   const checked = selected.has(item.shotId);
+                  const disabled = busy || submitting || !!item.missing.length;
                   return (
                     <tr
                       key={item.shotId}
-                      className={checked ? "is-selected" : ""}
+                      className={
+                        item.missing.length
+                          ? "is-disabled"
+                          : checked
+                            ? "is-selected"
+                            : ""
+                      }
                       onClick={() => {
-                        if (!busy && !submitting) toggle(item.shotId);
+                        if (!disabled) toggle(item.shotId);
                       }}
                     >
                       <td className="batch-shot-check">
                         <input
                           type="checkbox"
                           checked={checked}
-                          disabled={busy || submitting}
+                          disabled={disabled}
                           aria-label={item.shotId}
                           onClick={(event) => event.stopPropagation()}
                           onChange={() => toggle(item.shotId)}
@@ -234,6 +226,18 @@ export default function BatchGenerateDialog({
                       </td>
                       <td className="batch-shot-images">
                         {item.imageRefs.length}
+                      </td>
+                      <td className="batch-shot-status">
+                        <span>
+                          {item.hasVideo
+                            ? ui.batch.generatedVideo
+                            : ui.batch.missingVideo}
+                        </span>
+                        {item.missing.length > 0 && (
+                          <div className="generation-error">
+                            {ui.batch.missingAssets}：{item.missing.join("、")}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );
@@ -271,7 +275,7 @@ export default function BatchGenerateDialog({
           <button
             type="button"
             className="primary-button"
-            disabled={busy || submitting || !selected.size}
+            disabled={checking || busy || submitting || !selected.size}
             onClick={() => void submit()}
           >
             {submitting ? ui.busy : ui.batch.confirm}
