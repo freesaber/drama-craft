@@ -314,7 +314,7 @@ pub fn delete(root: &Path, document: &str, shot_id: &str, task_id: &str) -> Resu
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => return Err(e.into()),
         }
-        let scan = storage::scan_all_documents(root)?;
+        let scan = storage::scan(root)?;
         if !scan.warnings.is_empty() {
             return Err(AppError::new(
                 "media",
@@ -940,23 +940,47 @@ mod tests {
 
     #[test]
     fn delete_generation_protects_references_in_other_documents() {
-        for reference_document in ["02.md", "output/revisions/修订前/02.md"] {
-            let temp = tempdir().unwrap();
-            let root = fs::canonicalize(temp.path()).unwrap();
-            deletion_fixture(&root, "completed", Some("result.mp4"));
-            fs::write(root.join("result.mp4"), b"video").unwrap();
-            let reference_path = root.join(reference_document);
-            fs::create_dir_all(reference_path.parent().unwrap()).unwrap();
-            fs::write(reference_path, "视频文件：`RESULT.mp4`\n未知字段保持原样").unwrap();
-            assert_eq!(
-                delete(&root, "01.md", "S001", "delete-task")
-                    .unwrap_err()
-                    .code,
-                "media"
-            );
-            assert!(root.join("result.mp4").exists());
-            assert_eq!(history(&root, "01.md", "S001").unwrap().len(), 1);
-        }
+        let temp = tempdir().unwrap();
+        let root = fs::canonicalize(temp.path()).unwrap();
+        deletion_fixture(&root, "completed", Some("result.mp4"));
+        fs::write(root.join("result.mp4"), b"video").unwrap();
+        fs::write(
+            root.join("02.md"),
+            "视频文件：`RESULT.mp4`\n未知字段保持原样",
+        )
+        .unwrap();
+        assert_eq!(
+            delete(&root, "01.md", "S001", "delete-task")
+                .unwrap_err()
+                .code,
+            "media"
+        );
+        assert!(root.join("result.mp4").exists());
+        assert_eq!(history(&root, "01.md", "S001").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn delete_generation_ignores_backup_references_and_preserves_backup_documents() {
+        let temp = tempdir().unwrap();
+        let root = fs::canonicalize(temp.path()).unwrap();
+        deletion_fixture(&root, "completed", Some("result.mp4"));
+        fs::write(root.join("result.mp4"), b"video").unwrap();
+        let backups = root.join("output/revisions/修订前");
+        fs::create_dir_all(&backups).unwrap();
+        let backup_text = "视频文件：`RESULT.mp4`\n历史备份保持原样";
+        fs::write(backups.join("01.md"), backup_text).unwrap();
+        fs::write(backups.join("未编码.md"), [0xff, 0xfe]).unwrap();
+
+        delete(&root, "01.md", "S001", "delete-task").unwrap();
+
+        assert!(!root.join("result.mp4").exists());
+        assert!(history(&root, "01.md", "S001").unwrap().is_empty());
+        assert!(task_provider(&root, "delete-task").unwrap().is_none());
+        assert_eq!(
+            fs::read_to_string(backups.join("01.md")).unwrap(),
+            backup_text
+        );
+        assert_eq!(fs::read(backups.join("未编码.md")).unwrap(), [0xff, 0xfe]);
     }
 
     #[test]
