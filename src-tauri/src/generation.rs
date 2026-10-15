@@ -314,7 +314,7 @@ pub fn delete(root: &Path, document: &str, shot_id: &str, task_id: &str) -> Resu
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => return Err(e.into()),
         }
-        let scan = storage::scan(root)?;
+        let scan = storage::scan_all_documents(root)?;
         if !scan.warnings.is_empty() {
             return Err(AppError::new(
                 "media",
@@ -940,23 +940,23 @@ mod tests {
 
     #[test]
     fn delete_generation_protects_references_in_other_documents() {
-        let temp = tempdir().unwrap();
-        let root = fs::canonicalize(temp.path()).unwrap();
-        deletion_fixture(&root, "completed", Some("result.mp4"));
-        fs::write(root.join("result.mp4"), b"video").unwrap();
-        fs::write(
-            root.join("02.md"),
-            "视频文件：`RESULT.mp4`\n未知字段保持原样",
-        )
-        .unwrap();
-        assert_eq!(
-            delete(&root, "01.md", "S001", "delete-task")
-                .unwrap_err()
-                .code,
-            "media"
-        );
-        assert!(root.join("result.mp4").exists());
-        assert_eq!(history(&root, "01.md", "S001").unwrap().len(), 1);
+        for reference_document in ["02.md", "output/revisions/修订前/02.md"] {
+            let temp = tempdir().unwrap();
+            let root = fs::canonicalize(temp.path()).unwrap();
+            deletion_fixture(&root, "completed", Some("result.mp4"));
+            fs::write(root.join("result.mp4"), b"video").unwrap();
+            let reference_path = root.join(reference_document);
+            fs::create_dir_all(reference_path.parent().unwrap()).unwrap();
+            fs::write(reference_path, "视频文件：`RESULT.mp4`\n未知字段保持原样").unwrap();
+            assert_eq!(
+                delete(&root, "01.md", "S001", "delete-task")
+                    .unwrap_err()
+                    .code,
+                "media"
+            );
+            assert!(root.join("result.mp4").exists());
+            assert_eq!(history(&root, "01.md", "S001").unwrap().len(), 1);
+        }
     }
 
     #[test]

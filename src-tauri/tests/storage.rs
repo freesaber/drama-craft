@@ -44,6 +44,45 @@ fn regular_path(path: &Path) -> String {
 }
 
 #[test]
+fn scan_lists_only_visible_root_markdown_documents() {
+    let temp = workspace();
+    let root = root(&temp);
+    let expected = ["0001 示例.md", "AGENTS.md", "剧本大纲.MD"];
+    for name in expected {
+        fs::write(root.join(name), "# 原创示例\n").unwrap();
+    }
+    fs::write(root.join(".临时.md"), "hidden draft").unwrap();
+    fs::write(root.join("素材.png"), b"synthetic-image").unwrap();
+    for directory in [
+        "output/revisions/修订前",
+        "章节",
+        ".drama-craft",
+        "node_modules",
+        "target",
+        "dist",
+        "目录.md",
+    ] {
+        fs::create_dir_all(root.join(directory)).unwrap();
+        fs::write(root.join(directory).join("0001 示例.md"), "backup").unwrap();
+    }
+
+    let result = scan(&root).unwrap();
+    assert!(result.warnings.is_empty());
+    assert_eq!(
+        result
+            .documents
+            .iter()
+            .map(|document| (document.path.as_str(), document.name.as_str()))
+            .collect::<Vec<_>>(),
+        expected.map(|name| (name, name))
+    );
+    assert_eq!(
+        fs::read_to_string(root.join("output/revisions/修订前/0001 示例.md")).unwrap(),
+        "backup"
+    );
+}
+
+#[test]
 fn preserves_custom_content_bom_crlf_and_rejects_conflicts() {
     let temp = workspace();
     let root = root(&temp);
@@ -226,7 +265,7 @@ fn project_identity_moves_while_external_library_configuration_is_preserved() {
     create_document(&project, "assets/补充.md", "unknown sections\n").unwrap();
     let metadata = fs::read(project.join(".drama-craft/project.json")).unwrap();
     assert!(String::from_utf8_lossy(&metadata).contains("测试声音库"));
-    assert_eq!(scan(&project).unwrap().documents.len(), 4);
+    assert_eq!(scan(&project).unwrap().documents.len(), 3);
     assert_eq!(
         metadata,
         fs::read(project.join(".drama-craft/project.json")).unwrap()

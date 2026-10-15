@@ -96,9 +96,17 @@ pub fn canonical_directory(path: &Path) -> Result<PathBuf> {
     Ok(root)
 }
 pub fn scan(root: &Path) -> Result<Scan> {
+    scan_markdown(root, 1)
+}
+// Deletion checks must still protect references in documents outside the visible list.
+pub(crate) fn scan_all_documents(root: &Path) -> Result<Scan> {
+    scan_markdown(root, usize::MAX)
+}
+fn scan_markdown(root: &Path, max_depth: usize) -> Result<Scan> {
     let mut documents = Vec::new();
     let mut warnings = Vec::new();
     for entry in WalkDir::new(root)
+        .max_depth(max_depth)
         .follow_links(false)
         .into_iter()
         .filter_entry(|e| e.depth() == 0 || !ignored(&e.file_name().to_string_lossy()))
