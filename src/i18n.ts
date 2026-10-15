@@ -212,6 +212,7 @@ export const ui = {
     history: "历史生成版本",
     deleteVersion: "删除",
     deletingVersion: "正在删除…",
+    versionDeleted: "已删除生成版本",
     deleteVersionTitle: "删除生成版本",
     deleteVersionHint:
       "确认删除这条历史记录及对应的本地视频文件？删除后无法恢复。",

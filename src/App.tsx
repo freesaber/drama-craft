@@ -1405,9 +1405,9 @@ export default function App() {
                       setRefreshKey((key) => key + 1);
                       setNotice(ui.episodeData.mediaPlaced);
                     }}
-                    onMediaChanged={() => {
+                    onMediaChanged={(message) => {
                       setRefreshKey((key) => key + 1);
-                      setNotice(ui.generation.videoTrimmed);
+                      setNotice(message);
                     }}
                   />
                 ) : (

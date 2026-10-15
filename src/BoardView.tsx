@@ -92,7 +92,7 @@ export default function BoardView({
   discardedShotIds?: readonly string[];
   onToggleDiscarded?: (shotId: string, discarded: boolean) => void;
   onMediaPlaced?: () => void;
-  onMediaChanged?: () => void;
+  onMediaChanged?: (message: string) => void;
 }) {
   const isAgentDocument =
     document.split(/[\\/]/).at(-1)?.toLowerCase() === "agents.md";

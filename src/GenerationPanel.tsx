@@ -129,7 +129,7 @@ export default function GenerationPanel({
   useVideo: (reference: string) => Promise<void>;
   renderField: (key: BoardField, multiline?: boolean) => React.ReactNode;
   video: React.ReactNode;
-  onMediaChanged?: () => void;
+  onMediaChanged?: (message: string) => void;
 }) {
   const [seed, setSeed] = useState(videoWorkflow.defaultSeed);
   const [history, setHistory] = useState<GenerationRecord[]>([]);
@@ -413,7 +413,7 @@ export default function GenerationPanel({
       );
       applied.current.delete(deleteTarget.taskId);
       setDeleteTarget(null);
-      onMediaChanged?.();
+      onMediaChanged?.(ui.generation.versionDeleted);
     } catch (e) {
       setError(errorMessage(e));
       // A filesystem cleanup error can occur after the record was removed.
@@ -713,7 +713,7 @@ export default function GenerationPanel({
           onClose={() => setTrimmingVideo(null)}
           onSaved={() => {
             setTrimmingVideo(null);
-            onMediaChanged?.();
+            onMediaChanged?.(ui.generation.videoTrimmed);
           }}
         />
       )}
