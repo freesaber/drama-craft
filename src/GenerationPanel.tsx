@@ -242,6 +242,7 @@ export default function GenerationPanel({
     request: GenerationReviewRequest,
     images = reviewImageAssets.map(() => true),
     audios = reviewAudioAssets.map(() => true),
+    preservePrompt = false,
   ) => {
     const prepared = prepareGenerationSelection(
       prompt,
@@ -255,7 +256,7 @@ export default function GenerationPanel({
     setReviewAudioInputs(reviewAudioAssets);
     setReviewImages(images);
     setReviewAudios(audios);
-    setReviewPrompt(prepared.prompt);
+    setReviewPrompt(preservePrompt ? prompt : prepared.prompt);
     setReviewRequest(request);
     setError("");
     setReviewOpen(true);
@@ -287,7 +288,7 @@ export default function GenerationPanel({
     }
     const selected = regenerationSelections(imageInputs, audioInputs, record);
     openReview(
-      card.fields.videoPrompt.value,
+      record.prompt,
       imageInputs,
       audioInputs,
       {
@@ -300,6 +301,7 @@ export default function GenerationPanel({
       },
       selected.images,
       selected.audios,
+      true,
     );
   };
 
