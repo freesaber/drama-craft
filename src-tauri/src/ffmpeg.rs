@@ -121,9 +121,30 @@ pub fn export_frame(
     time: f64,
     destination: &str,
 ) -> Result<()> {
+    export_frame_at(root, document, reference, time, destination, false)
+}
+
+pub fn export_tail_frame(
+    root: &Path,
+    document: &str,
+    reference: &str,
+    end: f64,
+    destination: &str,
+) -> Result<()> {
+    export_frame_at(root, document, reference, end, destination, true)
+}
+
+fn export_frame_at(
+    root: &Path,
+    document: &str,
+    reference: &str,
+    time: f64,
+    destination: &str,
+    last_before: bool,
+) -> Result<()> {
     let source = resolve_project_video(root, document, reference)?;
     let duration = probe_duration(&source)?;
-    if !time.is_finite() || time < 0.0 || time > duration + 0.05 {
+    if !time.is_finite() || time < 0.0 || (last_before && time == 0.0) || time > duration + 0.05 {
         return Err(AppError::new("input", "导出帧的时间无效"));
     }
     let destination = validate_frame_destination(root, Path::new(destination))?;
@@ -133,7 +154,7 @@ pub fn export_frame(
     let temp = tempfile::tempdir_in(parent)?;
     let output = temp.path().join("frame.png");
     let ffmpeg = ffmpeg_binary()?;
-    if time >= duration - 0.05 {
+    if (!last_before && time >= duration - 0.05) || (last_before && time >= duration) {
         // Seeking to the container duration returns no frame. Decode the tail
         // and let image2 update the same temporary PNG with the last frame.
         let tail = format_seconds(duration.min(0.5));
@@ -148,6 +169,35 @@ pub fn export_frame(
                 &format!("-{tail}"),
                 "-i",
                 path_arg(&source)?,
+                "-map",
+                "0:v:0",
+                "-an",
+                "-vsync",
+                "0",
+                "-c:v",
+                "png",
+                "-f",
+                "image2",
+                "-update",
+                "1",
+                path_arg(&output)?,
+            ],
+        )?;
+    } else if last_before {
+        // Decode through the selected out point and keep the last decoded frame.
+        // A single-frame seek would select the first frame after that point.
+        let position = format_seconds(time);
+        run(
+            &ffmpeg,
+            &[
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-i",
+                path_arg(&source)?,
+                "-to",
+                &position,
                 "-map",
                 "0:v:0",
                 "-an",
@@ -701,6 +751,7 @@ mod tests {
         fs::write(&markdown, "# 原稿\n").unwrap();
         assert!(write_test_clip(&video, 3), "未找到打包的 FFmpeg");
         let original = fs::read(&video).unwrap();
+        let duration = probe_duration(&video).unwrap();
         for (time, filename) in [(0.4, "selected.png"), (3.0, "last.png")] {
             let destination = export_dir.join(filename);
             export_frame(
@@ -715,9 +766,69 @@ mod tests {
                 .unwrap()
                 .starts_with(b"\x89PNG\r\n\x1a\n"));
         }
+        let tail = export_dir.join("tail.png");
+        export_tail_frame(
+            &root,
+            "01.md",
+            "S001.mp4",
+            duration,
+            path_arg(&tail).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            fs::read(tail).unwrap(),
+            fs::read(export_dir.join("last.png")).unwrap()
+        );
         assert_eq!(fs::read(video).unwrap(), original);
         assert_eq!(fs::read_to_string(markdown).unwrap(), "# 原稿\n");
         assert_eq!(fs::read_dir(root).unwrap().count(), 2);
+    }
+
+    #[test]
+    fn tail_frame_uses_last_frame_before_selected_out_point() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("project");
+        let export_dir = temp.path().join("exports");
+        fs::create_dir(&root).unwrap();
+        fs::create_dir(&export_dir).unwrap();
+        let root = fs::canonicalize(root).unwrap();
+        fs::write(root.join("01.md"), "# 原稿\n").unwrap();
+        let video = root.join("S001.mp4");
+        run(
+            &ffmpeg_binary().unwrap(),
+            &[
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc2=s=64x64:r=10:d=3",
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                path_arg(&video).unwrap(),
+            ],
+        )
+        .unwrap();
+        let tail = export_dir.join("tail.png");
+        let expected = export_dir.join("expected.png");
+        let later = export_dir.join("later.png");
+        export_tail_frame(&root, "01.md", "S001.mp4", 1.0, path_arg(&tail).unwrap()).unwrap();
+        export_frame(
+            &root,
+            "01.md",
+            "S001.mp4",
+            0.9,
+            path_arg(&expected).unwrap(),
+        )
+        .unwrap();
+        export_frame(&root, "01.md", "S001.mp4", 1.5, path_arg(&later).unwrap()).unwrap();
+        assert_eq!(fs::read(&tail).unwrap(), fs::read(&expected).unwrap());
+        assert_ne!(fs::read(&expected).unwrap(), fs::read(&later).unwrap());
+        assert_eq!(fs::read_to_string(root.join("01.md")).unwrap(), "# 原稿\n");
     }
 
     #[test]

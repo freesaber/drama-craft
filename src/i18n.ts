@@ -241,6 +241,7 @@ export const ui = {
     trimHint: "点击时间轴定位 · 拖动两端控制杆裁切 · I / O 设点",
     trimOverwrite: "保存后覆盖当前文件，不另存副本，也不改 Markdown。",
     exportFrame: "导出当前帧",
+    exportTailFrame: "导出尾帧",
     exportingFrame: "正在导出…",
     frameExported: (filename: string) => `已导出：${filename}`,
     trimming: "正在裁切…",

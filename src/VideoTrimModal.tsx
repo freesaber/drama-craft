@@ -284,19 +284,43 @@ export default function VideoTrimModal({
     }
   };
 
-  const exportCurrentFrame = async () => {
+  const exportFrame = async (kind: "current" | "tail") => {
     const video = videoRef.current;
     if (!video || duration <= 0 || exporting || saving) return;
     video.pause();
-    const time = Math.min(Math.max(video.currentTime, 0), duration);
-    const filename = `${reference.replace(/.*[/\\]/, "").replace(/\.mp4$/i, "")}_frame_${formatTimecode(time).replace(/[.:]/g, "-")}.png`;
+    const time =
+      kind === "tail"
+        ? end
+        : Math.min(Math.max(video.currentTime, 0), duration);
+    const suffix = kind === "tail" ? "tail" : "frame";
+    const filename = `${reference.replace(/.*[/\\]/, "").replace(/\.mp4$/i, "")}_${suffix}_${formatTimecode(time).replace(/[.:]/g, "-")}.png`;
     setExporting(true);
     setError("");
     setExported("");
     try {
-      const destination = await chooseFrameExport(filename);
+      const destination = await chooseFrameExport(
+        filename,
+        kind === "tail"
+          ? ui.generation.exportTailFrame
+          : ui.generation.exportFrame,
+      );
       if (!destination) return;
-      await api.exportVideoFrame(project.handle, document, reference, time, destination);
+      if (kind === "tail")
+        await api.exportVideoTailFrame(
+          project.handle,
+          document,
+          reference,
+          time,
+          destination,
+        );
+      else
+        await api.exportVideoFrame(
+          project.handle,
+          document,
+          reference,
+          time,
+          destination,
+        );
       setExported(destination.replace(/.*[/\\]/, ""));
     } catch (cause) {
       setError(errorMessage(cause));
@@ -396,7 +420,10 @@ export default function VideoTrimModal({
             >
               {playing ? "❚❚" : "▶"}
             </button>
-            <span className="video-trim-now" aria-label={`${ui.generation.trimCurrent} ${formatTimecode(current)}`}>
+            <span
+              className="video-trim-now"
+              aria-label={`${ui.generation.trimCurrent} ${formatTimecode(current)}`}
+            >
               {formatTimecode(current)}
             </span>
             <button
@@ -482,23 +509,41 @@ export default function VideoTrimModal({
           </div>
         </div>
         <footer className="video-trim-actions">
-          <p>{exported ? ui.generation.frameExported(exported) : ui.generation.trimOverwrite}</p>
+          <p>
+            {exported
+              ? ui.generation.frameExported(exported)
+              : ui.generation.trimOverwrite}
+          </p>
           <div>
             <button
               type="button"
               disabled={saving || exporting || !src || failed || duration <= 0}
-              onClick={() => void exportCurrentFrame()}
+              onClick={() => void exportFrame("current")}
             >
-              {exporting ? ui.generation.exportingFrame : ui.generation.exportFrame}
+              {exporting
+                ? ui.generation.exportingFrame
+                : ui.generation.exportFrame}
             </button>
-            <button type="button" disabled={saving || exporting} onClick={onClose}>
+            <button
+              type="button"
+              disabled={saving || exporting || !src || failed || duration <= 0}
+              onClick={() => void exportFrame("tail")}
+            >
+              {ui.generation.exportTailFrame}
+            </button>
+            <button
+              type="button"
+              disabled={saving || exporting}
+              onClick={onClose}
+            >
               {ui.cancel}
             </button>
             <button
               type="button"
               className="primary-button"
               disabled={
-                saving || exporting ||
+                saving ||
+                exporting ||
                 missing ||
                 failed ||
                 !src ||

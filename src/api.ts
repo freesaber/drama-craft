@@ -189,6 +189,20 @@ export const api = {
     time: number,
     destination: string,
   ) => invoke<void>("export_video_frame", { handle, document, reference, time, destination }),
+  exportVideoTailFrame: (
+    handle: string,
+    document: string,
+    reference: string,
+    end: number,
+    destination: string,
+  ) =>
+    invoke<void>("export_video_tail_frame", {
+      handle,
+      document,
+      reference,
+      end,
+      destination,
+    }),
   createBatchJob: (handle: string, input: CreateBatchJobInput) =>
     invoke<BatchJob>("create_batch_job", { handle, input }),
   mergeEpisode: (handle: string, input: MergeEpisodeInput) =>
@@ -235,10 +249,13 @@ export async function chooseMedia(
   });
   return typeof path === "string" ? path : null;
 }
-export async function chooseFrameExport(defaultName: string): Promise<string | null> {
+export async function chooseFrameExport(
+  defaultName: string,
+  title = ui.generation.exportFrame,
+): Promise<string | null> {
   if (!desktop) return null;
   return save({
-    title: ui.generation.exportFrame,
+    title,
     defaultPath: defaultName,
     filters: [{ name: "PNG", extensions: ["png"] }],
   });
