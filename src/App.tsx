@@ -32,6 +32,9 @@ import type {
 } from "./types";
 import {
   API_PLATFORM_TYPES,
+  AUTODL_RESOLUTION_PRESETS,
+  autodlApiProfile,
+  type AutodlPreset,
   compactResolutionsJson,
   emptyApiProfile,
   fillEmptyAutodlPreset,
@@ -118,17 +121,29 @@ export default function App() {
           : profile,
       ),
     }));
-  const addApi = () => {
-    const id = crypto.randomUUID();
+  const addApi = (preset?: AutodlPreset) => {
+    const reuseEmpty =
+      preset &&
+      activeApi &&
+      !activeApi.submitUrl.trim() &&
+      !activeApi.queryUrl.trim() &&
+      !activeApi.resolutions.trim() &&
+      !activeApi.defaultSeed.trim() &&
+      !activeApi.hasAuthorization &&
+      !activeApiTokenDraft;
+    const id = reuseEmpty ? activeApi.id : crypto.randomUUID();
+    setShowApiToken(false);
     setApiDraft((draft) => ({
       ...draft,
       activeProfileId: id,
       profiles: [
-        ...draft.profiles,
-        emptyApiProfile(
-          id,
-          `${ui.generation.profileName} ${draft.profiles.length + 1}`,
-        ),
+        ...draft.profiles.filter((profile) => profile.id !== id),
+        preset
+          ? autodlApiProfile(id, preset)
+          : emptyApiProfile(
+              id,
+              `${ui.generation.profileName} ${draft.profiles.length + 1}`,
+            ),
       ],
     }));
   };
@@ -1577,7 +1592,11 @@ export default function App() {
                       </select>
                     </label>
                     <div className="api-profile-actions">
-                      <button type="button" disabled={busy} onClick={addApi}>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => addApi()}
+                      >
                         {ui.generation.addProfile}
                       </button>
                       {activeApi && (
@@ -1591,6 +1610,26 @@ export default function App() {
                         </button>
                       )}
                     </div>
+                    <label>
+                      {ui.generation.addPreset}
+                      <select
+                        value=""
+                        disabled={busy}
+                        onChange={(event) => {
+                          const preset = AUTODL_RESOLUTION_PRESETS.find(
+                            (item) => item.id === event.target.value,
+                          );
+                          if (preset) addApi(preset);
+                        }}
+                      >
+                        <option value="">{ui.generation.choosePreset}</option>
+                        {AUTODL_RESOLUTION_PRESETS.map((preset) => (
+                          <option key={preset.id} value={preset.id}>
+                            {preset.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                     {activeApi ? (
                       <>
                         <label>

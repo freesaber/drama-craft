@@ -224,6 +224,23 @@ describe("generationInputs", () => {
     ).toBe("480p横(864*480)");
   });
 
+  it("snapshots the configured seed for batch generation and preserves an empty seed", () => {
+    const shot = card({
+      id: "S009",
+      videoPrompt: "向前走",
+      frameFile: "frame.png",
+    });
+    expect(
+      shotGenerationPayload(shot, episode, { defaultSeed: "803" })?.seed,
+    ).toBe(803);
+    expect(
+      shotGenerationPayload(shot, episode, { defaultSeed: "0" })?.seed,
+    ).toBe(0);
+    expect(
+      shotGenerationPayload(shot, episode, { defaultSeed: "" })?.seed,
+    ).toBeNull();
+  });
+
   it("rejects cards without prompt or images", () => {
     expect(
       shotGenerationPayload(card({ id: "S002", videoPrompt: "" }), episode),

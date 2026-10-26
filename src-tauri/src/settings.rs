@@ -100,7 +100,19 @@ fn migrate_legacy_endpoints(profile: &mut ApiProfile) {
     }
     if profile.resolutions.trim().is_empty() && !profile.submit_url.trim().is_empty() {
         let z0903 = profile.submit_url.contains("minimax_h3_z0903");
-        let resolutions = if z0903 {
+        let h3_803 = profile.submit_url.contains("minimax_h3_803");
+        let resolutions = if h3_803 {
+            serde_json::json!([
+                "480p竖(480*864)",
+                "768p竖(768*1376)",
+                "1088p竖(1088*1920)",
+                "1440p竖(1440*2560)",
+                "480p横(864*480)",
+                "768p横(1376*768)",
+                "1088p横(1920*1088)",
+                "1440p横(2560*1440)"
+            ])
+        } else if z0903 {
             serde_json::json!([
                 "480p竖(480*864)",
                 "480p横(864*480)",
@@ -123,7 +135,9 @@ fn migrate_legacy_endpoints(profile: &mut ApiProfile) {
         };
         profile.resolutions = serde_json::to_string_pretty(&resolutions).unwrap_or_default();
         if profile.default_seed.trim().is_empty() {
-            profile.default_seed = if z0903 {
+            profile.default_seed = if h3_803 {
+                "803".into()
+            } else if z0903 {
                 "757947932117433".into()
             } else {
                 "683072603085674".into()
@@ -277,6 +291,42 @@ mod tests {
         assert!(profile.query_url.contains("{task_id}"));
         assert!(profile.resolutions.contains("1080p横"));
         assert_eq!(profile.default_seed, "757947932117433");
+    }
+
+    #[test]
+    fn migrates_h3_803_without_overwriting_custom_values() {
+        let mut legacy = config();
+        let profile = &mut legacy.profiles[0];
+        profile.submit_url =
+            "https://autodl.art/api/v1/comfyui/comfyui_workflow/minimax_h3_803".into();
+        profile.query_url.clear();
+        profile.resolutions.clear();
+        profile.default_seed.clear();
+        let mut normalized = legacy.normalize().unwrap();
+        let profile = &normalized.profiles[0];
+        assert_eq!(profile.default_seed, "803");
+        assert_eq!(
+            parse_resolutions_json(&profile.resolutions).unwrap(),
+            vec![
+                "480p竖(480*864)",
+                "768p竖(768*1376)",
+                "1088p竖(1088*1920)",
+                "1440p竖(1440*2560)",
+                "480p横(864*480)",
+                "768p横(1376*768)",
+                "1088p横(1920*1088)",
+                "1440p横(2560*1440)",
+            ]
+        );
+        assert_eq!(
+            profile.query_url,
+            "https://autodl.art/api/v1/comfyui/comfyui_workflow/result/{task_id}"
+        );
+        normalized.profiles[0].default_seed = "42".into();
+        normalized.profiles[0].resolutions = r#"["768p横(1376*768)"]"#.into();
+        let custom = normalized.normalize().unwrap();
+        assert_eq!(custom.profiles[0].default_seed, "42");
+        assert_eq!(custom.profiles[0].resolutions, r#"["768p横(1376*768)"]"#);
     }
 
     #[test]

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   AUTODL_RESOLUTION_PRESETS,
+  autodlApiProfile,
   autodlPresetValues,
   detectAutodlPreset,
   fillEmptyAutodlPreset,
@@ -16,6 +17,55 @@ import {
 } from "./videoWorkflows";
 
 describe("videoWorkflows", () => {
+  it("adds and migrates H3 803 with its exact resolution enum and numeric seed", () => {
+    const preset = AUTODL_RESOLUTION_PRESETS.find(
+      (item) => item.id === "minimax_h3_803",
+    )!;
+    const profile = autodlApiProfile("803", preset);
+    expect(profile.submitUrl).toBe(
+      "https://autodl.art/api/v1/comfyui/comfyui_workflow/minimax_h3_803",
+    );
+    expect(profile.queryUrl).toBe(
+      "https://autodl.art/api/v1/comfyui/comfyui_workflow/result/{task_id}",
+    );
+    expect(profile.hasAuthorization).toBe(false);
+    const options = optionsFromProfile(profile);
+    expect(options.defaultSeed).toBe("803");
+    expect(options.resolutions).toEqual([
+      "480p竖(480*864)",
+      "768p竖(768*1376)",
+      "1088p竖(1088*1920)",
+      "1440p竖(1440*2560)",
+      "480p横(864*480)",
+      "768p横(1376*768)",
+      "1088p横(1920*1088)",
+      "1440p横(2560*1440)",
+    ]);
+    expect(matchConfiguredResolution("1088p横", options.resolutions)).toBe(
+      "1088p横(1920*1088)",
+    );
+    expect(
+      fillEmptyAutodlPreset({ ...profile, resolutions: "", defaultSeed: "" }),
+    ).toEqual(profile);
+    expect(
+      migrateApiProfile({
+        id: "803",
+        name: "自定义名称",
+        baseUrl: profile.submitUrl,
+      }),
+    ).toMatchObject({
+      resolutions: profile.resolutions,
+      defaultSeed: "803",
+      queryUrl: profile.queryUrl,
+    });
+    const custom = {
+      ...profile,
+      resolutions: '["768p横(1376*768)"]',
+      defaultSeed: "42",
+    };
+    expect(migrateApiProfile(custom)).toEqual(custom);
+  });
+
   it("parses resolution JSON lists", () => {
     const compact = formatResolutionsJson(
       AUTODL_RESOLUTION_PRESETS[0].resolutions,
@@ -82,9 +132,9 @@ describe("videoWorkflows", () => {
     expect(matchConfiguredResolution("1080p横", list, list[0])).toBe(
       "1080p横(1920*1088)",
     );
-    expect(
-      matchConfiguredResolution("480p横(864*480)", ["480p横"], "x"),
-    ).toBe("480p横");
+    expect(matchConfiguredResolution("480p横(864*480)", ["480p横"], "x")).toBe(
+      "480p横",
+    );
     expect(matchConfiguredResolution("999p", list, list[0])).toBe(list[0]);
   });
 

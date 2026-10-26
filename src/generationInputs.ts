@@ -271,6 +271,7 @@ export function shotGenerationPayload(
     maxImages?: number;
     defaultResolution?: string;
     resolutions?: readonly string[];
+    defaultSeed?: string;
   } = {},
 ): {
   shotId: string;
@@ -299,7 +300,7 @@ export function shotGenerationPayload(
     prompt,
     duration,
     resolution,
-    seed: null,
+    seed: options.defaultSeed?.trim() ? Number(options.defaultSeed) : null,
     imageRefs: images.map((item) => item.reference),
     audioRefs: audios.map((item) => item.reference),
   };

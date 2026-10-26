@@ -1417,6 +1417,71 @@ mod tests {
     }
 
     #[test]
+    fn submits_h3_803_seed_resolution_and_optional_audio_without_rerouting() {
+        for audio_count in [0, 3] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let address = listener.local_addr().unwrap();
+            let server = thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                let submitted = request(&mut stream);
+                assert!(
+                    submitted.starts_with("POST /api/v1/comfyui/comfyui_workflow/minimax_h3_803 ")
+                );
+                let body: Value =
+                    serde_json::from_str(submitted.split_once("\r\n\r\n").unwrap().1).unwrap();
+                assert_eq!(body["seed"], 803);
+                assert_eq!(body["resolution"], "1088p竖(1088*1920)");
+                assert_eq!(body["duration"], 15);
+                assert!(body.get("ref_image_8").is_some());
+                assert!(body.get("ref_image_9").is_none());
+                for index in 0..audio_count {
+                    assert!(body[format!("ref_audio_{index}")]
+                        .as_str()
+                        .unwrap()
+                        .starts_with("data:audio/mpeg;base64,"));
+                }
+                assert!(body.get(format!("ref_audio_{audio_count}")).is_none());
+                respond(
+                    &mut stream,
+                    "application/json",
+                    br#"{"code":"Success","data":{"task_id":"task-803","status":"queued"}}"#,
+                );
+            });
+            let project = tempfile::tempdir().unwrap();
+            let root = storage::canonical_directory(project.path()).unwrap();
+            storage::create_document(&root, "01 测试.md", "# S0001 测试\n").unwrap();
+            fs::write(root.join("frame.png"), b"synthetic-image").unwrap();
+            fs::write(root.join("voice.mp3"), b"synthetic-audio").unwrap();
+            let mut settings = fixture_settings(&format!(
+                "http://{address}/api/v1/comfyui/comfyui_workflow/minimax_h3_803"
+            ));
+            settings.resolutions = vec!["1088p竖(1088*1920)".into()];
+            let record = tauri::async_runtime::block_on(submit(
+                &root,
+                &settings,
+                GenerationInput {
+                    document: "01 测试.md".into(),
+                    shot_id: "S0001".into(),
+                    prompt: "向前走".into(),
+                    duration: 15,
+                    resolution: "1088p竖".into(),
+                    seed: Some(803),
+                    image_refs: vec!["frame.png".into(); 9],
+                    audio_refs: vec!["voice.mp3".into(); audio_count],
+                },
+            ))
+            .unwrap();
+            assert_eq!(record.seed, Some(803));
+            assert_eq!(record.resolution, "1088p竖(1088*1920)");
+            assert_eq!(
+                history(&root, "01 测试.md", "S0001").unwrap()[0].seed,
+                Some(803)
+            );
+            server.join().unwrap();
+        }
+    }
+
+    #[test]
     fn submit_z0903_without_audio_posts_to_z0902() {
         post_to_workflow("/api/v1/comfyui/comfyui_workflow/minimax_h3_z0902", vec![]);
     }

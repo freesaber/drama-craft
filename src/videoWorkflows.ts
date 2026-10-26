@@ -91,7 +91,7 @@ export function matchConfiguredResolution(
   return alignResolutionOption(shot, list) ?? (fallback || list[0]);
 }
 
-/** AutoDL 两套可一键填入的 resolution / seed 预设（不填接口地址） */
+/** AutoDL 工作流各自的 resolution / seed 预设。 */
 export const AUTODL_RESOLUTION_PRESETS = [
   {
     id: "minimax_h3_zm_u24",
@@ -121,7 +121,35 @@ export const AUTODL_RESOLUTION_PRESETS = [
     ],
     defaultSeed: "757947932117433",
   },
+  {
+    id: "minimax_h3_803",
+    label: "minimax_h3_803",
+    resolutions: [
+      RES_480P_V,
+      RES_768P_V,
+      "1088p竖(1088*1920)",
+      RES_1440P_V,
+      RES_480P_H,
+      RES_768P_H,
+      "1088p横(1920*1088)",
+      RES_1440P_H,
+    ],
+    defaultSeed: "803",
+  },
 ] as const;
+
+export type AutodlPreset = (typeof AUTODL_RESOLUTION_PRESETS)[number];
+
+export function autodlApiProfile(id: string, preset: AutodlPreset): ApiProfile {
+  return {
+    ...emptyApiProfile(id, preset.label),
+    submitUrl: `https://autodl.art/api/v1/comfyui/comfyui_workflow/${preset.id}`,
+    queryUrl:
+      "https://autodl.art/api/v1/comfyui/comfyui_workflow/result/{task_id}",
+    resolutions: formatResolutionsJson(preset.resolutions),
+    defaultSeed: preset.defaultSeed,
+  };
+}
 
 export interface VideoApiOptions {
   resolutions: string[];
@@ -220,12 +248,10 @@ export function migrateApiProfile(raw: Record<string, unknown>): ApiProfile {
       /* ignore */
     }
   }
-  if (!resolutions.trim() && submitUrl.includes("minimax_h3_z0903")) {
-    const preset = AUTODL_RESOLUTION_PRESETS[1];
-    resolutions = formatResolutionsJson(preset.resolutions);
-    if (!defaultSeed) defaultSeed = preset.defaultSeed;
-  } else if (!resolutions.trim() && submitUrl) {
-    const preset = AUTODL_RESOLUTION_PRESETS[0];
+  if (!resolutions.trim() && submitUrl) {
+    const preset =
+      detectAutodlPreset({ name: "", submitUrl }) ??
+      AUTODL_RESOLUTION_PRESETS[0];
     resolutions = formatResolutionsJson(preset.resolutions);
     if (!defaultSeed) defaultSeed = preset.defaultSeed;
   }
