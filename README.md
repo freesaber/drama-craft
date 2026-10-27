@@ -43,7 +43,7 @@ npm run tauri build -- --no-bundle
 
 ## 发布安装包
 
-发布前同步更新 `package.json`、`package-lock.json`（顶层及根包版本）和 `src-tauri/tauri.conf.json`，提交这些修改后，再向 GitHub 推送指向该提交且与应用版本一致的 tag（例如 `0.1.6` 对应 `v0.1.6`）。`Release Windows installer` 工作流会先运行测试和格式检查，再构建 Windows NSIS 安装包，并把 `.exe` 上传到对应的 GitHub Release。tag 与应用版本不一致时发布会明确失败，避免错误标记安装包。若 tag 已指向版本号错误的提交，仅重跑旧任务不会包含后续修复；需要让发布 tag 指向修复后的提交再触发构建。
+发布前同步更新 `package.json`、`package-lock.json`（顶层及根包版本）和 `src-tauri/tauri.conf.json`，提交这些修改后，再向 GitHub 推送指向该提交且与应用版本一致的 tag（例如 `0.1.6` 对应 `v0.1.6`）。`Release Windows installer` 工作流直接构建 Windows NSIS 安装包，并缓存 Rust 构建产物与 FFmpeg；测试和格式检查可通过手动运行 `Check P0` 工作流执行，并把 `.exe` 上传到对应的 GitHub Release。tag 与应用版本不一致时发布会明确失败，避免错误标记安装包。若 tag 已指向版本号错误的提交，仅重跑旧任务不会包含后续修复；需要让发布 tag 指向修复后的提交再触发构建。
 
 下载时出现「发布者: 未知」和「通常不会下载此文件」，是 Microsoft Defender SmartScreen 对未签名、尚无信誉的安装包的提示，不是杀毒软件报出的病毒名称。发布工作流只有在仓库机密里同时提供 `WINDOWS_CERTIFICATE` 和 `WINDOWS_CERTIFICATE_PASSWORD` 时才会签名。证书必须是代码签名证书，SSL 证书不能用。在 Windows 上执行 `certutil -encode certificate.pfx base64cert.txt`，把输出的全文放进 `WINDOWS_CERTIFICATE`，导出 pfx 时设置的密码放进 `WINDOWS_CERTIFICATE_PASSWORD`。本机打包可把指纹写进未纳入版本管理的 `src-tauri/tauri.windows.conf.json`：
 

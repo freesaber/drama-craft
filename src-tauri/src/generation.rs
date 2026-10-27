@@ -12,8 +12,6 @@ use std::{
 };
 
 const DATABASE_NAME: &str = "generations.sqlite3";
-const AUDIO_REQUIRED_WORKFLOW: &str = "minimax_h3_z0903";
-const AUDIO_OPTIONAL_WORKFLOW: &str = "minimax_h3_z0902";
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -401,13 +399,9 @@ fn parse_http_url(raw: &str) -> Result<reqwest::Url> {
     Ok(url)
 }
 
-fn submit_endpoint(settings: &GenerationSettings, has_ref_audio: bool) -> Result<String> {
+fn submit_endpoint(settings: &GenerationSettings) -> Result<String> {
     let url = parse_http_url(&settings.submit_url)?;
-    let mut endpoint = url.as_str().trim_end_matches('/').to_owned();
-    if !has_ref_audio && endpoint.contains(AUDIO_REQUIRED_WORKFLOW) {
-        endpoint = endpoint.replace(AUDIO_REQUIRED_WORKFLOW, AUDIO_OPTIONAL_WORKFLOW);
-    }
-    Ok(endpoint)
+    Ok(url.as_str().trim_end_matches('/').to_owned())
 }
 
 fn result_endpoint(settings: &GenerationSettings, task_id: &str) -> Result<String> {
@@ -580,10 +574,9 @@ pub async fn submit(
     for (index, reference) in input.audio_refs.iter().enumerate() {
         body[format!("ref_audio_{index}")] = json!(api_media(root, &input.document, reference)?);
     }
-    let has_ref_audio = body.get("ref_audio_0").is_some();
     let value = envelope(
         client(settings)?
-            .post(submit_endpoint(settings, has_ref_audio)?)
+            .post(submit_endpoint(settings)?)
             .json(&body)
             .send()
             .await
@@ -1157,24 +1150,6 @@ mod tests {
     }
 
     #[test]
-    fn z0903_without_audio_rewrites_to_z0902() {
-        let z0903 =
-            fixture_settings("https://autodl.art/api/v1/comfyui/comfyui_workflow/minimax_h3_z0903");
-        assert_eq!(
-            submit_endpoint(&z0903, false).unwrap(),
-            "https://autodl.art/api/v1/comfyui/comfyui_workflow/minimax_h3_z0902"
-        );
-        assert_eq!(
-            submit_endpoint(&z0903, true).unwrap(),
-            "https://autodl.art/api/v1/comfyui/comfyui_workflow/minimax_h3_z0903"
-        );
-        assert_eq!(
-            submit_endpoint(&fixture_settings("https://example.test/submit"), false).unwrap(),
-            "https://example.test/submit"
-        );
-    }
-
-    #[test]
     fn video_names_use_the_episode_document_number() {
         for (document, expected) in [
             ("01 测试.md", "0001 S007_20260913-222911"),
@@ -1292,7 +1267,7 @@ mod tests {
             assert!(submitted.contains("data:image/png;base64,"));
             let body: Value =
                 serde_json::from_str(submitted.split_once("\r\n\r\n").unwrap().1).unwrap();
-            assert_eq!(body["seed"], 683072603085674_i64);
+            assert_eq!(body["seed"], 548628410878779_i64);
             assert_eq!(
                 body["ref_audio_0"],
                 format!(
@@ -1341,7 +1316,7 @@ mod tests {
                 prompt: "向前走".into(),
                 duration: 5,
                 resolution: "768p横(1376*768)".into(),
-                seed: Some(683072603085674),
+                seed: Some(548628410878779),
                 image_refs: vec!["frame.png".into()],
                 audio_refs: vec!["voice.mp3".into()],
             },
@@ -1392,7 +1367,7 @@ mod tests {
         let settings = GenerationSettings {
             profile_id: "fixture".into(),
             submit_url: format!(
-                "http://{address}/api/v1/comfyui/comfyui_workflow/minimax_h3_z0903"
+                "http://{address}/api/v1/comfyui/comfyui_workflow/minimax_h3_zm_u30"
             ),
             query_url: format!("http://{address}/result/{{task_id}}"),
             resolutions: vec!["768p横(1376*768)".into()],
@@ -1482,14 +1457,14 @@ mod tests {
     }
 
     #[test]
-    fn submit_z0903_without_audio_posts_to_z0902() {
-        post_to_workflow("/api/v1/comfyui/comfyui_workflow/minimax_h3_z0902", vec![]);
+    fn submit_u30_without_audio_uses_configured_endpoint() {
+        post_to_workflow("/api/v1/comfyui/comfyui_workflow/minimax_h3_zm_u30", vec![]);
     }
 
     #[test]
-    fn submit_z0903_with_audio_keeps_z0903() {
+    fn submit_u30_with_audio_uses_configured_endpoint() {
         post_to_workflow(
-            "/api/v1/comfyui/comfyui_workflow/minimax_h3_z0903",
+            "/api/v1/comfyui/comfyui_workflow/minimax_h3_zm_u30",
             vec!["voice.mp3".into()],
         );
     }

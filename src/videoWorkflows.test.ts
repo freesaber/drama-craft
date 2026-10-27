@@ -66,6 +66,18 @@ describe("videoWorkflows", () => {
     expect(migrateApiProfile(custom)).toEqual(custom);
   });
 
+  it("offers U30 using the documented endpoint and confirmed defaults", () => {
+    expect(AUTODL_RESOLUTION_PRESETS.map((item) => item.id)).toEqual(["minimax_h3_zm_u30", "minimax_h3_803"]);
+    const preset = AUTODL_RESOLUTION_PRESETS.find((item) => item.id === "minimax_h3_zm_u30")!;
+    const profile = autodlApiProfile("u30", preset);
+    expect(profile.submitUrl).toBe("https://autodl.art/api/v1/comfyui/comfyui_workflow/minimax_h3_zm_u30");
+    expect(profile.queryUrl).toContain("result/{task_id}");
+    expect(profile.hasAuthorization).toBe(false);
+    expect(parseResolutionsJson(profile.resolutions)).toEqual(["480p横", "480p竖", "768p横", "768p竖", "960p横", "960p竖"]);
+    expect(profile.defaultSeed).toBe("548628410878779");
+    expect(migrateApiProfile({ id: "u30", baseUrl: profile.submitUrl })).toMatchObject({ resolutions: profile.resolutions, defaultSeed: profile.defaultSeed });
+  });
+
   it("parses resolution JSON lists", () => {
     const compact = formatResolutionsJson(
       AUTODL_RESOLUTION_PRESETS[0].resolutions,
@@ -81,29 +93,29 @@ describe("videoWorkflows", () => {
   it("detects autodl presets from profile name or submit url", () => {
     expect(
       detectAutodlPreset({
-        name: "minimax_h3_z0903",
+        name: "minimax_h3_zm_u30",
         submitUrl: "",
       })?.id,
-    ).toBe("minimax_h3_z0903");
+    ).toBe("minimax_h3_zm_u30");
     expect(
       autodlPresetValues({
         type: "autodl",
         name: "A",
         submitUrl:
-          "https://autodl.art/api/v1/comfyui/comfyui_workflow/minimax_h3_zm_u24",
+          "https://autodl.art/api/v1/comfyui/comfyui_workflow/minimax_h3_zm_u30",
         resolutions: "",
         defaultSeed: "",
       })?.defaultSeed,
-    ).toBe("683072603085674");
+    ).toBe("548628410878779");
   });
 
   it("does not overwrite saved autodl preset fields", () => {
     const saved = fillEmptyAutodlPreset({
       id: "1",
-      name: "minimax_h3_zm_u24",
+      name: "minimax_h3_zm_u30",
       type: "autodl",
       submitUrl:
-        "https://autodl.art/api/v1/comfyui/comfyui_workflow/minimax_h3_zm_u24",
+        "https://autodl.art/api/v1/comfyui/comfyui_workflow/minimax_h3_zm_u30",
       queryUrl:
         "https://autodl.art/api/v1/comfyui/comfyui_workflow/result/{task_id}",
       resolutions: '["768p横(1376*768)"]',
@@ -115,7 +127,7 @@ describe("videoWorkflows", () => {
   });
 
   it("maps document resolution labels onto the active API list", () => {
-    const list = [...AUTODL_RESOLUTION_PRESETS[1].resolutions];
+    const list = ["480p横(864*480)", "480p竖(480*864)", "1080p横(1920*1088)"];
     expect(resolutionLabelKey("480p横(864*480)")).toBe("480p横");
     expect(alignResolutionOption("480p横", list)).toBe("480p横(864*480)");
     expect(alignResolutionOption("480p横(864*480)", ["480p横"])).toBe("480p横");
@@ -141,14 +153,14 @@ describe("videoWorkflows", () => {
   it("builds options from configured profile", () => {
     const options = optionsFromProfile({
       id: "1",
-      name: "z0903",
+      name: "自定义",
       type: "autodl",
       submitUrl: "https://example.test/submit",
       queryUrl: "https://example.test/result/{task_id}",
       resolutions: formatResolutionsJson(
-        AUTODL_RESOLUTION_PRESETS[1].resolutions,
+        ["1080p横(1920*1088)"],
       ),
-      defaultSeed: AUTODL_RESOLUTION_PRESETS[1].defaultSeed,
+      defaultSeed: "757947932117433",
       hasAuthorization: true,
     });
     expect(options.resolutions).toContain("1080p横(1920*1088)");
@@ -160,16 +172,16 @@ describe("videoWorkflows", () => {
       id: "legacy",
       name: "旧",
       baseUrl:
-        "https://autodl.art/api/v1/comfyui/comfyui_workflow/minimax_h3_z0903",
+        "https://autodl.art/api/v1/comfyui/comfyui_workflow/minimax_h3_zm_u30",
       hasAuthorization: true,
     });
     expect(profile.type).toBe("autodl");
-    expect(profile.submitUrl).toContain("minimax_h3_z0903");
+    expect(profile.submitUrl).toContain("minimax_h3_zm_u30");
     expect(profile.queryUrl).toContain("{task_id}");
     expect(parseResolutionsJson(profile.resolutions)).toContain(
-      "1080p横(1920*1088)",
+      "960p横",
     );
-    expect(profile.defaultSeed).toBe("757947932117433");
+    expect(profile.defaultSeed).toBe("548628410878779");
   });
 
   it("migrates generation settings payload", () => {

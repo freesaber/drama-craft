@@ -769,7 +769,7 @@ fn set_audio_settings(
 fn configuration_from_preferences(prefs: &Preferences) -> settings::Configuration {
     let mut config = prefs.generation_configuration.clone();
     if config.default_resolution.is_empty() {
-        config.default_resolution = "480p横(864*480)".into();
+        config.default_resolution = "480p横".into();
     }
     if config.profiles.is_empty() && !prefs.generation_base_url.is_empty() {
         config.active_profile_id = "legacy".into();

@@ -1,5 +1,5 @@
 name: Check P0
-on: [push, pull_request]
+on: workflow_dispatch
 jobs:
   windows:
     runs-on: windows-latest

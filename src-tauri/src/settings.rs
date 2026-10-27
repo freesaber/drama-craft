@@ -35,7 +35,7 @@ pub struct Configuration {
 }
 
 fn default_resolution() -> String {
-    "480p横(864*480)".into()
+    "480p横".into()
 }
 
 fn validate_http_url(raw: &str, label: &str) -> Result<reqwest::Url> {
@@ -99,8 +99,8 @@ fn migrate_legacy_endpoints(profile: &mut ApiProfile) {
         }
     }
     if profile.resolutions.trim().is_empty() && !profile.submit_url.trim().is_empty() {
-        let z0903 = profile.submit_url.contains("minimax_h3_z0903");
         let h3_803 = profile.submit_url.contains("minimax_h3_803");
+        let u30 = profile.submit_url.contains("minimax_h3_zm_u30");
         let resolutions = if h3_803 {
             serde_json::json!([
                 "480p竖(480*864)",
@@ -112,35 +112,19 @@ fn migrate_legacy_endpoints(profile: &mut ApiProfile) {
                 "1088p横(1920*1088)",
                 "1440p横(2560*1440)"
             ])
-        } else if z0903 {
-            serde_json::json!([
-                "480p竖(480*864)",
-                "480p横(864*480)",
-                "768p竖(768*1376)",
-                "768p横(1376*768)",
-                "1080p竖(1080*1920)",
-                "1080p横(1920*1088)",
-                "1440p竖(1440*2560)",
-                "1440p横(2560*1440)"
-            ])
+        } else if u30 {
+            serde_json::json!(["480p横", "480p竖", "768p横", "768p竖", "960p横", "960p竖"])
         } else {
-            serde_json::json!([
-                "480p横(864*480)",
-                "480p竖(480*864)",
-                "768p横(1376*768)",
-                "768p竖(768*1376)",
-                "480p(1:1)(480*480)",
-                "768p(1:1)(768*768)"
-            ])
+            serde_json::json!(["480p横", "480p竖", "768p横", "768p竖", "960p横", "960p竖"])
         };
         profile.resolutions = serde_json::to_string_pretty(&resolutions).unwrap_or_default();
         if profile.default_seed.trim().is_empty() {
             profile.default_seed = if h3_803 {
                 "803".into()
-            } else if z0903 {
-                "757947932117433".into()
+            } else if u30 {
+                "548628410878779".into()
             } else {
-                "683072603085674".into()
+                "548628410878779".into()
             };
         }
     }
@@ -274,7 +258,7 @@ mod tests {
                 id: "legacy".into(),
                 name: "旧配置".into(),
                 platform_type: String::new(),
-                submit_url: "https://autodl.art/api/v1/comfyui/comfyui_workflow/minimax_h3_z0903"
+                submit_url: "https://autodl.art/api/v1/comfyui/comfyui_workflow/minimax_h3_zm_u30"
                     .into(),
                 query_url: String::new(),
                 resolutions: String::new(),
@@ -289,8 +273,25 @@ mod tests {
         let profile = &legacy.profiles[0];
         assert_eq!(profile.platform_type, "autodl");
         assert!(profile.query_url.contains("{task_id}"));
-        assert!(profile.resolutions.contains("1080p横"));
-        assert_eq!(profile.default_seed, "757947932117433");
+        assert!(profile.resolutions.contains("960p横"));
+        assert_eq!(profile.default_seed, "548628410878779");
+    }
+
+    #[test]
+    fn migrates_u30_with_its_resolution_options() {
+        let mut legacy = config();
+        let profile = &mut legacy.profiles[0];
+        profile.submit_url =
+            "https://autodl.art/api/v1/comfyui/comfyui_workflow/minimax_h3_zm_u30".into();
+        profile.resolutions.clear();
+        profile.default_seed.clear();
+        let normalized = legacy.normalize().unwrap();
+        let profile = &normalized.profiles[0];
+        assert_eq!(
+            parse_resolutions_json(&profile.resolutions).unwrap(),
+            vec!["480p横", "480p竖", "768p横", "768p竖", "960p横", "960p竖"]
+        );
+        assert_eq!(profile.default_seed, "548628410878779");
     }
 
     #[test]

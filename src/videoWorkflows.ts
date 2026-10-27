@@ -8,12 +8,8 @@ const RES_480P_H = "480p横(864*480)";
 const RES_480P_V = "480p竖(480*864)";
 const RES_768P_H = "768p横(1376*768)";
 const RES_768P_V = "768p竖(768*1376)";
-const RES_1080P_V = "1080p竖(1080*1920)";
-const RES_1080P_H = "1080p横(1920*1088)";
 const RES_1440P_V = "1440p竖(1440*2560)";
 const RES_1440P_H = "1440p横(2560*1440)";
-const RES_480P_11 = "480p(1:1)(480*480)";
-const RES_768P_11 = "768p(1:1)(768*768)";
 
 export function formatResolutionsJson(values: readonly string[]): string {
   return JSON.stringify([...values]);
@@ -94,32 +90,10 @@ export function matchConfiguredResolution(
 /** AutoDL 工作流各自的 resolution / seed 预设。 */
 export const AUTODL_RESOLUTION_PRESETS = [
   {
-    id: "minimax_h3_zm_u24",
-    label: "minimax_h3_zm_u24",
-    resolutions: [
-      RES_480P_H,
-      RES_480P_V,
-      RES_768P_H,
-      RES_768P_V,
-      RES_480P_11,
-      RES_768P_11,
-    ],
-    defaultSeed: "683072603085674",
-  },
-  {
-    id: "minimax_h3_z0903",
-    label: "minimax_h3_z0903",
-    resolutions: [
-      RES_480P_V,
-      RES_480P_H,
-      RES_768P_V,
-      RES_768P_H,
-      RES_1080P_V,
-      RES_1080P_H,
-      RES_1440P_V,
-      RES_1440P_H,
-    ],
-    defaultSeed: "757947932117433",
+    id: "minimax_h3_zm_u30",
+    label: "minimax_h3_zm_u30",
+    resolutions: ["480p横", "480p竖", "768p横", "768p竖", "960p横", "960p竖"],
+    defaultSeed: "548628410878779",
   },
   {
     id: "minimax_h3_803",
@@ -161,7 +135,7 @@ export interface VideoApiOptions {
 
 export const FALLBACK_VIDEO_OPTIONS: VideoApiOptions = {
   resolutions: [...AUTODL_RESOLUTION_PRESETS[0].resolutions],
-  defaultResolution: RES_480P_H,
+  defaultResolution: "480p横",
   defaultSeed: AUTODL_RESOLUTION_PRESETS[0].defaultSeed,
   maxImages: 9,
   maxAudios: 3,
@@ -250,8 +224,7 @@ export function migrateApiProfile(raw: Record<string, unknown>): ApiProfile {
   }
   if (!resolutions.trim() && submitUrl) {
     const preset =
-      detectAutodlPreset({ name: "", submitUrl }) ??
-      AUTODL_RESOLUTION_PRESETS[0];
+      detectAutodlPreset({ name: "", submitUrl }) ?? AUTODL_RESOLUTION_PRESETS[0];
     resolutions = formatResolutionsJson(preset.resolutions);
     if (!defaultSeed) defaultSeed = preset.defaultSeed;
   }
