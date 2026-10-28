@@ -2744,6 +2744,25 @@ select:focus {
   flex-shrink: 0;
   margin-top: 8px;
 }
+.default-voice-directory {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #6e8062;
+}
+.default-voice-directory small {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.default-voice-directory small span {
+  display: block;
+  user-select: text;
+}
+.default-voice-directory button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
 .modal-actions {
   display: flex;
   justify-content: flex-end;

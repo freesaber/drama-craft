@@ -107,6 +107,8 @@ export const ui = {
   confirm: "确认",
   newTitle: "开始一个新故事",
   createFolder: "在父目录下创建同名项目文件夹，不覆盖已有目录。",
+  rememberProjectDirectories:
+    "创建成功后记住本次目录选择，下次新建时自动填入。",
   librarySetup: "配置角色与声音",
   librarySetupExisting: "导入这个项目之前，请先配置项目素材库。",
   characterDirectory: "角色目录（可选）",
@@ -116,6 +118,8 @@ export const ui = {
   voiceHint:
     "已提供内置 TTS 音色样本，也可以改为自己的声音目录。文件名用于标记性别、年龄和声音特征。",
   openDirectory: "打开目录",
+  defaultVoiceDirectory: "内置声音默认目录：",
+  restoreDefaultVoiceDirectory: "恢复默认",
   libraryImportHint:
     "这里只保存目录配置；不会复制素材，也不会修改现有剧本和提示词。",
   selectProject: "选择要打开的作品",

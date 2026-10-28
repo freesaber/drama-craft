@@ -1814,6 +1814,12 @@ export default function App() {
                         </label>
                         <p className="muted">
                           {modal === "open" ? ui.pathHint : ui.createFolder}
+                          {modal === "project" && (
+                            <>
+                              <br />
+                              {ui.rememberProjectDirectories}
+                            </>
+                          )}
                         </p>
                       </>
                     )}
@@ -1853,6 +1859,11 @@ export default function App() {
                           <div className="directory-input">
                             <input
                               value={voiceDirectory}
+                              aria-describedby={
+                                defaultVoiceDirectory
+                                  ? "default-voice-directory"
+                                  : undefined
+                              }
                               onChange={(event) =>
                                 setVoiceDirectory(event.target.value)
                               }
@@ -1888,6 +1899,25 @@ export default function App() {
                           </div>
                           <small>{ui.voiceHint}</small>
                         </label>
+                        {defaultVoiceDirectory && (
+                          <div className="default-voice-directory">
+                            <small id="default-voice-directory">
+                              {ui.defaultVoiceDirectory}
+                              <span>{defaultVoiceDirectory}</span>
+                            </small>
+                            <button
+                              type="button"
+                              disabled={
+                                busy || voiceDirectory === defaultVoiceDirectory
+                              }
+                              onClick={() =>
+                                setVoiceDirectory(defaultVoiceDirectory)
+                              }
+                            >
+                              {ui.restoreDefaultVoiceDirectory}
+                            </button>
+                          </div>
+                        )}
                         <p className="muted">{ui.libraryImportHint}</p>
                       </>
                     )}
