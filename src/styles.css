@@ -2761,7 +2761,21 @@ select:focus {
 }
 .default-voice-directory button {
   flex-shrink: 0;
+  align-self: flex-start;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  line-height: 18px;
   white-space: nowrap;
+}
+.default-voice-directory button:hover:not(:disabled) {
+  background: transparent;
+  color: #34573f;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .modal-actions {
   display: flex;
