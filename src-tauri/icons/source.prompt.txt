@@ -1,0 +1,12 @@
+DramaCraft application icon
+Generator: built-in imagegen
+Transparent background: true
+
+Initial generation prompt:
+Use case: logo-brand. Create ONE polished production-ready Windows desktop app icon for DramaCraft (剧匠), a professional AI short-drama filmmaking workbench. Square 1024x1024 icon asset, straight-on orthographic view. A bold custom ivory cinema clapperboard symbol whose lower body subtly forms a capital D through a single generous rounded negative-space aperture; the slightly raised diagonal striped clapper bar makes the filmmaking identity immediately recognizable. Extremely simple, memorable silhouette, broad strokes and large negative spaces that remain crisp at 16 and 32 pixels. Center the symbol generously within a rich deep emerald rounded-square tile, with a restrained jade edge highlight and very subtle satin material depth. Ivory clapper stripes, no thin outlines. Premium editorial creative-software identity, confident precise geometry, sophisticated restrained finish. Tile occupies about 92% of canvas, rounded corners, truly transparent outside the tile, no exterior shadow. Symbol fills about 65% of tile. No words, no Chinese characters, no lettering except the abstract D shape, no play triangle, no filmstrip perforations, no sparkles, no mascot, no decorative objects, no mockup, no contact sheet, no presentation background, no perspective tilt. Deliver only the finished single icon.
+
+Refinement prompt (using the initial generated image as the edit target):
+Refine this exact app icon for production. Preserve the emerald rounded-square tile, ivory D clapperboard symbol, proportions, position and composition. Clean the entire exterior alpha boundary: completely remove every detached speck, stray colored pixel, cyan mark and green fringe outside the single smooth rounded-square tile. Outside tile must be perfectly transparent. Replace the bright cyan/neon rim with a restrained dark jade satin edge, smooth silhouette with excellent antialiasing. Reduce surface grain for a cleaner professional finish. Keep the D and clapper bar unchanged. Deliver one square final transparent PNG icon, no text or extras.
+
+The final image is source.png. Run npm run icon to regenerate application icon formats.
+
