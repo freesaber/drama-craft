@@ -32,6 +32,11 @@ export default function EpisodeOverview({
     "roles",
   );
   const [availability, setAvailability] = useState<Record<string, boolean>>({});
+  const [previewReference, setPreviewReference] = useState<string | null>(null);
+  const [previewAvailable, setPreviewAvailable] = useState<boolean | null>(
+    null,
+  );
+  const [previewMode, setPreviewMode] = useState<"image" | "prompt">("image");
   const [prompt, setPrompt] = useState<{
     name: string;
     text: string;
@@ -72,6 +77,9 @@ export default function EpisodeOverview({
     reference: string | null,
   ) => {
     const request = ++promptRequest.current;
+    setPreviewReference(reference);
+    setPreviewAvailable(null);
+    setPreviewMode("image");
     setPromptCopied(false);
     setPrompt({ name, text, loading: true });
     try {
@@ -382,6 +390,9 @@ export default function EpisodeOverview({
             aria-modal="true"
             aria-labelledby="generation-prompt-title"
             onMouseDown={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") closePromptModal();
+            }}
           >
             <button
               type="button"
@@ -391,39 +402,89 @@ export default function EpisodeOverview({
             >
               ×
             </button>
-            <h2 id="generation-prompt-title">
-              {prompt.name} · {ui.episodeData.generationPrompt}
-            </h2>
-            {prompt.firstDocument && (
-              <p className="generation-prompt-source">
-                {ui.episodeData.firstDefinedIn}：{prompt.firstDocument}
-              </p>
-            )}
-            {prompt.error && (
-              <p className="diagnostic" role="alert">
-                {prompt.error}
-              </p>
-            )}
-            <pre className="plain-prompt">
-              {prompt.loading
-                ? ui.episodeData.loadingPrompt
-                : prompt.text || ui.episodeData.noGenerationPrompt}
-            </pre>
-            <div className="modal-actions">
+            <h2 id="generation-prompt-title">{prompt.name}</h2>
+            <div
+              className="material-preview-tabs"
+              role="tablist"
+              aria-label={ui.episodeData.previewMode}
+            >
               <button
                 type="button"
-                disabled={!prompt.text || prompt.loading}
-                onClick={() => {
-                  void navigator.clipboard.writeText(prompt.text).then(() => {
-                    setPromptCopied(true);
-                    window.setTimeout(() => setPromptCopied(false), 1500);
-                  });
-                }}
+                role="tab"
+                id="material-image-tab"
+                aria-controls="material-preview-panel"
+                aria-selected={previewMode === "image"}
+                onClick={() => setPreviewMode("image")}
               >
-                {promptCopied
-                  ? ui.episodeData.promptCopied
-                  : ui.episodeData.copyPrompt}
+                {ui.episodeData.largeImage}
               </button>
+              <button
+                type="button"
+                role="tab"
+                id="material-prompt-tab"
+                aria-controls="material-preview-panel"
+                aria-selected={previewMode === "prompt"}
+                onClick={() => setPreviewMode("prompt")}
+              >
+                {ui.episodeData.generationPrompt}
+              </button>
+            </div>
+            <div
+              className="material-preview-content"
+              id="material-preview-panel"
+              role="tabpanel"
+              aria-labelledby={
+                previewMode === "image"
+                  ? "material-image-tab"
+                  : "material-prompt-tab"
+              }
+            >
+              {previewMode === "image" ? (
+                <div className="material-preview-image">
+                  {previewReference
+                    ? asset(previewReference, setPreviewAvailable)
+                    : null}
+                  {(!previewReference || previewAvailable === false) && (
+                    <p className="muted">{ui.episodeData.noPreviewImage}</p>
+                  )}
+                </div>
+              ) : (
+                <>
+                  {prompt.firstDocument && (
+                    <p className="generation-prompt-source">
+                      {ui.episodeData.firstDefinedIn}：{prompt.firstDocument}
+                    </p>
+                  )}
+                  {prompt.error && (
+                    <p className="diagnostic" role="alert">
+                      {prompt.error}
+                    </p>
+                  )}
+                  <pre className="plain-prompt">
+                    {prompt.loading
+                      ? ui.episodeData.loadingPrompt
+                      : prompt.text || ui.episodeData.noGenerationPrompt}
+                  </pre>
+                </>
+              )}
+            </div>
+            <div className="modal-actions">
+              {previewMode === "prompt" && (
+                <button
+                  type="button"
+                  disabled={!prompt.text || prompt.loading}
+                  onClick={() => {
+                    void navigator.clipboard.writeText(prompt.text).then(() => {
+                      setPromptCopied(true);
+                      window.setTimeout(() => setPromptCopied(false), 1500);
+                    });
+                  }}
+                >
+                  {promptCopied
+                    ? ui.episodeData.promptCopied
+                    : ui.episodeData.copyPrompt}
+                </button>
+              )}
               <button type="button" onClick={closePromptModal}>
                 {ui.confirm}
               </button>

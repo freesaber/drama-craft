@@ -110,7 +110,9 @@ try {
     .first();
   await expect(checklistItem).toBeVisible();
   assert.equal(
-    await checklistItem.evaluate((item) => getComputedStyle(item).listStyleType),
+    await checklistItem.evaluate(
+      (item) => getComputedStyle(item).listStyleType,
+    ),
     "disc",
   );
   await page.getByRole("button", { name: "▤ 剧本大纲.md", exact: true }).click();
@@ -241,6 +243,18 @@ N/A
   await boundRole.scrollIntoViewIfNeeded();
   await expect(boundRole.getByAltText("角色 图.png")).toBeVisible();
   await expect(boundRole.locator("audio")).toBeVisible();
+  await boundRole.click();
+  const rolePreview = page.getByRole("dialog", { name: "旅人", exact: true });
+  await expect(
+    rolePreview.getByRole("tab", { name: "大图", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  await expect(rolePreview.getByAltText("角色 图.png")).toBeVisible();
+  const imageBounds = await rolePreview.boundingBox();
+  await rolePreview
+    .getByRole("tab", { name: "生成提示词", exact: true })
+    .click();
+  assert.deepEqual(await rolePreview.boundingBox(), imageBounds);
+  await rolePreview.getByRole("button", { name: "确认", exact: true }).click();
   await page.screenshot({
     path: join(output, "desktop-character-binding.png"),
   });
@@ -250,8 +264,15 @@ N/A
     .click();
   await page.getByRole("button", { name: /渡口/ }).click();
   const materialPrompt = page.getByRole("dialog", {
-    name: "渡口 · 生成提示词",
+    name: "渡口",
+    exact: true,
   });
+  await expect(materialPrompt).toContainText("暂无可预览的图片");
+  const missingImageBounds = await materialPrompt.boundingBox();
+  await materialPrompt
+    .getByRole("tab", { name: "生成提示词", exact: true })
+    .click();
+  assert.deepEqual(await materialPrompt.boundingBox(), missingImageBounds);
   await expect(materialPrompt).toContainText(
     "晨雾中的古渡口，木码头延伸到水面。",
   );
@@ -407,7 +428,10 @@ N/A
     original.replace("## S001 灯下相逢", "## S001 点亮渡口") +
     "\n### 创作备注\n\n自定义段落：旅人在灯下停步。\n\n[参考图](<参考 图.png>)\n\n`missing.mp4`\n";
   await copyFile("src-tauri/icons/source.png", join(root, "参考 图.png"));
-  await copyFile("src-tauri/icons/source.png", join(root, "0001 首帧_S001.png"));
+  await copyFile(
+    "src-tauri/icons/source.png",
+    join(root, "0001 首帧_S001.png"),
+  );
   await writeFile(join(root, "损坏 图片.png"), "synthetic invalid image");
   // Create an original, silent local video fixture using this WebView's encoder.
   const videoBytes = await page.evaluate(async () => {
@@ -572,9 +596,7 @@ N/A
     .toContain("保留被删除文档的编辑");
   // Read-only originals permit draft edits and save-as, never an overwrite.
   await chmod(join(root, "02 恢复草稿.md"), 0o444);
-  await page
-    .getByRole("button", { name: "▤ 剧本大纲.md", exact: true })
-    .click();
+  await page.getByRole("button", { name: "▤ 剧本大纲.md", exact: true }).click();
   await page
     .getByRole("button", { name: "▤ 02 恢复草稿.md", exact: true })
     .click();
