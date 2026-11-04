@@ -10,10 +10,10 @@ describe("createEpisodeTemplate", () => {
     expect(template).toContain("0001 S0001.mp4");
     expect(template).toContain("detailed_description:");
     expect(template).toContain(
-      "The target video uses [replace with the visual style confirmed with the user, written in concise English].",
+      "画面风格为[填入已确认的核心画面风格词]。",
     );
     expect(template).toContain(
-      "Maintain that style and the rendering of <Picture 1> throughout the video.",
+      "全程沿用 <Picture 1> 的画风与渲染。",
     );
     expect(template).not.toContain("禁止转成 3D、写实或其他未确认风格");
     expect(template).not.toContain("参考图只约束外貌与场景");

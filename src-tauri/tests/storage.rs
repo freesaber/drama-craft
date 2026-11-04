@@ -190,11 +190,8 @@ fn rejects_traversal_reserved_names_and_overwrites() {
     assert!(agents.contains("视频提示词画面与发声规则"));
     assert!(agents.contains("视频提示词画面风格写法"));
     assert!(agents.contains("画面风格不是模板预设值"));
-    assert!(agents.contains(
-        "The target video uses [replace with the visual style confirmed with the user, written in concise English]."
-    ));
-    assert!(agents
-        .contains("Maintain that style and the rendering of <Picture 1> throughout the video."));
+    assert!(agents.contains("画面风格为[填入已确认的核心画面风格词]。"));
+    assert!(agents.contains("全程沿用 <Picture 1> 的画风与渲染。"));
     assert!(!agents.contains("禁止转成 3D、写实或其他未确认风格"));
     assert!(agents.contains("删掉破折号不够"));
     assert!(agents.contains("不要用破折号串联动作或代替正常标点"));
@@ -225,10 +222,8 @@ fn rejects_traversal_reserved_names_and_overwrites() {
     assert!(agents.contains("16:9横向单幅画面。3D写实，PBR材质，电影级光照。"));
     assert!(agents.contains("首帧已显式写入画面风格"));
     assert!(agents.contains("H3 Ref2VA 主体与音色引用"));
-    assert!(agents.contains("<Subject 1> is the young apprentice in <Picture 2>"));
-    assert!(agents.contains(
-        "<Subject 1> (S1) speaks on screen in an irritated voice, using the timbre of <Audio 1>:"
-    ));
+    assert!(agents.contains("<Subject 1> 是 <Picture 2> 中的年轻学徒"));
+    assert!(agents.contains("<Subject 1> (S1) 使用 <Audio 1> 的音色，在画内恼火地说："));
     assert!(agents.contains("没有可见主体的系统声或旁白"));
 }
 
