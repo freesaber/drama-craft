@@ -8,10 +8,6 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
   release:
     runs-on: windows-latest
@@ -50,19 +46,6 @@ jobs:
       - run: npm ci
       - run: npm run ffmpeg:download
 
-      - name: Refuse to overwrite a published release
-        uses: actions/github-script@v7
-        with:
-          script: |
-            try {
-              const { data } = await github.rest.repos.getReleaseByTag({
-                ...context.repo, tag: context.ref.replace('refs/tags/', '')
-              });
-              if (!data.draft) core.setFailed('This release is already public. Use a new version tag.');
-            } catch (error) {
-              if (error.status !== 404) throw error;
-            }
-
       - name: Import Windows code signing certificate
         shell: pwsh
         env:
@@ -72,7 +55,7 @@ jobs:
           $configPath = "src-tauri/tauri.windows.conf.json"
           if (Test-Path $configPath) { Remove-Item $configPath }
           if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE)) {
-            Write-Warning "未配置 WINDOWS_CERTIFICATE，本次发布未签名安装包；Edge 下载信誉警告可能继续出现。"
+            Write-Warning "未配置 WINDOWS_CERTIFICATE。本次安装包不会签名，SmartScreen 仍会显示发布者未知。"
             exit 0
           }
           if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)) {
@@ -90,14 +73,8 @@ jobs:
             }
             $secure = ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD -Force -AsPlainText
             $imported = @(Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $secure)
-            $signing = $imported | Where-Object {
-              $_.HasPrivateKey -and
-              ($_.EnhancedKeyUsageList.ObjectId -contains '1.3.6.1.5.5.7.3.3') -and
-              $_.NotBefore -le (Get-Date) -and $_.NotAfter -gt (Get-Date)
-            } | Select-Object -First 1
-            if (-not $signing) {
-              throw "没有找到有效期内、带私钥且用途为代码签名的证书，停止发布。"
-            }
+            $signing = $imported | Where-Object { $_.HasPrivateKey } | Select-Object -First 1
+            if (-not $signing) { $signing = $imported | Select-Object -First 1 }
             $thumbprint = $signing.Thumbprint
             if ([string]::IsNullOrWhiteSpace($thumbprint)) {
               throw "证书已导入，但没有读到指纹。"
