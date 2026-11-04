@@ -61,6 +61,8 @@ export default function BoardView({
   refreshKey,
   busy,
   apply,
+  savePatch,
+  readonly,
   source,
   active,
   select,
@@ -81,6 +83,8 @@ export default function BoardView({
   refreshKey: number;
   busy: boolean;
   apply: (patch: SourcePatch, nextIndex?: number) => boolean;
+  savePatch: (patch: SourcePatch) => Promise<void>;
+  readonly: boolean;
   source: (offset: number) => void;
   active: number;
   select: (index: number) => void;
@@ -261,6 +265,10 @@ export default function BoardView({
                     </div>
                   )}
                 </div>
+              }
+              promptReadonly={readonly}
+              savePrompt={(value) =>
+                savePatch(fieldPatch(board, card.fields.videoPrompt, value))
               }
               card={card}
               episode={board.episode}

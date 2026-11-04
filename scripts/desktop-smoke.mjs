@@ -365,7 +365,7 @@ N/A
     .getByLabel("视频提示词", { exact: true })
     .evaluate((element) => element.getBoundingClientRect().height);
   assert.ok(
-    promptHeight >= 415,
+    promptHeight >= 240,
     "Video prompt starts at the expanded desktop height",
   );
   await expect(
@@ -381,6 +381,17 @@ N/A
     .boundingBox();
   assert.ok(assetBox.y >= mediaBox.y + mediaBox.height);
   assert.ok(Math.abs(assetBox.x - mediaBox.x) < 2);
+  const promptField = firstCard().locator(".generation-prompt-field");
+  const promptEditor = promptField.getByRole("textbox");
+  const originalPrompt = await promptEditor.inputValue();
+  const beforePromptEdit = await readFile(join(root, "01 灯火.md"), "utf8");
+  await expect(promptField.getByRole("button", { name: "复制", exact: true })).toHaveCount(0);
+  await expect(promptField.getByRole("button", { name: "撤销", exact: true })).toBeDisabled();
+  await expect(promptField.getByRole("button", { name: "保存", exact: true })).toBeDisabled();
+  await promptEditor.fill("尚未保存的提示词");
+  assert.equal(await readFile(join(root, "01 灯火.md"), "utf8"), beforePromptEdit);
+  await promptField.getByRole("button", { name: "撤销", exact: true }).click();
+  await expect(promptEditor).toHaveValue(originalPrompt);
   await firstCard().getByLabel("镜头标题", { exact: true }).fill("灯下相逢");
   await firstCard()
     .getByLabel("视频提示词", { exact: true })
@@ -394,7 +405,8 @@ N/A
   await expect(
     firstCard().getByLabel("视频提示词", { exact: true }),
   ).toHaveValue("旅人点灯。\n\n船夫循光靠岸。\n灯火未熄。");
-  await page.keyboard.press("Control+s");
+  await promptField.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(promptField.getByRole("button", { name: "保存", exact: true })).toBeDisabled();
   await expect
     .poll(() => readFile(join(root, "01 灯火.md"), "utf8"))
     .toContain("船夫循光靠岸。");

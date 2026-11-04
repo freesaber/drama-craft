@@ -30,6 +30,8 @@ function renderDocument(document: string) {
       refreshKey={0}
       busy={false}
       apply={() => false}
+      savePatch={async () => {}}
+      readonly={false}
       source={() => {}}
       active={0}
       select={() => {}}

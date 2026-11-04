@@ -153,6 +153,7 @@ export const ui = {
   noGeneration:
     "在故事板中编排剧情、提示词与本地素材；配置视频 API 后可直接生成并归档版本。",
   generation: {
+    undoPrompt: "撤销",
     apiSettings: "视频 API",
     activeProfile: "当前使用配置（保存后生效）",
     profileName: "配置名称",

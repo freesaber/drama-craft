@@ -640,6 +640,32 @@ export default function App() {
       setShowApiToken(true);
     });
   };
+  const savePromptPatch = async (patch: SourcePatch) => {
+    if (!project || !snapshot) throw new Error(ui.generation.noDocument);
+    if (snapshot.readonly) throw new Error(ui.readonly);
+    if (busyRef.current) throw new Error(ui.busy);
+    busyRef.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const nextText = applySourcePatch(textRef.current, patch);
+      const saved = await api.save(
+        project.handle,
+        path,
+        nextText,
+        snapshot.hash,
+      );
+      replaceDocument(path, saved);
+      setNotice(ui.saved);
+    } catch (e) {
+      if (e && typeof e === "object" && "code" in e && e.code === "conflict")
+        setConflict(true);
+      throw e;
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  };
   const useGeneratedVideo = async (index: number, reference: string) => {
     if (!project || !snapshot) throw new Error(ui.generation.noDocument);
     if (snapshot.readonly) throw new Error(ui.readonly);
@@ -1398,6 +1424,8 @@ export default function App() {
                     refreshKey={refreshKey}
                     busy={busy}
                     apply={apply}
+                    savePatch={savePromptPatch}
+                    readonly={Boolean(snapshot.readonly)}
                     source={showSource}
                     active={activeShot}
                     select={setActiveShot}

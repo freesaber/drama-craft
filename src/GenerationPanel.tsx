@@ -16,6 +16,7 @@ import {
   canRetryGenerationDownload,
   retryGenerationDownload,
 } from "./generationRetry";
+import VideoPromptEditor from "./VideoPromptEditor";
 import VideoPlayerModal from "./VideoPlayerModal";
 import VideoTrimModal from "./VideoTrimModal";
 import { ui } from "./i18n";
@@ -114,6 +115,8 @@ export default function GenerationPanel({
   configure,
   useVideo,
   renderField,
+  savePrompt,
+  promptReadonly,
   video,
   onMediaChanged,
 }: {
@@ -128,6 +131,8 @@ export default function GenerationPanel({
   configure: () => void;
   useVideo: (reference: string) => Promise<void>;
   renderField: (key: BoardField, multiline?: boolean) => React.ReactNode;
+  savePrompt: (value: string) => Promise<void>;
+  promptReadonly: boolean;
   video: React.ReactNode;
   onMediaChanged?: (message: string) => void;
 }) {
@@ -136,7 +141,6 @@ export default function GenerationPanel({
   const [task, setTask] = useState<GenerationRecord | null>(null);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [promptCopied, setPromptCopied] = useState(false);
   const [retryingTaskId, setRetryingTaskId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<GenerationRecord | null>(
     null,
@@ -167,7 +171,6 @@ export default function GenerationPanel({
   useEffect(() => {
     setReviewOpen(false);
     setDeleteTarget(null);
-    setPromptCopied(false);
   }, [card.id, document]);
 
   const imageInputs = useMemo(
@@ -429,37 +432,14 @@ export default function GenerationPanel({
     <section className="shot-main generation-panel">
       <div className="shot-narrative">
         <div className="generation-fields">
-          <section className="board-field generation-prompt-field">
-            <div className="generation-prompt-heading">
-              <span>{ui.board.videoPrompt}</span>
-              <button
-                type="button"
-                disabled={!card.fields.videoPrompt.value}
-                onClick={() => {
-                  void navigator.clipboard
-                    .writeText(card.fields.videoPrompt.value)
-                    .then(() => {
-                      setPromptCopied(true);
-                      window.setTimeout(() => setPromptCopied(false), 1500);
-                    })
-                    .catch((e) => setError(errorMessage(e)));
-                }}
-              >
-                {promptCopied
-                  ? ui.generation.promptCopied
-                  : ui.generation.copyPrompt}
-              </button>
-            </div>
-            <div
-              className="generation-prompt-readonly"
-              role="textbox"
-              aria-label={ui.board.videoPrompt}
-              aria-readonly="true"
-              tabIndex={0}
-            >
-              {card.fields.videoPrompt.value || "—"}
-            </div>
-          </section>
+          <VideoPromptEditor
+            key={`${project.handle}:${document}:${card.id}`}
+            value={card.fields.videoPrompt.value}
+            disabled={
+              busy || promptReadonly || Boolean(card.fields.videoPrompt.ambiguous)
+            }
+            save={savePrompt}
+          />
           <div className="generation-parameters">
             {renderField("duration")}
             {renderField("resolution")}

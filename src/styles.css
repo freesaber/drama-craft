@@ -698,11 +698,18 @@
   justify-content: space-between;
   gap: 12px;
 }
+.generation-prompt-actions {
+  display: flex;
+  gap: 6px;
+}
 .generation-prompt-heading button {
   padding: 3px 10px;
   font-size: 11px;
 }
-.generation-prompt-readonly {
+.board-field .generation-prompt-editor {
+  resize: none;
+  font-family: inherit;
+  width: 100%;
   height: 300px;
   min-height: 0;
   max-height: 300px;
@@ -719,7 +726,7 @@
   overflow-wrap: anywhere;
   cursor: text;
 }
-.generation-prompt-readonly:focus {
+.board-field .generation-prompt-editor:focus {
   outline: 2px solid #d8e2d2;
   outline-offset: 1px;
 }
@@ -1741,7 +1748,7 @@
   .generation-actions {
     grid-row: 3;
   }
-  .generation-prompt-readonly {
+  .board-field .generation-prompt-editor {
     height: 240px;
     max-height: 240px;
   }
