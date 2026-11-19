@@ -77,7 +77,45 @@ describe("batch generation candidates", () => {
     expect(rows[0]).toMatchObject({ missing: [], hasVideo: true });
   });
 
-  it("keeps incomplete shots visible and reports absent frame, prompt, audio and invalid duration", async () => {
+  it.each(["", "planned-frame.png"])(
+    "accepts mapped reference art without using the planned first frame (%j)",
+    async (frameFile) => {
+      const board = fixture();
+      const shot = board.cards[0];
+      shot.fields.frameFile.value = frameFile;
+      shot.fields.videoPrompt.value = "沿用<Picture 1>中的街道布局。";
+      shot.videoInputs = [
+        {
+          param: "ref_image_0",
+          tag: "<Picture 1>",
+          reference: "street.png",
+          kind: "image",
+        },
+      ];
+      vi.spyOn(api, "generationHistory").mockResolvedValue([]);
+      const media = vi.spyOn(api, "media").mockImplementation(
+        async (_handle, _document, ref) =>
+          ({ exists: ref === "street.png" }) as Awaited<
+            ReturnType<typeof api.media>
+          >,
+      );
+      const rows = await batchGenerationCandidates(
+        "fixture",
+        "01 测试.md",
+        board,
+        FALLBACK_VIDEO_OPTIONS,
+      );
+      expect(rows[0]).toMatchObject({
+        missing: [],
+        hasVideo: false,
+        prompt: shot.fields.videoPrompt.value,
+        imageRefs: ["street.png"],
+      });
+      expect(media).not.toHaveBeenCalledWith("fixture", "01 测试.md", frameFile);
+    },
+  );
+
+  it("keeps incomplete shots visible and reports missing prompt, audio and invalid duration", async () => {
     const board = fixture();
     const shot = board.cards[0];
     shot.fields.frameFile.value = "";
@@ -105,14 +143,11 @@ describe("batch generation candidates", () => {
       FALLBACK_VIDEO_OPTIONS,
     );
     expect(rows).toHaveLength(1);
-    expect(rows[0].missing).toEqual(
-      expect.arrayContaining([
-        ui.batch.missingFrame,
-        ui.batch.missingPrompt,
-        ui.batch.invalidDuration,
-        "voice.wav",
-      ]),
-    );
+    expect(rows[0].missing).toEqual([
+      ui.batch.missingPrompt,
+      ui.batch.invalidDuration,
+      "voice.wav",
+    ]);
   });
 
   it("does not count deleted historical video files as existing videos", async () => {

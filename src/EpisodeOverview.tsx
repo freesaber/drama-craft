@@ -32,7 +32,11 @@ export default function EpisodeOverview({
     "roles",
   );
   const [availability, setAvailability] = useState<Record<string, boolean>>({});
-  const [previewReference, setPreviewReference] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{
+    tab: "roles" | "assets";
+    index: number;
+    reference: string | null;
+  } | null>(null);
   const [previewAvailable, setPreviewAvailable] = useState<boolean | null>(
     null,
   );
@@ -45,6 +49,16 @@ export default function EpisodeOverview({
     error?: string;
   } | null>(null);
   const promptRequest = useRef(0);
+  const previewDialog = useRef<HTMLElement>(null);
+  const previewOpen = preview !== null;
+  useEffect(() => {
+    if (!previewOpen) return;
+    const previousFocus = window.document.activeElement;
+    previewDialog.current?.focus();
+    return () => {
+      if (previousFocus instanceof HTMLElement) previousFocus.focus();
+    };
+  }, [previewOpen]);
   useEffect(
     () => () => {
       promptRequest.current += 1;
@@ -67,29 +81,37 @@ export default function EpisodeOverview({
     );
   const closePromptModal = () => {
     promptRequest.current += 1;
+    setPreview(null);
     setPromptCopied(false);
     setPrompt(null);
   };
   const openPromptModal = async (
-    id: string,
-    name: string,
-    text: string,
-    reference: string | null,
+    tab: "roles" | "assets",
+    index: number,
+    mode: "image" | "prompt" = "image",
   ) => {
+    const item =
+      tab === "roles" ? episode.characters[index] : materialAssets[index];
+    if (!item) return;
+    const { id, name } = item;
+    const { reference, text } =
+      "imagePrompt" in item
+        ? { reference: item.image, text: item.imagePrompt }
+        : { reference: item.reference, text: item.prompt };
     const request = ++promptRequest.current;
-    setPreviewReference(reference);
+    setPreview({ tab, index, reference });
     setPreviewAvailable(null);
-    setPreviewMode("image");
+    setPreviewMode(mode);
     setPromptCopied(false);
     setPrompt({ name, text, loading: true });
     try {
       const raw = await api.assetIndex(project.handle);
       if (request !== promptRequest.current) return;
-      const index = parseAssetIndex(
+      const assetIndex = parseAssetIndex(
         raw,
         documents.map((item) => item.path),
       );
-      const matches = index.assets.filter(
+      const matches = assetIndex.assets.filter(
         (item) => item.id === id && item.name === name,
       );
       if (matches.length !== 1) {
@@ -112,7 +134,7 @@ export default function EpisodeOverview({
           : await api.read(project.handle, firstDocument);
       if (request !== promptRequest.current) return;
       const found = indexedGenerationPrompt(
-        index.assets,
+        assetIndex.assets,
         id,
         name,
         reference,
@@ -127,6 +149,16 @@ export default function EpisodeOverview({
       if (request === promptRequest.current)
         setPrompt({ name, text, error: errorMessage(cause) });
     }
+  };
+  const previewCount =
+    preview?.tab === "roles"
+      ? episode.characters.length
+      : materialAssets.length;
+  const movePreview = (offset: -1 | 1) => {
+    if (!preview) return;
+    const index = preview.index + offset;
+    if (index >= 0 && index < previewCount)
+      void openPromptModal(preview.tab, index, previewMode);
   };
   const sourceText = useRef(source);
   sourceText.current = source;
@@ -202,13 +234,7 @@ export default function EpisodeOverview({
           <div role="tabpanel" className="episode-material-row">
             {episode.characters.map((role, index) => {
               const key = `role-${role.id}-${index}`;
-              const openPrompt = () =>
-                void openPromptModal(
-                  role.id,
-                  role.name,
-                  role.imagePrompt,
-                  role.image,
-                );
+              const openPrompt = () => void openPromptModal("roles", index);
               const canPlace =
                 !!role.imagePrompt && isProjectRelativeImage(role.image);
               return (
@@ -265,13 +291,7 @@ export default function EpisodeOverview({
           <div role="tabpanel" className="episode-material-row">
             {materialAssets.map((item, index) => {
               const key = `asset-${item.id}-${index}`;
-              const openPrompt = () =>
-                void openPromptModal(
-                  item.id,
-                  item.name,
-                  item.prompt,
-                  item.reference,
-                );
+              const openPrompt = () => void openPromptModal("assets", index);
               const canPlace =
                 !!item.prompt && isProjectRelativeImage(item.reference);
               return (
@@ -382,16 +402,22 @@ export default function EpisodeOverview({
           </div>
         )}
       </div>
-      {prompt && (
+      {prompt && preview && (
         <div className="modal-backdrop" onMouseDown={closePromptModal}>
           <section
+            ref={previewDialog}
             className="modal generation-prompt-modal"
             role="dialog"
             aria-modal="true"
             aria-labelledby="generation-prompt-title"
+            tabIndex={-1}
             onMouseDown={(event) => event.stopPropagation()}
             onKeyDown={(event) => {
               if (event.key === "Escape") closePromptModal();
+              if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                event.preventDefault();
+                movePreview(event.key === "ArrowLeft" ? -1 : 1);
+              }
             }}
           >
             <button
@@ -429,44 +455,66 @@ export default function EpisodeOverview({
                 {ui.episodeData.generationPrompt}
               </button>
             </div>
-            <div
-              className="material-preview-content"
-              id="material-preview-panel"
-              role="tabpanel"
-              aria-labelledby={
-                previewMode === "image"
-                  ? "material-image-tab"
-                  : "material-prompt-tab"
-              }
-            >
-              {previewMode === "image" ? (
-                <div className="material-preview-image">
-                  {previewReference
-                    ? asset(previewReference, setPreviewAvailable)
-                    : null}
-                  {(!previewReference || previewAvailable === false) && (
-                    <p className="muted">{ui.episodeData.noPreviewImage}</p>
-                  )}
-                </div>
-              ) : (
-                <>
-                  {prompt.firstDocument && (
-                    <p className="generation-prompt-source">
-                      {ui.episodeData.firstDefinedIn}：{prompt.firstDocument}
-                    </p>
-                  )}
-                  {prompt.error && (
-                    <p className="diagnostic" role="alert">
-                      {prompt.error}
-                    </p>
-                  )}
-                  <pre className="plain-prompt">
-                    {prompt.loading
-                      ? ui.episodeData.loadingPrompt
-                      : prompt.text || ui.episodeData.noGenerationPrompt}
-                  </pre>
-                </>
-              )}
+            <div className="material-preview-stage">
+              <button
+                type="button"
+                className="material-preview-arrow"
+                title={ui.episodeData.previousMaterial}
+                aria-label={ui.episodeData.previousMaterial}
+                aria-disabled={preview.index === 0}
+                onClick={() => movePreview(-1)}
+              >
+                ‹
+              </button>
+              <div
+                className="material-preview-content"
+                id="material-preview-panel"
+                role="tabpanel"
+                aria-labelledby={
+                  previewMode === "image"
+                    ? "material-image-tab"
+                    : "material-prompt-tab"
+                }
+              >
+                {previewMode === "image" ? (
+                  <div className="material-preview-image" key={preview.index}>
+                    {preview.reference
+                      ? asset(preview.reference, setPreviewAvailable)
+                      : null}
+                    {(!preview.reference || previewAvailable === false) && (
+                      <p className="muted">{ui.episodeData.noPreviewImage}</p>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    {prompt.firstDocument && (
+                      <p className="generation-prompt-source">
+                        {ui.episodeData.firstDefinedIn}：{prompt.firstDocument}
+                      </p>
+                    )}
+                    {prompt.error && (
+                      <p className="diagnostic" role="alert">
+                        {prompt.error}
+                      </p>
+                    )}
+                    <pre className="plain-prompt">
+                      {prompt.loading
+                        ? ui.episodeData.loadingPrompt
+                        : prompt.text || ui.episodeData.noGenerationPrompt}
+                    </pre>
+                  </>
+                )}
+              </div>
+              <button
+                type="button"
+                className="material-preview-arrow"
+                title={ui.episodeData.nextMaterial}
+                aria-label={ui.episodeData.nextMaterial}
+                aria-disabled={preview.index >= previewCount - 1}
+                onClick={() => movePreview(1)}
+              >
+                ›
+              </button>
             </div>
             <div className="modal-actions">
               {previewMode === "prompt" && (
@@ -474,9 +522,14 @@ export default function EpisodeOverview({
                   type="button"
                   disabled={!prompt.text || prompt.loading}
                   onClick={() => {
+                    const request = promptRequest.current;
                     void navigator.clipboard.writeText(prompt.text).then(() => {
+                      if (request !== promptRequest.current) return;
                       setPromptCopied(true);
-                      window.setTimeout(() => setPromptCopied(false), 1500);
+                      window.setTimeout(() => {
+                        if (request === promptRequest.current)
+                          setPromptCopied(false);
+                      }, 1500);
                     });
                   }}
                 >

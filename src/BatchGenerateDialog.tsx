@@ -30,6 +30,7 @@ export default function BatchGenerateDialog({
   const [checking, setChecking] = useState(true);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [resolutionOverride, setResolutionOverride] = useState("");
   const [delayHours, setDelayHours] = useState(0);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -126,7 +127,7 @@ export default function BatchGenerateDialog({
             shotTitle,
             prompt,
             duration,
-            resolution,
+            resolution: resolutionOverride || resolution,
             seed,
             imageRefs,
             audioRefs,
@@ -183,6 +184,8 @@ export default function BatchGenerateDialog({
               <tbody>
                 {candidates.map((item) => {
                   const checked = selected.has(item.shotId);
+                  const resolution =
+                    (checked && resolutionOverride) || item.resolution;
                   const disabled = busy || submitting || !!item.missing.length;
                   return (
                     <tr
@@ -220,9 +223,9 @@ export default function BatchGenerateDialog({
                       <td className="batch-shot-duration">{item.duration}s</td>
                       <td
                         className="batch-shot-resolution"
-                        title={item.resolution}
+                        title={resolution}
                       >
-                        {item.resolution}
+                        {resolution}
                       </td>
                       <td className="batch-shot-images">
                         {item.imageRefs.length}
@@ -248,20 +251,37 @@ export default function BatchGenerateDialog({
         ) : (
           <p className="muted">{ui.batch.empty}</p>
         )}
-        <label>
-          {ui.batch.delay}
-          <select
-            value={delayHours}
-            disabled={busy || submitting}
-            onChange={(event) => setDelayHours(Number(event.target.value))}
-          >
-            {delayOptions.map((hour) => (
-              <option key={hour} value={hour}>
-                {hour === 0 ? ui.batch.delayNow : ui.batch.delayHours(hour)}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="generation-batch-options">
+          <label>
+            {ui.batch.resolutionOverride}
+            <select
+              value={resolutionOverride}
+              disabled={busy || submitting || !videoWorkflow.resolutions.length}
+              onChange={(event) => setResolutionOverride(event.target.value)}
+            >
+              <option value="">{ui.batch.keepShotResolution}</option>
+              {videoWorkflow.resolutions.map((resolution) => (
+                <option key={resolution} value={resolution}>
+                  {resolution}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            {ui.batch.delay}
+            <select
+              value={delayHours}
+              disabled={busy || submitting}
+              onChange={(event) => setDelayHours(Number(event.target.value))}
+            >
+              {delayOptions.map((hour) => (
+                <option key={hour} value={hour}>
+                  {hour === 0 ? ui.batch.delayNow : ui.batch.delayHours(hour)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         {error && (
           <p className="generation-error" role="alert">
             {error}

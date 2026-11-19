@@ -41,10 +41,6 @@ export async function batchGenerationCandidates(
       const missing: string[] = [];
       if (!card.fields.videoPrompt.value.trim())
         missing.push(ui.batch.missingPrompt);
-      const frame = card.fields.frameFile.value.trim();
-      if (!frame) missing.push(ui.batch.missingFrame);
-      if (frame && !imageRefs.includes(frame) && !(await exists(frame)))
-        missing.push(frame);
       if (!imageRefs.length) missing.push(ui.batch.missingImages);
       const duration = Number(card.fields.duration.value || "5");
       if (!Number.isInteger(duration) || duration < 1 || duration > 15)
