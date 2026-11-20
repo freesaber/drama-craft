@@ -1492,6 +1492,7 @@ export default function App() {
                         Boolean(profile.submitUrl?.trim()) &&
                         Boolean(profile.queryUrl?.trim()),
                     )}
+                    videoApiProfiles={generationSettings.profiles}
                     videoWorkflow={activeVideoOptions}
                     configureGeneration={configureGeneration}
                     useVideo={useGeneratedVideo}
@@ -1531,7 +1532,7 @@ export default function App() {
           project={project}
           document={path}
           board={board}
-          videoWorkflow={activeVideoOptions}
+          generationSettings={generationSettings}
           busy={busy}
           onClose={() => setShowBatchDialog(false)}
           onCreated={(message) => {

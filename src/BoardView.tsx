@@ -12,6 +12,7 @@ import EpisodeOverview from "./EpisodeOverview";
 import GenerationPanel from "./GenerationPanel";
 import { alignResolutionOption, type VideoApiOptions } from "./videoWorkflows";
 import type {
+  ApiProfile,
   BoardField,
   DocumentEntry,
   Project,
@@ -67,6 +68,7 @@ export default function BoardView({
   active,
   select,
   generationConfigured,
+  videoApiProfiles,
   videoWorkflow,
   configureGeneration,
   useVideo,
@@ -89,6 +91,7 @@ export default function BoardView({
   active: number;
   select: (index: number) => void;
   generationConfigured: boolean;
+  videoApiProfiles: readonly ApiProfile[];
   videoWorkflow: VideoApiOptions;
   configureGeneration: () => void;
   useVideo: (index: number, reference: string) => Promise<void>;
@@ -277,6 +280,7 @@ export default function BoardView({
               refreshKey={refreshKey}
               busy={busy}
               configured={generationConfigured}
+              videoApiProfiles={videoApiProfiles}
               videoWorkflow={videoWorkflow}
               configure={configureGeneration}
               useVideo={(reference) => useVideo(index, reference)}

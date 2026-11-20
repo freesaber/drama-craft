@@ -108,6 +108,17 @@ export interface GenerationRecord {
   error: string | null;
   createdAt: string;
   updatedAt: string;
+  provider: GenerationProviderBinding | null;
+}
+export interface GenerationProviderBinding {
+  profileId: string;
+  submitUrl: string;
+}
+export interface GenerationVideoSource {
+  taskId: string;
+  localFile: string;
+  resolution: string;
+  provider: GenerationProviderBinding | null;
 }
 export type BatchJobType = "generation" | "audio" | "merge";
 export interface BatchJobItemInput {
@@ -119,6 +130,7 @@ export interface BatchJobItemInput {
   seed: number | null;
   imageRefs: string[];
   audioRefs: string[];
+  sourceTaskId?: string;
 }
 export interface MergeShotInput {
   shotId: string;
@@ -159,6 +171,7 @@ export interface BatchJobItem {
   createdAt: string;
   updatedAt: string;
   appliedAt: string | null;
+  provider: GenerationProviderBinding | null;
 }
 export interface BatchJob {
   jobId: string;

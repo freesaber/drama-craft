@@ -2,11 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api, errorMessage } from "./api";
 import {
   batchGenerationCandidates,
+  batchItemResolution,
+  batchResolutionOptions,
   type BatchGenerationCandidate,
 } from "./batchGeneration";
 import { ui } from "./i18n";
-import type { VideoApiOptions } from "./videoWorkflows";
-import type { Project, Storyboard } from "./types";
+import type { GenerationSettings, Project, Storyboard } from "./types";
 
 type Candidate = BatchGenerationCandidate;
 
@@ -14,7 +15,7 @@ export default function BatchGenerateDialog({
   project,
   document,
   board,
-  videoWorkflow,
+  generationSettings,
   busy,
   onClose,
   onCreated,
@@ -22,7 +23,7 @@ export default function BatchGenerateDialog({
   project: Project;
   document: string;
   board: Storyboard;
-  videoWorkflow: VideoApiOptions;
+  generationSettings: GenerationSettings;
   busy: boolean;
   onClose: () => void;
   onCreated: (notice: string) => void;
@@ -38,6 +39,7 @@ export default function BatchGenerateDialog({
   useEffect(() => {
     let alive = true;
     setChecking(true);
+    setCandidates([]);
     setSelected(new Set());
     setError("");
     void (async () => {
@@ -46,7 +48,7 @@ export default function BatchGenerateDialog({
           project.handle,
           document,
           board,
-          videoWorkflow,
+          generationSettings,
         );
         if (!alive) return;
         setCandidates(next);
@@ -66,13 +68,24 @@ export default function BatchGenerateDialog({
     return () => {
       alive = false;
     };
-  }, [board, document, project.handle, videoWorkflow]);
+  }, [board, document, project.handle, generationSettings]);
 
   const delayOptions = useMemo(
     () => Array.from({ length: 13 }, (_, hour) => hour),
     [],
   );
   const selectable = candidates.filter((item) => !item.missing.length);
+  const items = selectable.filter((item) => selected.has(item.shotId));
+  const resolutionOptions = batchResolutionOptions(
+    items.length ? items : selectable,
+  );
+  const incompatibleOverride = Boolean(
+    resolutionOverride && !resolutionOptions.includes(resolutionOverride),
+  );
+  const canKeepPreviousResolution = items.every((item) =>
+    batchItemResolution(item),
+  );
+  const resolutionRequired = !resolutionOverride && !canKeepPreviousResolution;
   const allSelected =
     selectable.length > 0 &&
     selectable.every((item) => selected.has(item.shotId));
@@ -100,8 +113,14 @@ export default function BatchGenerateDialog({
     );
 
   const submit = async () => {
-    if (checking || busy || submitting) return;
-    const items = selectable.filter((item) => selected.has(item.shotId));
+    if (
+      checking ||
+      busy ||
+      submitting ||
+      incompatibleOverride ||
+      resolutionRequired
+    )
+      return;
     if (!items.length) return;
     setSubmitting(true);
     setError("");
@@ -118,19 +137,25 @@ export default function BatchGenerateDialog({
             shotTitle,
             prompt,
             duration,
-            resolution,
             seed,
             imageRefs,
             audioRefs,
+            sourceTaskId,
+            previousResolution,
+            resolutions,
           }) => ({
             shotId,
             shotTitle,
             prompt,
             duration,
-            resolution: resolutionOverride || resolution,
+            resolution: batchItemResolution(
+              { previousResolution, resolutions },
+              resolutionOverride,
+            ),
             seed,
             imageRefs,
             audioRefs,
+            sourceTaskId,
           }),
         ),
       });
@@ -175,17 +200,16 @@ export default function BatchGenerateDialog({
                   <th>{ui.batch.shotTitle}</th>
                   <th className="batch-shot-duration">{ui.batch.duration}</th>
                   <th className="batch-shot-resolution">
-                    {ui.batch.resolution}
+                    {ui.batch.previousResolution}
                   </th>
                   <th className="batch-shot-images">{ui.batch.images}</th>
+                  <th className="batch-shot-api">{ui.generation.submitApi}</th>
                   <th className="batch-shot-status">{ui.batch.statusLabel}</th>
                 </tr>
               </thead>
               <tbody>
                 {candidates.map((item) => {
                   const checked = selected.has(item.shotId);
-                  const resolution =
-                    (checked && resolutionOverride) || item.resolution;
                   const disabled = busy || submitting || !!item.missing.length;
                   return (
                     <tr
@@ -223,12 +247,15 @@ export default function BatchGenerateDialog({
                       <td className="batch-shot-duration">{item.duration}s</td>
                       <td
                         className="batch-shot-resolution"
-                        title={resolution}
+                        title={item.previousResolution}
                       >
-                        {resolution}
+                        {item.previousResolution || "—"}
                       </td>
                       <td className="batch-shot-images">
                         {item.imageRefs.length}
+                      </td>
+                      <td className="batch-shot-api" title={item.apiName}>
+                        {item.apiName || ui.generation.unknownApi}
                       </td>
                       <td className="batch-shot-status">
                         <span>
@@ -256,11 +283,20 @@ export default function BatchGenerateDialog({
             {ui.batch.resolutionOverride}
             <select
               value={resolutionOverride}
-              disabled={busy || submitting || !videoWorkflow.resolutions.length}
+              disabled={checking || busy || submitting}
               onChange={(event) => setResolutionOverride(event.target.value)}
             >
-              <option value="">{ui.batch.keepShotResolution}</option>
-              {videoWorkflow.resolutions.map((resolution) => (
+              <option value="">
+                {canKeepPreviousResolution
+                  ? ui.batch.keepPreviousResolution
+                  : ui.batch.chooseResolution}
+              </option>
+              {incompatibleOverride && (
+                <option value={resolutionOverride} disabled>
+                  {resolutionOverride}
+                </option>
+              )}
+              {resolutionOptions.map((resolution) => (
                 <option key={resolution} value={resolution}>
                   {resolution}
                 </option>
@@ -282,6 +318,18 @@ export default function BatchGenerateDialog({
             </select>
           </label>
         </div>
+        {incompatibleOverride && (
+          <p className="generation-error" role="alert">
+            {ui.batch.incompatibleResolution}
+          </p>
+        )}
+        {resolutionRequired && (
+          <p className="muted">
+            {resolutionOptions.length
+              ? ui.batch.requireBatchResolution
+              : ui.batch.noCommonResolution}
+          </p>
+        )}
         {error && (
           <p className="generation-error" role="alert">
             {error}
@@ -295,7 +343,14 @@ export default function BatchGenerateDialog({
           <button
             type="button"
             className="primary-button"
-            disabled={checking || busy || submitting || !selected.size}
+            disabled={
+              checking ||
+              busy ||
+              submitting ||
+              !items.length ||
+              incompatibleOverride ||
+              resolutionRequired
+            }
             onClick={() => void submit()}
           >
             {submitting ? ui.busy : ui.batch.confirm}

@@ -36,6 +36,7 @@ function renderDocument(document: string) {
       active={0}
       select={() => {}}
       generationConfigured={false}
+      videoApiProfiles={[]}
       videoWorkflow={optionsFromProfile(undefined)}
       configureGeneration={() => {}}
       useVideo={async () => {}}

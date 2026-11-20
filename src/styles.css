@@ -914,10 +914,10 @@
   gap: 7px;
 }
 .generation-history article {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
+  gap: 2px 10px;
   padding: 9px 10px;
   border: 1px solid #e4e9df;
   border-radius: 6px;
@@ -945,10 +945,18 @@
   margin-top: 3px;
   color: #95a08d;
 }
+.generation-history article .generation-history-meta {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 10px;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
 .generation-history-actions {
   display: flex;
   gap: 6px;
-  flex-shrink: 0;
   flex-wrap: wrap;
   justify-content: flex-end;
 }
@@ -3439,7 +3447,15 @@ select:focus {
 }
 
 .generation-batch-modal {
-  width: min(920px, 94vw);
+  width: min(1120px, 94vw);
+  max-height: min(90vh, 820px);
+  overflow: auto;
+}
+.generation-batch-modal .batch-shot-table-wrap {
+  max-height: min(460px, 50vh);
+}
+.generation-batch-modal .batch-shot-resolution {
+  width: 120px;
 }
 .generation-batch-options {
   display: grid;
@@ -3450,4 +3466,12 @@ select:focus {
   width: 220px;
   white-space: normal;
   overflow-wrap: anywhere;
+}
+.generation-batch-modal .batch-shot-api {
+  width: 27%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.generation-batch-modal .batch-shot-status {
+  width: 18%;
 }

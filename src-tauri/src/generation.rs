@@ -23,6 +23,35 @@ pub struct GenerationSettings {
     pub authorization: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderBinding {
+    pub profile_id: String,
+    pub submit_url: String,
+}
+
+impl GenerationSettings {
+    pub fn binding(&self) -> ProviderBinding {
+        ProviderBinding {
+            profile_id: self.profile_id.clone(),
+            submit_url: self.submit_url.clone(),
+        }
+    }
+}
+
+pub(crate) fn read_binding(
+    row: &rusqlite::Row<'_>,
+    index: usize,
+) -> rusqlite::Result<Option<ProviderBinding>> {
+    Ok(row
+        .get::<_, Option<String>>(index)?
+        .zip(row.get(index + 1)?)
+        .map(|(profile_id, submit_url)| ProviderBinding {
+            profile_id,
+            submit_url,
+        }))
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GenerationInput {
@@ -54,6 +83,7 @@ pub struct GenerationRecord {
     pub error: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    pub provider: Option<ProviderBinding>,
 }
 
 pub(crate) fn open_database(root: &Path) -> Result<Connection> {
@@ -128,6 +158,8 @@ pub(crate) fn open_database(root: &Path) -> Result<Connection> {
         "ALTER TABLE batch_job_items ADD COLUMN submitted_at TEXT",
         [],
     );
+    let _ = connection.execute("ALTER TABLE batch_job_items ADD COLUMN profile_id TEXT", []);
+    let _ = connection.execute("ALTER TABLE batch_job_items ADD COLUMN submit_url TEXT", []);
     let has_applied_at = connection
         .prepare("PRAGMA table_info(batch_job_items)")
         .and_then(|mut statement| {
@@ -185,8 +217,15 @@ fn row(row: &rusqlite::Row<'_>) -> rusqlite::Result<GenerationRecord> {
         error: row.get(12)?,
         created_at: row.get(13)?,
         updated_at: row.get(14)?,
+        provider: read_binding(row, 15)?,
     })
 }
+
+const RECORD_SELECT: &str =
+    "SELECT g.task_id, g.document, g.shot_id, g.status, g.prompt, g.duration, g.resolution,
+            g.seed, g.image_refs, g.audio_refs, g.remote_url, g.local_file, g.error,
+            g.created_at, g.updated_at, p.profile_id, p.base_url
+       FROM generations AS g LEFT JOIN generation_providers AS p ON g.task_id = p.task_id";
 
 pub fn task_provider(root: &Path, task_id: &str) -> Result<Option<(String, String)>> {
     use rusqlite::OptionalExtension;
@@ -206,13 +245,10 @@ pub fn history(root: &Path, document: &str, shot_id: &str) -> Result<Vec<Generat
     }
     let connection = database(root)?;
     let mut statement = connection
-        .prepare(
-            "SELECT task_id, document, shot_id, status, prompt, duration, resolution,
-                    seed, image_refs, audio_refs, remote_url, local_file, error,
-                    created_at, updated_at
-               FROM generations WHERE document = ?1 AND shot_id = ?2
-               ORDER BY created_at DESC LIMIT 50",
-        )
+        .prepare(&format!(
+            "{RECORD_SELECT} WHERE g.document = ?1 AND g.shot_id = ?2
+               ORDER BY g.created_at DESC LIMIT 50"
+        ))
         .map_err(|e| AppError::new("database", e.to_string()))?;
     let records = statement
         .query_map(params![document, shot_id], row)
@@ -222,13 +258,46 @@ pub fn history(root: &Path, document: &str, shot_id: &str) -> Result<Vec<Generat
     Ok(records)
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VideoSource {
+    task_id: String,
+    local_file: String,
+    resolution: String,
+    provider: Option<ProviderBinding>,
+}
+
+pub fn video_sources(root: &Path, document: &str, shot_id: &str) -> Result<Vec<VideoSource>> {
+    if !root.join(".drama-craft").join(DATABASE_NAME).exists() {
+        return Ok(Vec::new());
+    }
+    let connection = database(root)?;
+    let mut statement = connection
+        .prepare(
+            "SELECT g.task_id, g.local_file, g.resolution, p.profile_id, p.base_url
+               FROM generations AS g LEFT JOIN generation_providers AS p ON g.task_id = p.task_id
+              WHERE g.document = ?1 AND g.shot_id = ?2 AND g.local_file <> ''
+              ORDER BY g.created_at DESC",
+        )
+        .map_err(|error| AppError::new("database", error.to_string()))?;
+    let rows = statement
+        .query_map(params![document, shot_id], |row| {
+            Ok(VideoSource {
+                task_id: row.get(0)?,
+                local_file: row.get(1)?,
+                resolution: row.get(2)?,
+                provider: read_binding(row, 3)?,
+            })
+        })
+        .map_err(|error| AppError::new("database", error.to_string()))?;
+    rows.collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(|error| AppError::new("database", error.to_string()))
+}
+
 fn get(root: &Path, task_id: &str) -> Result<GenerationRecord> {
     database(root)?
         .query_row(
-            "SELECT task_id, document, shot_id, status, prompt, duration, resolution,
-                    seed, image_refs, audio_refs, remote_url, local_file, error,
-                    created_at, updated_at
-               FROM generations WHERE task_id = ?1",
+            &format!("{RECORD_SELECT} WHERE g.task_id = ?1"),
             [task_id],
             row,
         )
@@ -507,7 +576,7 @@ fn resolution_prefix_match(shot: &str, item: &str) -> bool {
     }
 }
 
-fn resolve_resolution(value: &str, resolutions: &[String]) -> Result<String> {
+pub(crate) fn resolve_resolution(value: &str, resolutions: &[String]) -> Result<String> {
     if resolutions.is_empty() {
         return Err(AppError::new(
             "config",

@@ -1,5 +1,5 @@
 use crate::audio::{self, AudioInput, AudioSettings};
-use crate::generation::{self, GenerationInput, GenerationSettings};
+use crate::generation::{self, GenerationInput, GenerationSettings, ProviderBinding};
 use crate::storage::{AppError, Result};
 use chrono::{DateTime, Local, SecondsFormat};
 use rusqlite::{params, OptionalExtension};
@@ -18,6 +18,7 @@ pub struct BatchJobItemInput {
     pub seed: Option<i64>,
     pub image_refs: Vec<String>,
     pub audio_refs: Vec<String>,
+    pub source_task_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -70,6 +71,7 @@ pub struct BatchJobItem {
     pub created_at: String,
     pub updated_at: String,
     pub applied_at: Option<String>,
+    pub provider: Option<ProviderBinding>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -134,12 +136,13 @@ fn item_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<BatchJobItem> {
         created_at: row.get(16)?,
         updated_at: row.get(17)?,
         applied_at: row.get(18)?,
+        provider: generation::read_binding(row, 19)?,
     })
 }
 
 const ITEM_SELECT: &str = "SELECT item_id, job_id, shot_id, shot_title, status, prompt, duration,
        resolution, seed, image_refs, audio_refs, generation_task_id, submitted_at, local_file, error,
-       sort_order, created_at, updated_at, applied_at
+       sort_order, created_at, updated_at, applied_at, profile_id, submit_url
   FROM batch_job_items";
 
 fn load_items(connection: &rusqlite::Connection, job_id: &str) -> Result<Vec<BatchJobItem>> {
@@ -409,7 +412,11 @@ fn sync_item_from_audio(
     Ok(Some(next))
 }
 
-pub fn create_job(root: &Path, input: CreateBatchJobInput) -> Result<BatchJob> {
+pub fn create_job(
+    root: &Path,
+    input: CreateBatchJobInput,
+    settings_for: impl Fn(Option<&ProviderBinding>) -> Result<GenerationSettings>,
+) -> Result<BatchJob> {
     if !matches!(input.job_type.as_str(), "generation" | "audio") {
         return Err(AppError::new("input", "不支持的任务类型"));
     }
@@ -444,6 +451,12 @@ pub fn create_job(root: &Path, input: CreateBatchJobInput) -> Result<BatchJob> {
             return Err(AppError::new(
                 "input",
                 format!("{} 的时长须为 1—15 秒", item.shot_id),
+            ));
+        }
+        if input.job_type == "generation" && item.resolution.trim().is_empty() {
+            return Err(AppError::new(
+                "input",
+                format!("请为 {} 选择视频分辨率", item.shot_id),
             ));
         }
         if input.job_type == "generation"
@@ -496,12 +509,44 @@ pub fn create_job(root: &Path, input: CreateBatchJobInput) -> Result<BatchJob> {
         )
         .map_err(|e| AppError::new("database", e.to_string()))?;
     for (index, item) in input.items.iter().enumerate() {
+        let (provider, resolution) = if input.job_type == "generation" {
+            let source = item
+                .source_task_id
+                .as_ref()
+                .map(|task_id| {
+                    transaction
+                        .query_row(
+                            "SELECT p.profile_id, p.base_url
+                               FROM generations AS g JOIN generation_providers AS p
+                                 ON p.task_id = g.task_id
+                              WHERE g.task_id = ?1 AND g.document = ?2 AND g.shot_id = ?3
+                                AND g.local_file <> ''",
+                            params![task_id, input.document, item.shot_id],
+                            |row| generation::read_binding(row, 0),
+                        )
+                        .optional()
+                        .map_err(|error| AppError::new("database", error.to_string()))?
+                        .flatten()
+                        .ok_or_else(|| AppError::new("config", "当前视频没有可用的提交 API 记录"))
+                })
+                .transpose()?;
+            let for_shot = |error: AppError| {
+                AppError::new(&error.code, format!("{}：{}", item.shot_id, error.message))
+            };
+            let settings = settings_for(source.as_ref()).map_err(for_shot)?;
+            let resolution =
+                generation::resolve_resolution(&item.resolution, &settings.resolutions)
+                    .map_err(for_shot)?;
+            (Some(settings.binding()), resolution)
+        } else {
+            (None, item.resolution.clone())
+        };
         transaction
             .execute(
                 "INSERT INTO batch_job_items
                  (item_id, job_id, shot_id, shot_title, status, prompt, duration, resolution,
-                  seed, image_refs, audio_refs, sort_order, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, 'pending', ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?12)",
+                  seed, image_refs, audio_refs, sort_order, created_at, updated_at, profile_id, submit_url)
+                 VALUES (?1, ?2, ?3, ?4, 'pending', ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?12, ?13, ?14)",
                 params![
                     Uuid::new_v4().to_string(),
                     job_id,
@@ -509,12 +554,14 @@ pub fn create_job(root: &Path, input: CreateBatchJobInput) -> Result<BatchJob> {
                     item.shot_title,
                     item.prompt,
                     item.duration,
-                    item.resolution,
+                    resolution,
                     item.seed,
                     serde_json::to_string(&item.image_refs).unwrap_or_default(),
                     serde_json::to_string(&item.audio_refs).unwrap_or_default(),
                     index as i64,
                     stamp,
+                    provider.as_ref().map(|binding| &binding.profile_id),
+                    provider.as_ref().map(|binding| &binding.submit_url),
                 ],
             )
             .map_err(|e| AppError::new("database", e.to_string()))?;
@@ -867,13 +914,17 @@ pub fn sync_jobs(root: &Path) -> Result<Vec<BatchJob>> {
     list_jobs(root)
 }
 
-pub async fn advance(root: &Path, settings: &GenerationSettings) -> Result<BatchAdvanceResult> {
+pub async fn advance(
+    root: &Path,
+    settings_for: impl FnOnce(Option<&ProviderBinding>) -> Result<GenerationSettings>,
+) -> Result<BatchAdvanceResult> {
     let _ = sync_jobs(root)?;
 
     struct PendingSubmit {
         job_id: String,
         item_id: String,
         input: GenerationInput,
+        provider: Option<ProviderBinding>,
     }
 
     let pending_submit = {
@@ -942,6 +993,7 @@ pub async fn advance(root: &Path, settings: &GenerationSettings) -> Result<Batch
                 chosen = Some(PendingSubmit {
                     job_id,
                     item_id: item.item_id.clone(),
+                    provider: item.provider,
                     input: GenerationInput {
                         document,
                         shot_id: item.shot_id,
@@ -975,7 +1027,11 @@ pub async fn advance(root: &Path, settings: &GenerationSettings) -> Result<Batch
         if !still_pending {
             None
         } else {
-            match generation::submit(root, settings, target.input).await {
+            let result = match settings_for(target.provider.as_ref()) {
+                Ok(settings) => generation::submit(root, &settings, target.input).await,
+                Err(error) => Err(error),
+            };
+            match result {
                 Ok(record) => {
                     let connection = generation::open_database(root)?;
                     let mapped = if record.local_file.is_some() {
@@ -1159,6 +1215,10 @@ mod tests {
     use std::fs;
     use tempfile::tempdir;
 
+    fn create_job(root: &Path, input: CreateBatchJobInput) -> Result<BatchJob> {
+        super::create_job(root, input, |_| Ok(dummy_settings()))
+    }
+
     #[test]
     fn completed_legacy_batch_items_are_not_replayed_and_new_items_are_marked_once() {
         let dir = tempdir().unwrap();
@@ -1236,6 +1296,7 @@ mod tests {
             seed: None,
             image_refs: vec!["frame.png".into()],
             audio_refs: vec![],
+            source_task_id: None,
         }
     }
 
@@ -1290,6 +1351,26 @@ mod tests {
     }
 
     #[test]
+    fn rejects_video_batch_without_an_explicit_resolution() {
+        let dir = tempdir().unwrap();
+        let mut item = sample_item("S001");
+        item.resolution.clear();
+        let error = create_job(
+            dir.path(),
+            CreateBatchJobInput {
+                job_type: "generation".into(),
+                name: "未选择分辨率".into(),
+                document: "01.md".into(),
+                delay_hours: 0,
+                items: vec![item],
+            },
+        )
+        .unwrap_err();
+        assert_eq!(error.code, "input");
+        assert!(error.message.contains("分辨率"));
+    }
+
+    #[test]
     fn creates_audio_job_without_video_fields() {
         let dir = tempdir().unwrap();
         let job = create_job(
@@ -1308,6 +1389,7 @@ mod tests {
                     seed: None,
                     image_refs: vec![],
                     audio_refs: vec!["01 音色_秦墨.wav".into()],
+                    source_task_id: None,
                 }],
             },
         )
@@ -1337,6 +1419,7 @@ mod tests {
                     seed: None,
                     image_refs: vec![],
                     audio_refs: vec!["01 音色_秦墨.wav".into()],
+                    source_task_id: None,
                 }],
             },
         )
@@ -1369,6 +1452,7 @@ mod tests {
                     seed: None,
                     image_refs: vec![],
                     audio_refs: vec!["01 音色_秦墨.wav".into()],
+                    source_task_id: None,
                 }],
             },
         )
@@ -1445,7 +1529,10 @@ mod tests {
         let root = dir.path();
         let job = two_shot_job(root);
         set_item_status(root, "S001", "submitted");
-        let advanced = tauri::async_runtime::block_on(advance(root, &dummy_settings())).unwrap();
+        let advanced = tauri::async_runtime::block_on(advance(root, |_| {
+            panic!("must not resolve settings while a previous task is in flight")
+        }))
+        .unwrap();
         assert!(advanced.submitted.is_none());
         let items = get_job(root, &job.job_id).unwrap().items;
         assert_eq!(items[0].status, "submitted");
@@ -1453,7 +1540,7 @@ mod tests {
     }
 
     #[test]
-    fn advance_submits_next_after_previous_result() {
+    fn advances_mixed_batch_using_current_video_api_and_current_settings_for_new_shots() {
         use std::{
             io::{Read, Write},
             net::{TcpListener, TcpStream},
@@ -1492,7 +1579,9 @@ mod tests {
         let server = thread::spawn(move || {
             let (mut submit, _) = listener.accept().unwrap();
             let submitted = read_request(&mut submit);
-            assert!(submitted.starts_with("POST /submit "));
+            assert!(submitted.starts_with("POST /historical "));
+            assert!(submitted.contains("768p"));
+            assert!(submitted.contains("测试提示词"));
             let body = br#"{"code":"Success","data":{"task_id":"task-2","status":"queued"}}"#;
             write!(
                 submit,
@@ -1507,16 +1596,69 @@ mod tests {
         let root = crate::storage::canonical_directory(dir.path()).unwrap();
         crate::storage::create_document(&root, "01.md", "# S001\n").unwrap();
         fs::write(root.join("frame.png"), b"synthetic-image").unwrap();
-        let job = two_shot_job(&root);
-        set_item_status(&root, "S001", "failed");
-        let settings = GenerationSettings {
-            profile_id: "fixture".into(),
-            submit_url: format!("http://{address}/submit"),
+        let previous = GenerationSettings {
+            profile_id: "historical".into(),
+            submit_url: format!("http://{address}/historical"),
             query_url: format!("http://{address}/result/{{task_id}}"),
             resolutions: vec!["768p竖(768*1376)".into()],
             authorization: String::new(),
         };
-        let advanced = tauri::async_runtime::block_on(advance(&root, &settings)).unwrap();
+        let initial_active = dummy_settings();
+        let connection = generation::open_database(&root).unwrap();
+        for (task_id, profile) in [("selected", &previous), ("newer", &initial_active)] {
+            connection
+                .execute(
+                    "INSERT INTO generations
+                     (task_id, document, shot_id, status, prompt, duration, resolution,
+                      image_refs, audio_refs, local_file, created_at, updated_at)
+                     VALUES (?1, '01.md', 'S002', 'completed', '旧提示词', 4,
+                             '480p竖', '[]', '[]', ?2, ?1, ?1)",
+                    params![task_id, format!("{task_id}.mp4")],
+                )
+                .unwrap();
+            connection
+                .execute(
+                    "INSERT INTO generation_providers VALUES (?1, ?2, ?3)",
+                    params![task_id, profile.profile_id, profile.submit_url],
+                )
+                .unwrap();
+        }
+        drop(connection);
+        let mut repeat = sample_item("S002");
+        repeat.source_task_id = Some("selected".into());
+        repeat.resolution = "768p竖".into();
+        let job = super::create_job(
+            &root,
+            CreateBatchJobInput {
+                job_type: "generation".into(),
+                name: "本集批量生成".into(),
+                document: "01.md".into(),
+                delay_hours: 0,
+                items: vec![sample_item("S001"), repeat],
+            },
+            |source| match source {
+                None => Ok(initial_active.clone()),
+                Some(binding) => {
+                    assert_eq!(*binding, previous.binding());
+                    Ok(previous.clone())
+                }
+            },
+        )
+        .unwrap();
+        assert_eq!(job.items[0].provider, Some(initial_active.binding()));
+        assert_eq!(job.items[1].provider, Some(previous.binding()));
+        assert_eq!(job.items[1].resolution, "768p竖(768*1376)");
+        let failed = tauri::async_runtime::block_on(advance(&root, |binding| {
+            assert_eq!(binding, Some(&initial_active.binding()));
+            Err(AppError::new("config", "原 API 不可用"))
+        }))
+        .unwrap();
+        assert_eq!(failed.submitted.unwrap().status, "failed");
+        let advanced = tauri::async_runtime::block_on(advance(&root, |binding| {
+            assert_eq!(binding, Some(&previous.binding()));
+            Ok(previous.clone())
+        }))
+        .unwrap();
         assert_eq!(
             advanced
                 .submitted
@@ -1529,8 +1671,12 @@ mod tests {
         assert_eq!(items[1].status, "submitted");
         assert_eq!(items[1].generation_task_id.as_deref(), Some("task-2"));
         let records = generation::history(&root, "01.md", "S002").unwrap();
-        assert_eq!(records.len(), 1);
-        assert_eq!(records[0].prompt, "测试提示词");
+        let submitted = records
+            .iter()
+            .find(|record| record.task_id == "task-2")
+            .unwrap();
+        assert_eq!(submitted.prompt, "测试提示词");
+        assert_eq!(submitted.provider, Some(previous.binding()));
         server.join().unwrap();
     }
 

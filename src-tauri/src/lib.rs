@@ -627,6 +627,52 @@ mod tests {
     }
 
     #[test]
+    fn batch_settings_require_the_saved_submit_url_and_use_its_credentials() {
+        let original = settings::ApiProfile {
+            id: "original".into(),
+            submit_url: "https://example.test/original".into(),
+            ..Default::default()
+        };
+        let replacement = settings::ApiProfile {
+            id: "original".into(),
+            submit_url: "https://example.test/replacement".into(),
+            ..Default::default()
+        };
+        let restored = settings::ApiProfile {
+            id: "restored".into(),
+            ..original.clone()
+        };
+        let prefs = Preferences {
+            generation_authorizations: HashMap::from([(
+                restored.id.clone(),
+                "Token synthetic".into(),
+            )]),
+            ..Default::default()
+        };
+        let mut config = settings::Configuration {
+            active_profile_id: replacement.id.clone(),
+            profiles: vec![replacement.clone()],
+            ..Default::default()
+        };
+        let binding = generation::ProviderBinding {
+            profile_id: original.id,
+            submit_url: original.submit_url,
+        };
+        assert!(batch_generation_settings(&prefs, &config, Some(&binding)).is_err());
+        assert_eq!(
+            batch_generation_settings(&prefs, &config, None)
+                .unwrap()
+                .submit_url,
+            replacement.submit_url
+        );
+        config.profiles.push(restored);
+        let matched = batch_generation_settings(&prefs, &config, Some(&binding)).unwrap();
+        assert_eq!(matched.profile_id, "restored");
+        assert_eq!(matched.submit_url, binding.submit_url);
+        assert_eq!(matched.authorization, "Token synthetic");
+    }
+
+    #[test]
     fn token_is_kept_in_private_app_preferences_and_removed_with_profile() {
         let config = settings::Configuration {
             profiles: vec![settings::ApiProfile {
@@ -796,14 +842,54 @@ fn generation_settings(
     app: &tauri::AppHandle,
     profile_id: Option<&str>,
 ) -> Result<generation::GenerationSettings> {
-    let config = configuration(app)?;
+    let prefs = read_prefs(app)?;
+    let config = configuration_from_preferences(&prefs);
     let id = profile_id.unwrap_or(&config.active_profile_id);
     let profile = config
         .profiles
         .iter()
         .find(|profile| profile.id == id)
         .ok_or_else(|| AppError::new("config", "请先在视频 API 设置中配置服务和密钥"))?;
-    let prefs = read_prefs(app)?;
+    Ok(generation_settings_for_profile(&prefs, profile))
+}
+
+fn batch_generation_settings(
+    prefs: &Preferences,
+    config: &settings::Configuration,
+    binding: Option<&generation::ProviderBinding>,
+) -> Result<generation::GenerationSettings> {
+    let profile = if let Some(binding) = binding {
+        let mut matching = config
+            .profiles
+            .iter()
+            .filter(|profile| profile.submit_url == binding.submit_url);
+        matching
+            .clone()
+            .find(|profile| profile.id == binding.profile_id)
+            .or_else(|| matching.next().filter(|_| matching.next().is_none()))
+            .ok_or_else(|| {
+                AppError::new(
+                    "config",
+                    format!(
+                        "请在视频 API 设置中恢复或添加原提交地址的配置：{}",
+                        binding.submit_url
+                    ),
+                )
+            })?
+    } else {
+        config
+            .profiles
+            .iter()
+            .find(|profile| profile.id == config.active_profile_id)
+            .ok_or_else(|| AppError::new("config", "请先在视频 API 设置中配置服务和密钥"))?
+    };
+    Ok(generation_settings_for_profile(prefs, profile))
+}
+
+fn generation_settings_for_profile(
+    prefs: &Preferences,
+    profile: &settings::ApiProfile,
+) -> generation::GenerationSettings {
     let resolutions: Vec<String> = serde_json::from_str(profile.resolutions.trim())
         .ok()
         .and_then(|value: serde_json::Value| {
@@ -816,13 +902,13 @@ fn generation_settings(
             })
         })
         .unwrap_or_default();
-    Ok(generation::GenerationSettings {
+    generation::GenerationSettings {
         profile_id: profile.id.clone(),
         submit_url: profile.submit_url.clone(),
         query_url: profile.query_url.clone(),
         resolutions,
-        authorization: authorization(&prefs, &profile.id),
-    })
+        authorization: authorization(prefs, &profile.id),
+    }
 }
 #[tauri::command]
 fn get_generation_settings(app: tauri::AppHandle) -> Result<settings::Configuration> {
@@ -953,6 +1039,17 @@ fn generation_history(
     })
 }
 #[tauri::command]
+fn generation_video_sources(
+    state: State<Sessions>,
+    handle: String,
+    document: String,
+    shot_id: String,
+) -> Result<Vec<generation::VideoSource>> {
+    with_root(&state, &handle, |root| {
+        generation::video_sources(root, &document, &shot_id)
+    })
+}
+#[tauri::command]
 fn delete_generation(
     state: State<Sessions>,
     handle: String,
@@ -1026,11 +1123,22 @@ fn merge_episode(
 }
 #[tauri::command]
 fn create_batch_job(
+    app: tauri::AppHandle,
     state: State<Sessions>,
     handle: String,
     input: batch::CreateBatchJobInput,
 ) -> Result<batch::BatchJob> {
-    with_root(&state, &handle, |root| batch::create_job(root, input))
+    let prefs = if input.job_type == "generation" {
+        read_prefs(&app)?
+    } else {
+        Preferences::default()
+    };
+    let config = configuration_from_preferences(&prefs);
+    with_root(&state, &handle, |root| {
+        batch::create_job(root, input, |binding| {
+            batch_generation_settings(&prefs, &config, binding)
+        })
+    })
 }
 #[tauri::command]
 fn list_batch_jobs(state: State<Sessions>, handle: String) -> Result<Vec<batch::BatchJob>> {
@@ -1082,7 +1190,12 @@ async fn advance_batch_jobs(
     handle: String,
 ) -> Result<batch::BatchAdvanceResult> {
     let root = root_for(&state, &handle)?;
-    batch::advance(&root, &generation_settings(&app, None)?).await
+    batch::advance(&root, |binding| {
+        let prefs = read_prefs(&app)?;
+        let config = configuration_from_preferences(&prefs);
+        batch_generation_settings(&prefs, &config, binding)
+    })
+    .await
 }
 #[tauri::command]
 async fn advance_audio_jobs(
@@ -1133,6 +1246,7 @@ pub fn run() {
             poll_generation,
             poll_audio,
             generation_history,
+            generation_video_sources,
             delete_generation,
             import_generation_media,
             trim_media,

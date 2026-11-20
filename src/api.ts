@@ -11,6 +11,7 @@ import type {
   DocumentEntry,
   GenerationInput,
   GenerationRecord,
+  GenerationVideoSource,
   GenerationSettings,
   Media,
   FrameVersion,
@@ -144,6 +145,12 @@ export const api = {
     invoke<GenerationRecord>("poll_generation", { handle, taskId }),
   generationHistory: (handle: string, document: string, shotId: string) =>
     invoke<GenerationRecord[]>("generation_history", {
+      handle,
+      document,
+      shotId,
+    }),
+  generationVideoSources: (handle: string, document: string, shotId: string) =>
+    invoke<GenerationVideoSource[]>("generation_video_sources", {
       handle,
       document,
       shotId,

@@ -1,4 +1,38 @@
-import type { ApiProfile, ApiPlatformType, GenerationSettings } from "./types";
+import type {
+  ApiProfile,
+  ApiPlatformType,
+  GenerationProviderBinding,
+  GenerationSettings,
+} from "./types";
+
+export function profileForVideoBinding(
+  profiles: readonly ApiProfile[],
+  binding: GenerationProviderBinding | null | undefined,
+): ApiProfile | undefined {
+  if (!binding) return undefined;
+  const matching = profiles.filter(
+    (profile) => profile.submitUrl === binding.submitUrl,
+  );
+  return (
+    matching.find((profile) => profile.id === binding.profileId) ??
+    (matching.length === 1 ? matching[0] : undefined)
+  );
+}
+
+export function videoApiName(
+  submitUrl: string | undefined,
+  profile: ApiProfile | undefined,
+): string {
+  if (!submitUrl) return "";
+  const name = profile?.name.trim();
+  if (name) return name;
+  try {
+    const url = new URL(submitUrl);
+    return url.pathname.split("/").filter(Boolean).at(-1) ?? url.hostname;
+  } catch {
+    return "";
+  }
+}
 
 export const API_PLATFORM_TYPES: { id: ApiPlatformType; label: string }[] = [
   { id: "autodl", label: "AutoDL" },

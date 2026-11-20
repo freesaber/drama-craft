@@ -22,9 +22,12 @@ import VideoTrimModal from "./VideoTrimModal";
 import { ui } from "./i18n";
 import {
   matchConfiguredResolution,
+  profileForVideoBinding,
+  videoApiName,
   type VideoApiOptions,
 } from "./videoWorkflows";
 import type {
+  ApiProfile,
   BoardField,
   EpisodeData,
   GenerationRecord,
@@ -111,6 +114,7 @@ export default function GenerationPanel({
   refreshKey,
   busy,
   configured,
+  videoApiProfiles,
   videoWorkflow,
   configure,
   useVideo,
@@ -127,6 +131,7 @@ export default function GenerationPanel({
   refreshKey: number;
   busy: boolean;
   configured: boolean;
+  videoApiProfiles: readonly ApiProfile[];
   videoWorkflow: VideoApiOptions;
   configure: () => void;
   useVideo: (reference: string) => Promise<void>;
@@ -680,6 +685,18 @@ export default function GenerationPanel({
                       {ui.generation.deleteVersion}
                     </button>
                   </div>
+                  <small className="generation-history-meta">
+                    <span>
+                      {ui.generation.submitApi}：
+                      {videoApiName(
+                        record.provider?.submitUrl,
+                        profileForVideoBinding(videoApiProfiles, record.provider),
+                      ) || ui.generation.unknownApi}
+                    </span>
+                    <span>
+                      {ui.generation.taskId}：{record.taskId}
+                    </span>
+                  </small>
                 </article>
               ))}
             </div>

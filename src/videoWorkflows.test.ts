@@ -13,10 +13,28 @@ import {
   migrateGenerationSettings,
   optionsFromProfile,
   parseResolutionsJson,
+  profileForVideoBinding,
   resolutionLabelKey,
+  videoApiName,
 } from "./videoWorkflows";
 
 describe("videoWorkflows", () => {
+  it("uses the matching configuration name and never displays the full address", () => {
+    const original = {
+      ...autodlApiProfile("original", AUTODL_RESOLUTION_PRESETS[0]),
+      name: "试片模型",
+    };
+    const binding = { profileId: original.id, submitUrl: original.submitUrl };
+    const renamed = { ...original, submitUrl: "https://example.test/new" };
+    expect(
+      videoApiName(binding.submitUrl, profileForVideoBinding([original], binding)),
+    ).toBe(original.name);
+    expect(
+      videoApiName(binding.submitUrl, profileForVideoBinding([renamed], binding)),
+    ).toBe(AUTODL_RESOLUTION_PRESETS[0].id);
+    expect(videoApiName(undefined, undefined)).toBe("");
+  });
+
   it("adds and migrates H3 803 with its exact resolution enum and numeric seed", () => {
     const preset = AUTODL_RESOLUTION_PRESETS.find(
       (item) => item.id === "minimax_h3_803",

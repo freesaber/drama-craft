@@ -14,6 +14,7 @@
       {
         "label": "main",
         "title": "DramaCraft · 剧匠",
+        "maximized": true,
         "width": 1500,
         "height": 940,
         "minWidth": 1024,
