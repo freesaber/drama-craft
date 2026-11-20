@@ -1000,7 +1000,7 @@
 }
 .generation-review-parameters {
   display: grid;
-  grid-template-columns: 120px minmax(190px, 1fr) minmax(170px, 0.8fr);
+  grid-template-columns: minmax(0, 1.5fr) 100px minmax(0, 1fr) minmax(0, 1fr);
   gap: 10px;
   margin: 0 0 14px;
   color: #83917c;
@@ -1168,6 +1168,9 @@
   }
   .generation-review-parameters {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .generation-review-api {
+    grid-column: 1 / -1;
   }
 }
 .video-player-reference {
@@ -2734,6 +2737,12 @@ select:focus {
 .api-modal {
   width: min(720px, 92vw);
 }
+.api-list-modal {
+  width: min(840px, 92vw);
+}
+.api-child-backdrop {
+  z-index: 11;
+}
 .modal h2 {
   font-size: 20px;
   margin: 0 0 24px;
@@ -2811,39 +2820,80 @@ select:focus {
   margin-top: 8px;
   flex-shrink: 0;
 }
-.api-profile-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.api-inline-field {
+.api-list-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
-  margin-top: 19px;
 }
-.api-inline-field > span {
-  flex: 0 0 auto;
-  font-size: 12px;
-  font-weight: 500;
+.api-list-header h2 {
+  margin: 0;
+}
+.api-list-hint {
+  margin: 14px 0;
   color: #6e8062;
+  font-size: 12px;
+}
+.api-list-table {
+  max-height: min(52vh, 530px);
+  overflow: auto;
+  border: 1px solid #dce4d6;
+  border-radius: 8px;
+}
+.api-list-table table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+}
+.api-list-table th,
+.api-list-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #e6ebe1;
+  text-align: left;
+}
+.api-list-table thead th {
+  position: sticky;
+  top: 0;
+  background: #ecf1e7;
   white-space: nowrap;
 }
-.api-inline-field input {
-  flex: 1;
-  min-width: 0;
-  margin-top: 0;
+.api-list-table tbody th {
+  width: 100%;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.api-list-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+.api-list-table tr > :first-child {
+  text-align: center;
+}
+.api-list-table input[type="radio"] {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  padding: 0;
+  accent-color: #30543b;
+  vertical-align: middle;
+}
+.api-list-table td {
+  white-space: nowrap;
+}
+.api-list-table .token-saved {
+  color: #316143;
+}
+.api-profile-actions {
+  display: flex;
+  gap: 8px;
+}
+.api-editor-parameters {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 12px;
+}
+.api-editor-parameters input {
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-}
-.api-inline-field .secret-input {
-  flex: 1;
-  min-width: 0;
-}
-.api-inline-field .secret-input input {
-  font-family: inherit;
-}
-.api-inline-field .secret-input button {
-  margin-top: 0;
 }
 .api-inline-hint {
   display: block;

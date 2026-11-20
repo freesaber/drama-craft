@@ -100,7 +100,6 @@ fn migrate_legacy_endpoints(profile: &mut ApiProfile) {
     }
     if profile.resolutions.trim().is_empty() && !profile.submit_url.trim().is_empty() {
         let h3_803 = profile.submit_url.contains("minimax_h3_803");
-        let u30 = profile.submit_url.contains("minimax_h3_zm_u30");
         let resolutions = if h3_803 {
             serde_json::json!([
                 "480p竖(480*864)",
@@ -112,20 +111,24 @@ fn migrate_legacy_endpoints(profile: &mut ApiProfile) {
                 "1088p横(1920*1088)",
                 "1440p横(2560*1440)"
             ])
-        } else if u30 {
-            serde_json::json!(["480p横", "480p竖", "768p横", "768p竖", "960p横", "960p竖"])
         } else {
             serde_json::json!(["480p横", "480p竖", "768p横", "768p竖", "960p横", "960p竖"])
         };
         profile.resolutions = serde_json::to_string_pretty(&resolutions).unwrap_or_default();
         if profile.default_seed.trim().is_empty() {
-            profile.default_seed = if h3_803 {
-                "803".into()
-            } else if u30 {
-                "548628410878779".into()
+            let seed = if h3_803 {
+                "803"
+            } else if profile.submit_url.contains("minimax_h3_zm_u24") {
+                "683072603085674"
+            } else if profile
+                .submit_url
+                .contains("minimax_h3_image_audio_to_video_v2_15s")
+            {
+                "731242627237534"
             } else {
-                "548628410878779".into()
+                "548628410878779"
             };
+            profile.default_seed = seed.into();
         }
     }
 }
@@ -278,20 +281,26 @@ mod tests {
     }
 
     #[test]
-    fn migrates_u30_with_its_resolution_options() {
-        let mut legacy = config();
-        let profile = &mut legacy.profiles[0];
-        profile.submit_url =
-            "https://autodl.art/api/v1/comfyui/comfyui_workflow/minimax_h3_zm_u30".into();
-        profile.resolutions.clear();
-        profile.default_seed.clear();
-        let normalized = legacy.normalize().unwrap();
-        let profile = &normalized.profiles[0];
-        assert_eq!(
-            parse_resolutions_json(&profile.resolutions).unwrap(),
-            vec!["480p横", "480p竖", "768p横", "768p竖", "960p横", "960p竖"]
-        );
-        assert_eq!(profile.default_seed, "548628410878779");
+    fn migrates_standard_h3_workflows_with_their_own_seeds() {
+        for (workflow, seed) in [
+            ("minimax_h3_zm_u30", "548628410878779"),
+            ("minimax_h3_zm_u24", "683072603085674"),
+            ("minimax_h3_image_audio_to_video_v2_15s", "731242627237534"),
+        ] {
+            let mut legacy = config();
+            let profile = &mut legacy.profiles[0];
+            profile.submit_url =
+                format!("https://autodl.art/api/v1/comfyui/comfyui_workflow/{workflow}");
+            profile.resolutions.clear();
+            profile.default_seed.clear();
+            let normalized = legacy.normalize().unwrap();
+            let profile = &normalized.profiles[0];
+            assert_eq!(
+                parse_resolutions_json(&profile.resolutions).unwrap(),
+                vec!["480p横", "480p竖", "768p横", "768p竖", "960p横", "960p竖"]
+            );
+            assert_eq!(profile.default_seed, seed, "{workflow}");
+        }
     }
 
     #[test]

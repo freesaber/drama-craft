@@ -67,7 +67,7 @@ export default function BoardView({
   source,
   active,
   select,
-  generationConfigured,
+  defaultVideoApiProfileId,
   videoApiProfiles,
   videoWorkflow,
   configureGeneration,
@@ -90,7 +90,7 @@ export default function BoardView({
   source: (offset: number) => void;
   active: number;
   select: (index: number) => void;
-  generationConfigured: boolean;
+  defaultVideoApiProfileId: string;
   videoApiProfiles: readonly ApiProfile[];
   videoWorkflow: VideoApiOptions;
   configureGeneration: () => void;
@@ -279,7 +279,7 @@ export default function BoardView({
               document={document}
               refreshKey={refreshKey}
               busy={busy}
-              configured={generationConfigured}
+              defaultVideoApiProfileId={defaultVideoApiProfileId}
               videoApiProfiles={videoApiProfiles}
               videoWorkflow={videoWorkflow}
               configure={configureGeneration}

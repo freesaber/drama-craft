@@ -139,8 +139,8 @@ export const api = {
     }),
   pollAudio: (handle: string, taskId: string) =>
     invoke<AudioRecord>("poll_audio", { handle, taskId }),
-  submitGeneration: (handle: string, input: GenerationInput) =>
-    invoke<GenerationRecord>("submit_generation", { handle, input }),
+  submitGeneration: (handle: string, profileId: string, input: GenerationInput) =>
+    invoke<GenerationRecord>("submit_generation", { handle, profileId, input }),
   pollGeneration: (handle: string, taskId: string) =>
     invoke<GenerationRecord>("poll_generation", { handle, taskId }),
   generationHistory: (handle: string, document: string, shotId: string) =>

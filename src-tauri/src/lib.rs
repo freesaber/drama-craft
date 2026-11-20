@@ -627,6 +627,44 @@ mod tests {
     }
 
     #[test]
+    fn explicit_video_api_uses_its_own_settings_without_changing_the_default() {
+        let default_profile = settings::ApiProfile {
+            id: "default".into(),
+            submit_url: "https://example.test/default".into(),
+            ..Default::default()
+        };
+        let alternate = settings::ApiProfile {
+            id: "alternate".into(),
+            submit_url: "https://example.test/alternate".into(),
+            query_url: "https://example.test/alternate/result/{task_id}".into(),
+            resolutions: r#"["768p横(1376*768)"]"#.into(),
+            ..Default::default()
+        };
+        let prefs = Preferences {
+            generation_configuration: settings::Configuration {
+                active_profile_id: default_profile.id.clone(),
+                profiles: vec![default_profile.clone(), alternate.clone()],
+                ..Default::default()
+            },
+            generation_authorizations: HashMap::from([
+                (default_profile.id.clone(), "Token default".into()),
+                (alternate.id.clone(), "Token alternate".into()),
+            ]),
+            ..Default::default()
+        };
+        let selected = generation_settings_from_preferences(&prefs, Some("alternate")).unwrap();
+        assert_eq!(selected.profile_id, alternate.id);
+        assert_eq!(selected.submit_url, alternate.submit_url);
+        assert_eq!(selected.query_url, alternate.query_url);
+        assert_eq!(selected.resolutions, vec!["768p横(1376*768)"]);
+        assert_eq!(selected.authorization, "Token alternate");
+        assert!(generation_settings_from_preferences(&prefs, Some("missing")).is_err());
+        let default_settings = generation_settings_from_preferences(&prefs, None).unwrap();
+        assert_eq!(default_settings.profile_id, default_profile.id);
+        assert_eq!(default_settings.authorization, "Token default");
+    }
+
+    #[test]
     fn batch_settings_require_the_saved_submit_url_and_use_its_credentials() {
         let original = settings::ApiProfile {
             id: "original".into(),
@@ -842,15 +880,21 @@ fn generation_settings(
     app: &tauri::AppHandle,
     profile_id: Option<&str>,
 ) -> Result<generation::GenerationSettings> {
-    let prefs = read_prefs(app)?;
-    let config = configuration_from_preferences(&prefs);
+    generation_settings_from_preferences(&read_prefs(app)?, profile_id)
+}
+
+fn generation_settings_from_preferences(
+    prefs: &Preferences,
+    profile_id: Option<&str>,
+) -> Result<generation::GenerationSettings> {
+    let config = configuration_from_preferences(prefs);
     let id = profile_id.unwrap_or(&config.active_profile_id);
     let profile = config
         .profiles
         .iter()
         .find(|profile| profile.id == id)
         .ok_or_else(|| AppError::new("config", "请先在视频 API 设置中配置服务和密钥"))?;
-    Ok(generation_settings_for_profile(&prefs, profile))
+    Ok(generation_settings_for_profile(prefs, profile))
 }
 
 fn batch_generation_settings(
@@ -982,10 +1026,11 @@ async fn submit_generation(
     app: tauri::AppHandle,
     state: State<'_, Sessions>,
     handle: String,
+    profile_id: String,
     input: generation::GenerationInput,
 ) -> Result<generation::GenerationRecord> {
     let root = root_for(&state, &handle)?;
-    generation::submit(&root, &generation_settings(&app, None)?, input).await
+    generation::submit(&root, &generation_settings(&app, Some(&profile_id))?, input).await
 }
 #[tauri::command]
 async fn poll_generation(

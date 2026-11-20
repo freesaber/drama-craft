@@ -288,76 +288,76 @@ N/A
   await expect(
     firstCard().getByRole("button", { name: "生成视频", exact: true }),
   ).toBeEnabled();
-  await page
-    .getByRole("button", { name: "视频 API", exact: true })
-    .click();
-  await expect(page.getByLabel("API 服务地址", { exact: true })).toBeVisible();
-  const tokenInput = page.getByLabel("API Token（Authorization 请求头）", {
-    exact: false,
-  });
-  await expect(tokenInput).toBeVisible();
-  await tokenInput.fill("Token synthetic-smoke-test");
-  await page.getByRole("button", { name: "显示", exact: true }).click();
-  await expect(tokenInput).toHaveAttribute("type", "text");
-  await page.getByRole("button", { name: "隐藏", exact: true }).click();
-  await expect(tokenInput).toHaveAttribute("type", "password");
-  await tokenInput.fill("");
-  const initialProfiles = await page
-    .getByLabel("当前使用配置（保存后生效）")
-    .locator("option")
-    .count();
-  await page
-    .getByRole("button", { name: "添加 API 配置", exact: true })
-    .click();
-  await expect(
-    page.getByLabel("当前使用配置（保存后生效）").locator("option"),
-  ).toHaveCount(initialProfiles + 1);
-  await page.getByLabel("配置名称", { exact: true }).fill("备用测试配置");
-  await page
-    .getByLabel("API 服务地址", { exact: true })
-    .fill("https://secondary.example.test");
-  await page
-    .getByLabel("当前使用配置（保存后生效）")
-    .selectOption({ index: 0 });
-  await page
-    .getByLabel("当前使用配置（保存后生效）")
-    .selectOption({ index: initialProfiles });
-  await expect(page.getByLabel("API 服务地址", { exact: true })).toHaveValue(
-    "https://secondary.example.test",
-  );
-  await tokenInput.fill("Token synthetic-saved-test");
-  await page.getByRole("button", { name: "确认", exact: true }).click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  await page
-    .getByRole("button", { name: "视频 API", exact: true })
-    .click();
-  await expect(page.getByLabel("配置名称", { exact: true })).toHaveValue(
-    "备用测试配置",
-  );
-  await expect(page.getByLabel("API 服务地址", { exact: true })).toHaveValue(
-    "https://secondary.example.test",
-  );
-  await expect(
-    page.getByLabel("当前使用配置（保存后生效）").locator("option"),
-  ).toHaveCount(initialProfiles + 1);
-  await expect(tokenInput).toHaveValue("");
-  await page.getByRole("button", { name: "显示", exact: true }).click();
-  await expect(tokenInput).toHaveValue("Token synthetic-saved-test");
-  await expect(tokenInput).toHaveAttribute("type", "text");
-  await page.getByRole("button", { name: "隐藏", exact: true }).click();
-  await page.getByRole("button", { name: "删除当前配置", exact: true }).click();
-  await expect(
-    page.getByLabel("当前使用配置（保存后生效）").locator("option"),
-  ).toHaveCount(initialProfiles);
-  await page.getByRole("button", { name: "确认", exact: true }).click();
-  await page
-    .getByRole("button", { name: "视频 API", exact: true })
-    .click();
-  await expect(
-    page.getByLabel("当前使用配置（保存后生效）").locator("option"),
-  ).toHaveCount(initialProfiles);
-  await page.screenshot({ path: join(output, "desktop-api-settings.png") });
-  await page.getByRole("button", { name: "取消", exact: true }).click();
+  for (const service of ["视频 API", "音频 API"]) {
+    const openSettings = page.getByRole("button", { name: service, exact: true });
+    const list = page.getByRole("dialog", { name: service, exact: true });
+    const name = `合成测试 ${service}`;
+    const renamed = `${name}（编辑）`;
+    await openSettings.click();
+    const add = list.getByRole("button", { name: "新增 API 配置" });
+    await expect(add).toBeEnabled();
+    const defaultRadio = list.getByRole("radio", { checked: true });
+    const originalDefault = (await defaultRadio.count())
+      ? await defaultRadio.getAttribute("aria-label")
+      : null;
+    await add.click();
+    const addDialog = page.getByRole("dialog", { name: "新增 API 配置" });
+    await expect(addDialog).toBeVisible();
+    await expect(list).toHaveAttribute("inert", "");
+    if (service === "视频 API") {
+      await addDialog.getByRole("combobox").selectOption("minimax_h3_803");
+      await expect(addDialog.getByLabel("种子", { exact: true })).toHaveValue("803");
+    } else {
+      await expect(addDialog.getByRole("combobox")).toHaveCount(0);
+    }
+    await addDialog.getByLabel("配置名称", { exact: true }).fill(name);
+    const tokenLabel = "API Token（Authorization 请求头）";
+    await addDialog.getByLabel(tokenLabel).fill("Token synthetic-saved-test");
+    await addDialog.getByRole("button", { name: "保存", exact: true }).click();
+    await expect(addDialog).toHaveCount(0);
+    const added = list.getByRole("radio", { name: `设为默认：${name}` });
+    if (originalDefault) {
+      await expect(added).not.toBeChecked();
+      await added.click();
+    }
+    await expect(added).toBeChecked();
+    await list.getByRole("button", { name: "关闭", exact: true }).click();
+    await openSettings.click();
+    await expect(added).toBeChecked();
+
+    await list.getByRole("row", { name: new RegExp(name) }).getByRole("button", { name: "编辑" }).click();
+    const editDialog = page.getByRole("dialog", { name: "编辑 API 配置" });
+    const tokenInput = editDialog.getByLabel(tokenLabel);
+    await expect(tokenInput).toHaveAttribute("type", "password");
+    await editDialog.getByRole("button", { name: "显示", exact: true }).click();
+    await expect(tokenInput).toHaveValue("Token synthetic-saved-test");
+    await editDialog.getByLabel("配置名称", { exact: true }).fill("不应保存");
+    await editDialog.getByRole("button", { name: "取消", exact: true }).click();
+    await expect(added).toBeChecked();
+
+    await list.getByRole("row", { name: new RegExp(name) }).getByRole("button", { name: "编辑" }).click();
+    await editDialog.getByLabel("配置名称", { exact: true }).fill(renamed);
+    await editDialog.getByRole("button", { name: "保存", exact: true }).click();
+    await expect(list.getByRole("radio", { name: `设为默认：${renamed}` })).toBeChecked();
+
+    if (originalDefault) {
+      const previous = list.getByRole("radio", { name: originalDefault, exact: true });
+      await previous.click();
+      await expect(previous).toBeChecked();
+    }
+    const renamedRow = list.getByRole("row").filter({ hasText: renamed });
+    await renamedRow.getByRole("button", { name: "删除", exact: true }).click();
+    const confirm = page.getByRole("alertdialog", { name: "删除 API 配置" });
+    await expect(confirm).toContainText(renamed);
+    await confirm.getByRole("button", { name: "取消", exact: true }).click();
+    await expect(renamedRow).toBeVisible();
+    await renamedRow.getByRole("button", { name: "删除", exact: true }).click();
+    await confirm.getByRole("button", { name: "删除", exact: true }).click();
+    await expect(renamedRow).toHaveCount(0);
+    if (originalDefault)
+      await expect(list.getByRole("radio", { name: originalDefault, exact: true })).toBeChecked();
+    await list.getByRole("button", { name: "关闭", exact: true }).click();
+  }
   await expect(firstCard().getByLabel("故事走向", { exact: true })).toHaveCount(
     0,
   );

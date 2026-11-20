@@ -84,16 +84,37 @@ describe("videoWorkflows", () => {
     expect(migrateApiProfile(custom)).toEqual(custom);
   });
 
-  it("offers U30 using the documented endpoint and confirmed defaults", () => {
-    expect(AUTODL_RESOLUTION_PRESETS.map((item) => item.id)).toEqual(["minimax_h3_zm_u30", "minimax_h3_803"]);
-    const preset = AUTODL_RESOLUTION_PRESETS.find((item) => item.id === "minimax_h3_zm_u30")!;
-    const profile = autodlApiProfile("u30", preset);
-    expect(profile.submitUrl).toBe("https://autodl.art/api/v1/comfyui/comfyui_workflow/minimax_h3_zm_u30");
-    expect(profile.queryUrl).toContain("result/{task_id}");
+  it.each([
+    ["minimax_h3_zm_u30", "548628410878779"],
+    ["minimax_h3_zm_u24", "683072603085674"],
+    ["minimax_h3_image_audio_to_video_v2_15s", "731242627237534"],
+  ])("offers and migrates %s with the standard resolutions", (workflow, seed) => {
+    const preset = AUTODL_RESOLUTION_PRESETS.find((item) => item.id === workflow)!;
+    const profile = autodlApiProfile(workflow, preset);
+    expect(profile.name).toBe(workflow);
+    expect(profile.submitUrl).toBe(
+      `https://autodl.art/api/v1/comfyui/comfyui_workflow/${workflow}`,
+    );
+    expect(profile.queryUrl).toBe(
+      "https://autodl.art/api/v1/comfyui/comfyui_workflow/result/{task_id}",
+    );
     expect(profile.hasAuthorization).toBe(false);
-    expect(parseResolutionsJson(profile.resolutions)).toEqual(["480p横", "480p竖", "768p横", "768p竖", "960p横", "960p竖"]);
-    expect(profile.defaultSeed).toBe("548628410878779");
-    expect(migrateApiProfile({ id: "u30", baseUrl: profile.submitUrl })).toMatchObject({ resolutions: profile.resolutions, defaultSeed: profile.defaultSeed });
+    expect(parseResolutionsJson(profile.resolutions)).toEqual([
+      "480p横", "480p竖", "768p横", "768p竖", "960p横", "960p竖",
+    ]);
+    expect(profile.defaultSeed).toBe(seed);
+    expect(
+      migrateApiProfile({ id: workflow, baseUrl: profile.submitUrl }),
+    ).toMatchObject({ resolutions: profile.resolutions, defaultSeed: seed });
+  });
+
+  it("maps resolution between U30 and 803 without changing tier or orientation", () => {
+    const standard = AUTODL_RESOLUTION_PRESETS[0].resolutions;
+    const h3_803 = AUTODL_RESOLUTION_PRESETS[1].resolutions;
+    expect(alignResolutionOption("768p横", h3_803)).toBe("768p横(1376*768)");
+    expect(alignResolutionOption("768p竖(768*1376)", standard)).toBe("768p竖");
+    expect(alignResolutionOption("960p横", h3_803)).toBeNull();
+    expect(alignResolutionOption("1088p竖(1088*1920)", standard)).toBeNull();
   });
 
   it("parses resolution JSON lists", () => {

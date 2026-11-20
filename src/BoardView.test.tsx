@@ -35,7 +35,7 @@ function renderDocument(document: string) {
       source={() => {}}
       active={0}
       select={() => {}}
-      generationConfigured={false}
+      defaultVideoApiProfileId=""
       videoApiProfiles={[]}
       videoWorkflow={optionsFromProfile(undefined)}
       configureGeneration={() => {}}

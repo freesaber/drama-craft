@@ -121,12 +121,21 @@ export function matchConfiguredResolution(
   return alignResolutionOption(shot, list) ?? (fallback || list[0]);
 }
 
+const H3_STANDARD_RESOLUTIONS = [
+  "480p横",
+  "480p竖",
+  "768p横",
+  "768p竖",
+  "960p横",
+  "960p竖",
+] as const;
+
 /** AutoDL 工作流各自的 resolution / seed 预设。 */
 export const AUTODL_RESOLUTION_PRESETS = [
   {
     id: "minimax_h3_zm_u30",
     label: "minimax_h3_zm_u30",
-    resolutions: ["480p横", "480p竖", "768p横", "768p竖", "960p横", "960p竖"],
+    resolutions: H3_STANDARD_RESOLUTIONS,
     defaultSeed: "548628410878779",
   },
   {
@@ -143,6 +152,18 @@ export const AUTODL_RESOLUTION_PRESETS = [
       RES_1440P_H,
     ],
     defaultSeed: "803",
+  },
+  {
+    id: "minimax_h3_zm_u24",
+    label: "minimax_h3_zm_u24",
+    resolutions: H3_STANDARD_RESOLUTIONS,
+    defaultSeed: "683072603085674",
+  },
+  {
+    id: "minimax_h3_image_audio_to_video_v2_15s",
+    label: "minimax_h3_image_audio_to_video_v2_15s",
+    resolutions: H3_STANDARD_RESOLUTIONS,
+    defaultSeed: "731242627237534",
   },
 ] as const;
 

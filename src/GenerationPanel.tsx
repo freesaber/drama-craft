@@ -21,7 +21,8 @@ import VideoPlayerModal from "./VideoPlayerModal";
 import VideoTrimModal from "./VideoTrimModal";
 import { ui } from "./i18n";
 import {
-  matchConfiguredResolution,
+  alignResolutionOption,
+  optionsFromProfile,
   profileForVideoBinding,
   videoApiName,
   type VideoApiOptions,
@@ -100,9 +101,10 @@ const running = (status: string) =>
 interface GenerationReviewRequest {
   document: string;
   shotId: string;
+  profileId: string;
   duration: number;
   resolution: string;
-  seed: number | null;
+  seedOverride?: string;
   regeneration: boolean;
 }
 
@@ -113,7 +115,7 @@ export default function GenerationPanel({
   document,
   refreshKey,
   busy,
-  configured,
+  defaultVideoApiProfileId,
   videoApiProfiles,
   videoWorkflow,
   configure,
@@ -130,7 +132,7 @@ export default function GenerationPanel({
   document: string;
   refreshKey: number;
   busy: boolean;
-  configured: boolean;
+  defaultVideoApiProfileId: string;
   videoApiProfiles: readonly ApiProfile[];
   videoWorkflow: VideoApiOptions;
   configure: () => void;
@@ -141,7 +143,7 @@ export default function GenerationPanel({
   video: React.ReactNode;
   onMediaChanged?: (message: string) => void;
 }) {
-  const [seed, setSeed] = useState(videoWorkflow.defaultSeed);
+  const [seedOverride, setSeedOverride] = useState<string>();
   const [history, setHistory] = useState<GenerationRecord[]>([]);
   const [task, setTask] = useState<GenerationRecord | null>(null);
   const [error, setError] = useState("");
@@ -170,7 +172,7 @@ export default function GenerationPanel({
   useVideoRef.current = useVideo;
 
   useEffect(() => {
-    setSeed(videoWorkflow.defaultSeed);
+    setSeedOverride(undefined);
   }, [videoWorkflow.defaultSeed]);
 
   useEffect(() => {
@@ -186,6 +188,28 @@ export default function GenerationPanel({
     () => shotAudioInputs(card, episode),
     [card, episode],
   );
+  const reviewApiChoices = useMemo(
+    () =>
+      videoApiProfiles.map((profile) => {
+        const options = optionsFromProfile(profile);
+        const ready =
+          profile.hasAuthorization &&
+          Boolean(profile.submitUrl.trim()) &&
+          Boolean(profile.queryUrl.trim()) &&
+          options.resolutions.length > 0;
+        return { profile, options, ready };
+      }),
+    [videoApiProfiles],
+  );
+  const reviewApi = reviewApiChoices.find(
+    ({ profile, ready }) => ready && profile.id === reviewRequest?.profileId,
+  );
+  const reviewResolutions = reviewApi?.options.resolutions ?? [];
+  const reviewResolution =
+    alignResolutionOption(reviewRequest?.resolution ?? "", reviewResolutions) ??
+    "";
+  const reviewSeed =
+    reviewRequest?.seedOverride ?? reviewApi?.options.defaultSeed ?? "";
   const selectedImageCount = reviewImages.filter(Boolean).length;
   const selectedAudioCount = reviewAudios.filter(Boolean).length;
   const reviewIssues = useMemo(
@@ -247,11 +271,18 @@ export default function GenerationPanel({
     prompt: string,
     reviewImageAssets: InputAsset[],
     reviewAudioAssets: InputAsset[],
-    request: GenerationReviewRequest,
+    request: Omit<GenerationReviewRequest, "profileId">,
     images = reviewImageAssets.map(() => true),
     audios = reviewAudioAssets.map(() => true),
     preservePrompt = false,
   ) => {
+    if (!reviewApiChoices.some(({ ready }) => ready)) {
+      configure();
+      return;
+    }
+    const defaultApi = reviewApiChoices.find(
+      ({ profile, ready }) => ready && profile.id === defaultVideoApiProfileId,
+    );
     const prepared = prepareGenerationSelection(
       prompt,
       reviewImageAssets,
@@ -265,35 +296,24 @@ export default function GenerationPanel({
     setReviewImages(images);
     setReviewAudios(audios);
     setReviewPrompt(preservePrompt ? prompt : prepared.prompt);
-    setReviewRequest(request);
+    setReviewRequest({ ...request, profileId: defaultApi?.profile.id ?? "" });
     setError("");
     setReviewOpen(true);
   };
 
   const openSubmissionReview = () => {
-    if (!configured) {
-      configure();
-      return;
-    }
     openReview(card.fields.videoPrompt.value, imageInputs, audioInputs, {
       document,
       shotId: card.id,
       duration: Number(card.fields.duration.value || "5"),
-      resolution: matchConfiguredResolution(
-        card.fields.resolution.value,
-        videoWorkflow.resolutions,
-        videoWorkflow.defaultResolution,
-      ),
-      seed: seed.trim() ? Number(seed) : null,
+      resolution:
+        card.fields.resolution.value.trim() || videoWorkflow.defaultResolution,
+      seedOverride,
       regeneration: false,
     });
   };
 
   const openRegenerationReview = (record: GenerationRecord) => {
-    if (!configured) {
-      configure();
-      return;
-    }
     const selected = regenerationSelections(imageInputs, audioInputs, record);
     openReview(
       record.prompt,
@@ -304,7 +324,7 @@ export default function GenerationPanel({
         shotId: record.shotId,
         duration: record.duration,
         resolution: record.resolution,
-        seed: record.seed,
+        seedOverride: record.seed === null ? "" : String(record.seed),
         regeneration: true,
       },
       selected.images,
@@ -343,29 +363,34 @@ export default function GenerationPanel({
   };
 
   const submit = async () => {
-    if (!reviewRequest) return;
+    if (!reviewRequest || !reviewApi || !reviewResolution) return;
     setSubmitting(true);
     setError("");
     try {
-      const { duration, resolution, seed: submittedSeed } = reviewRequest;
+      const { duration } = reviewRequest;
+      const submittedSeed = reviewSeed ? Number(reviewSeed) : null;
       if (!Number.isInteger(duration) || duration < 1 || duration > 15)
         throw new Error(ui.generation.invalidDuration);
       if (submittedSeed !== null && !Number.isSafeInteger(submittedSeed))
         throw new Error(ui.generation.invalidSeed);
-      const next = await api.submitGeneration(project.handle, {
-        document: reviewRequest.document,
-        shotId: reviewRequest.shotId,
-        prompt: reviewPrompt,
-        duration,
-        resolution,
-        seed: submittedSeed,
-        imageRefs: reviewImageInputs
-          .filter((_, index) => reviewImages[index] !== false)
-          .map((item) => item.reference),
-        audioRefs: reviewAudioInputs
-          .filter((_, index) => reviewAudios[index] !== false)
-          .map((item) => item.reference),
-      });
+      const next = await api.submitGeneration(
+        project.handle,
+        reviewApi.profile.id,
+        {
+          document: reviewRequest.document,
+          shotId: reviewRequest.shotId,
+          prompt: reviewPrompt,
+          duration,
+          resolution: reviewResolution,
+          seed: submittedSeed,
+          imageRefs: reviewImageInputs
+            .filter((_, index) => reviewImages[index] !== false)
+            .map((item) => item.reference),
+          audioRefs: reviewAudioInputs
+            .filter((_, index) => reviewAudios[index] !== false)
+            .map((item) => item.reference),
+        },
+      );
       setReviewOpen(false);
       setTask(next);
       setHistory((items) => [
@@ -452,10 +477,10 @@ export default function GenerationPanel({
               <span>{ui.generation.seed}</span>
               <input
                 inputMode="numeric"
-                value={seed}
+                value={seedOverride ?? videoWorkflow.defaultSeed}
                 placeholder={ui.generation.randomSeed}
                 onChange={(event) =>
-                  setSeed(event.target.value.replace(/[^0-9]/g, ""))
+                  setSeedOverride(event.target.value.replace(/[^0-9]/g, ""))
                 }
               />
             </label>
@@ -821,6 +846,35 @@ export default function GenerationPanel({
                 : ui.generation.reviewHint}
             </p>
             <div className="generation-review-parameters">
+              <label className="generation-review-api">
+                <span>{ui.generation.reviewApi}</span>
+                <select
+                  value={reviewApi?.profile.id ?? ""}
+                  disabled={submitting}
+                  onChange={(event) => {
+                    const profileId = event.target.value;
+                    setReviewRequest((current) =>
+                      current ? { ...current, profileId } : current,
+                    );
+                    setError("");
+                  }}
+                >
+                  <option value="" disabled>
+                    {ui.generation.chooseReviewApi}
+                  </option>
+                  {reviewApiChoices.map(({ profile, ready }) => (
+                    <option
+                      key={profile.id}
+                      value={profile.id}
+                      disabled={!ready}
+                    >
+                      {ready
+                        ? profile.name
+                        : ui.generation.unavailableReviewApi(profile.name)}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <label>
                 <span>{ui.board.duration}</span>
                 <select
@@ -846,24 +900,19 @@ export default function GenerationPanel({
               <label>
                 <span>{ui.board.resolution}</span>
                 <select
-                  value={reviewRequest.resolution}
-                  disabled={submitting}
-                  onChange={(event) =>
+                  value={reviewResolution}
+                  disabled={submitting || !reviewApi}
+                  onChange={(event) => {
+                    const resolution = event.target.value;
                     setReviewRequest((current) =>
-                      current
-                        ? { ...current, resolution: event.target.value }
-                        : current,
-                    )
-                  }
+                      current ? { ...current, resolution } : current,
+                    );
+                  }}
                 >
-                  {!videoWorkflow.resolutions.includes(
-                    reviewRequest.resolution,
-                  ) && (
-                    <option value={reviewRequest.resolution}>
-                      {reviewRequest.resolution}
-                    </option>
-                  )}
-                  {videoWorkflow.resolutions.map((resolution) => (
+                  <option value="" disabled>
+                    {ui.generation.chooseReviewResolution}
+                  </option>
+                  {reviewResolutions.map((resolution) => (
                     <option key={resolution} value={resolution}>
                       {resolution}
                     </option>
@@ -874,18 +923,13 @@ export default function GenerationPanel({
                 <span>{ui.generation.seed}</span>
                 <input
                   inputMode="numeric"
-                  value={reviewRequest.seed ?? ""}
+                  value={reviewSeed}
                   placeholder={ui.generation.randomSeed}
                   disabled={submitting}
                   onChange={(event) => {
                     const value = event.target.value.replace(/[^0-9]/g, "");
                     setReviewRequest((current) =>
-                      current
-                        ? {
-                            ...current,
-                            seed: value ? Number(value) : null,
-                          }
-                        : current,
+                      current ? { ...current, seedOverride: value } : current,
                     );
                   }}
                 />
@@ -1042,6 +1086,8 @@ export default function GenerationPanel({
                 className="primary-button"
                 disabled={
                   submitting ||
+                  !reviewApi ||
+                  !reviewResolution ||
                   !reviewPrompt.trim() ||
                   selectedImageCount < 1 ||
                   reviewIssues.length > 0
