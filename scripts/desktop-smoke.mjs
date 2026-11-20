@@ -69,9 +69,10 @@ try {
   assert.ok(page, "No desktop WebView page");
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await expect(page.getByText("从文字，到每一个镜头。")).toBeVisible();
+  const projectTable = page.getByRole("table", { name: "项目列表" });
+  await expect(projectTable).toBeVisible();
   await page.screenshot({ path: join(output, "desktop-home.png") });
-  await page.locator(".start-card", { hasText: "打开项目目录" }).click();
+  await page.getByRole("button", { name: "打开项目目录", exact: true }).click();
   await page.getByLabel("目录路径", { exact: false }).fill(legacyRoot);
   await page.getByRole("button", { name: "确认", exact: true }).click();
   await expect(
@@ -84,6 +85,9 @@ try {
   await expect(page.getByRole("dialog")).not.toBeVisible();
   await access(join(legacyRoot, ".drama-craft", "project.json"));
   await page.getByRole("button", { name: "返回项目首页", exact: true }).click();
+  await expect(
+    projectTable.getByRole("button", { name: "02 旧项目", exact: true }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "创建项目", exact: false }).click();
   await page.getByLabel("项目名称", { exact: true }).fill("01 原创 渡口");
   await page.getByLabel("父目录", { exact: false }).fill(testRoot);
@@ -635,8 +639,8 @@ N/A
     .fill("未保存的新标题");
   await page.getByRole("button", { name: "返回项目首页", exact: true }).click();
   await page.getByRole("button", { name: "放弃修改", exact: true }).click();
-  await expect(page.getByText("从文字，到每一个镜头。")).toBeVisible();
-  await page.locator(".start-card", { hasText: "打开项目目录" }).click();
+  await expect(projectTable).toBeVisible();
+  await page.getByRole("button", { name: "打开项目目录", exact: true }).click();
   await page.getByLabel("目录路径", { exact: false }).fill(testRoot);
   await page.getByRole("button", { name: "确认", exact: true }).click();
   await expect(

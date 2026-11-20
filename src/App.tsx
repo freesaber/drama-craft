@@ -42,6 +42,38 @@ import {
   optionsFromProfile,
 } from "./videoWorkflows";
 
+const projectListIcons = {
+  search: "M21 21l-4.3-4.3M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z",
+  folder:
+    "M3 7V6a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z",
+  plus: "M12 5v14M5 12h14",
+  project:
+    "M5 5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5Zm9-2v5h5M9 12h6m-6 4h6",
+  terminal:
+    "M3 6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6Zm4 3 3 3-3 3m6 0h4",
+  copy: "M8 16H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v3M8 10a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-9a2 2 0 0 1-2-2v-9Z",
+  rename: "m14 6 4 4M4 20l1-5L16 4a2.8 2.8 0 0 1 4 4L9 19l-5 1Z",
+  remove: "M6 6l12 12M18 6 6 18",
+};
+
+function ProjectListIcon({ name }: { name: keyof typeof projectListIcons }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d={projectListIcons[name]} />
+    </svg>
+  );
+}
+
 export default function App() {
   const { ask: discardChanges, dialog: unsavedDialog } = useUnsavedChanges();
   const [project, setProject] = useState<Project | null>(null);
@@ -917,7 +949,7 @@ export default function App() {
   }, [project, applyBatchVideo]);
   return (
     <div className="app-shell">
-      <header className="topbar">
+      <header className={project ? "topbar" : "topbar home-topbar"}>
         <button
           className="brand"
           onClick={() => void home()}
@@ -959,149 +991,173 @@ export default function App() {
       )}
       {!project ? (
         <main className="home-page">
-          <div className="home-eyebrow">DRAMACRAFT / LOCAL STUDIO</div>
-          <h1>{ui.tagline}</h1>
-          <p className="home-intro">{ui.intro}</p>
-          <div className="start-actions">
-            <button
-              className="start-card primary-card"
-              disabled={!desktop || busy}
-              onClick={() => {
-                void run(async () => {
-                  const { newProjectDirectories: directories } =
-                    await api.preferences();
-                  const voices =
-                    directories?.voiceDirectory ||
-                    defaultVoiceDirectory ||
-                    (await api.defaultVoiceDirectory());
-                  setName("");
-                  setParent(directories?.parent ?? "");
-                  setCharacterDirectory(directories?.characterDirectory ?? "");
-                  setVoiceDirectory(voices);
-                  setModal("project");
-                });
-              }}
-            >
-              <span className="card-icon">＋</span>
-              <strong>{ui.create}</strong>
-              <p>{ui.createHint}</p>
-              <span className="card-arrow">↗</span>
-            </button>
-            <button
-              className="start-card"
-              disabled={!desktop || busy}
-              onClick={() => void openDirectory()}
-            >
-              <span className="card-icon">▱</span>
-              <strong>{ui.open}</strong>
-              <p>{ui.openHint}</p>
-              <span className="card-arrow">↗</span>
-            </button>
-          </div>
-          <section className="recent-section">
-            <div className="section-heading">
-              <h2>{ui.recent}</h2>
-              <span>{recent.length.toString().padStart(2, "0")}</span>
+          <div className="project-list-toolbar">
+            <div className="project-list-heading">
+              <h1 id="project-list-title">{ui.recent}</h1>
+              <span aria-live="polite">
+                {ui.projectListResult(filteredProjects.length)}
+              </span>
             </div>
-            {recent.length > 0 && (
-              <div className="project-list-toolbar">
-                <input
-                  type="search"
-                  value={projectSearch}
-                  onChange={(event) => {
-                    setProjectSearch(event.target.value);
-                    setCurrentProjectPage(1);
-                  }}
-                  placeholder={ui.searchProjects}
-                  aria-label={ui.searchProjects}
-                />
-                <span>{ui.projectListResult(filteredProjects.length)}</span>
-              </div>
-            )}
-            {visibleProjects.length ? (
-              visibleProjects.map((item) => (
-                <div className="recent-project" key={item.path}>
-                  <button
-                    className="recent-project-main"
-                    disabled={busy}
-                    onClick={() => void openPath(item.path)}
-                  >
-                    <span className="project-icon">▤</span>
-                    <span>
-                      <strong>{item.name}</strong>
-                      <small>{item.path.replace(/^\\\\\?\\/, "")}</small>
-                    </span>
-                  </button>
-                  <span className="recent-actions">
-                    <button
-                      title={ui.openInTerminal}
-                      disabled={busy}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void run(async () => {
-                          await api.openInTerminal(item.path);
-                        });
-                      }}
-                    >
-                      ⌨
-                    </button>
-                    <button
-                      title={ui.openInExplorer}
-                      disabled={busy}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void run(async () => {
-                          await api.openDirectory(item.path);
-                        });
-                      }}
-                    >
-                      📂
-                    </button>
-                    <button
-                      title={ui.copyPath}
-                      disabled={busy}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void navigator.clipboard
-                          .writeText(item.path.replace(/^\\\\\?\\/, ""))
-                          .then(() => setNotice(ui.pathCopied));
-                      }}
-                    >
-                      📋
-                    </button>
-                    <button
-                      className="recent-remove-btn"
-                      title={ui.removeRecent}
-                      disabled={busy}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPendingRecentRemoval(item);
-                      }}
-                    >
-                      ✕
-                    </button>
-                    <button
-                      title={ui.renameProject}
-                      disabled={busy}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPendingRecentRename(item);
-                        setRenameName(item.name);
-                        setRenameFolder(true);
-                      }}
-                    >
-                      ✎
-                    </button>
-                  </span>
-                </div>
-              ))
-            ) : (
-              <div className="empty-recent">
-                <span>▤</span>
-                {recent.length ? ui.noProjectMatch : ui.noRecent}
-              </div>
-            )}
-            {filteredProjects.length > 0 && (
+            <div className="project-list-search">
+              <ProjectListIcon name="search" />
+              <input
+                type="search"
+                value={projectSearch}
+                onChange={(event) => {
+                  setProjectSearch(event.target.value);
+                  setCurrentProjectPage(1);
+                }}
+                placeholder={ui.searchProjects}
+                aria-label={ui.searchProjects}
+              />
+            </div>
+            <div className="project-list-actions">
+              <button
+                disabled={!desktop || busy}
+                onClick={() => void openDirectory()}
+              >
+                <ProjectListIcon name="folder" />
+                {ui.open}
+              </button>
+              <button
+                className="primary-button"
+                disabled={!desktop || busy}
+                onClick={() => {
+                  void run(async () => {
+                    const { newProjectDirectories: directories } =
+                      await api.preferences();
+                    const voices =
+                      directories?.voiceDirectory ||
+                      defaultVoiceDirectory ||
+                      (await api.defaultVoiceDirectory());
+                    setName("");
+                    setParent(directories?.parent ?? "");
+                    setCharacterDirectory(
+                      directories?.characterDirectory ?? "",
+                    );
+                    setVoiceDirectory(voices);
+                    setModal("project");
+                  });
+                }}
+              >
+                <ProjectListIcon name="plus" />
+                {ui.create}
+              </button>
+            </div>
+          </div>
+          <div className="project-list-panel">
+            <div className="project-table-scroll">
+              <table
+                className="project-table"
+                aria-labelledby="project-list-title"
+              >
+                <thead>
+                  <tr>
+                    <th scope="col">{ui.projectName}</th>
+                    <th scope="col">{ui.directoryPath}</th>
+                    <th scope="col">{ui.projectActions}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleProjects.map((item) => {
+                    const displayPath = item.path.replace(/^\\\\\?\\/, "");
+                    return (
+                      <tr key={item.path}>
+                        <td>
+                          <button
+                            className="recent-project-main"
+                            title={item.name}
+                            disabled={busy}
+                            onClick={() => void openPath(item.path)}
+                          >
+                            <span className="project-icon">
+                              <ProjectListIcon name="project" />
+                            </span>
+                            <strong>{item.name}</strong>
+                          </button>
+                        </td>
+                        <td className="project-directory" title={displayPath}>
+                          {displayPath}
+                        </td>
+                        <td>
+                          <div className="recent-actions">
+                            <button
+                              title={ui.openInTerminal}
+                              aria-label={ui.openInTerminal}
+                              disabled={busy}
+                              onClick={() =>
+                                void run(() => api.openInTerminal(item.path))
+                              }
+                            >
+                              <ProjectListIcon name="terminal" />
+                            </button>
+                            <button
+                              title={ui.openInExplorer}
+                              aria-label={ui.openInExplorer}
+                              disabled={busy}
+                              onClick={() =>
+                                void run(() => api.openDirectory(item.path))
+                              }
+                            >
+                              <ProjectListIcon name="folder" />
+                            </button>
+                            <button
+                              title={ui.copyPath}
+                              aria-label={ui.copyPath}
+                              disabled={busy}
+                              onClick={() =>
+                                void run(async () => {
+                                  await navigator.clipboard.writeText(
+                                    displayPath,
+                                  );
+                                  setNotice(ui.pathCopied);
+                                })
+                              }
+                            >
+                              <ProjectListIcon name="copy" />
+                            </button>
+                            <button
+                              title={ui.renameProject}
+                              aria-label={ui.renameProject}
+                              disabled={busy}
+                              onClick={() => {
+                                setPendingRecentRename(item);
+                                setRenameName(item.name);
+                                setRenameFolder(true);
+                              }}
+                            >
+                              <ProjectListIcon name="rename" />
+                            </button>
+                            <button
+                              className="recent-remove-btn"
+                              title={ui.removeRecent}
+                              aria-label={ui.removeRecent}
+                              disabled={busy}
+                              onClick={() => setPendingRecentRemoval(item)}
+                            >
+                              <ProjectListIcon name="remove" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {visibleProjects.length === 0 && (
+                    <tr>
+                      <td colSpan={3}>
+                        <div className="empty-recent">
+                          <span className="project-icon">
+                            <ProjectListIcon name="project" />
+                          </span>
+                          {recent.length ? ui.noProjectMatch : ui.noRecent}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            {totalProjectPages > 1 && (
               <nav className="project-pagination" aria-label={ui.pagination}>
                 <button
                   disabled={busy || currentProjectPage === 1}
@@ -1126,7 +1182,7 @@ export default function App() {
                 </button>
               </nav>
             )}
-          </section>
+          </div>
         </main>
       ) : (
         <>
