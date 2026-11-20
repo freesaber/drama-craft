@@ -316,12 +316,21 @@ N/A
     await addDialog.getByRole("button", { name: "保存", exact: true }).click();
     await expect(addDialog).toHaveCount(0);
     const added = list.getByRole("radio", { name: `设为默认：${name}` });
+    const confirmDefault = list.getByRole("button", { name: "确定", exact: true });
+    const cancelDefault = list.getByRole("button", { name: "取消", exact: true });
     if (originalDefault) {
       await expect(added).not.toBeChecked();
       await added.click();
+      await expect(added).toBeChecked();
+      await expect(list).toBeVisible();
+      await cancelDefault.click();
+      await openSettings.click();
+      await expect(list.getByRole("radio", { name: originalDefault, exact: true })).toBeChecked();
+      await added.click();
     }
     await expect(added).toBeChecked();
-    await list.getByRole("button", { name: "关闭", exact: true }).click();
+    await confirmDefault.click();
+    await expect(list).toHaveCount(0);
     await openSettings.click();
     await expect(added).toBeChecked();
 
@@ -344,6 +353,10 @@ N/A
       const previous = list.getByRole("radio", { name: originalDefault, exact: true });
       await previous.click();
       await expect(previous).toBeChecked();
+      await confirmDefault.click();
+      await expect(list).toHaveCount(0);
+      await openSettings.click();
+      await expect(previous).toBeChecked();
     }
     const renamedRow = list.getByRole("row").filter({ hasText: renamed });
     await renamedRow.getByRole("button", { name: "删除", exact: true }).click();
@@ -356,7 +369,7 @@ N/A
     await expect(renamedRow).toHaveCount(0);
     if (originalDefault)
       await expect(list.getByRole("radio", { name: originalDefault, exact: true })).toBeChecked();
-    await list.getByRole("button", { name: "关闭", exact: true }).click();
+    await cancelDefault.click();
   }
   await expect(firstCard().getByLabel("故事走向", { exact: true })).toHaveCount(
     0,

@@ -104,12 +104,14 @@ function ApiSettingsDialog<
   const titleId = useId();
   const deleteTitleId = useId();
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [pendingDefaultId, setPendingDefaultId] = useState<string | null>(null);
   const [target, setTarget] = useState<EditorTarget<Profile> | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const addButton = useRef<HTMLButtonElement>(null);
   const opener = useRef<HTMLElement | null>(null);
   const disabled = busy || saving;
+  const selectedDefaultId = pendingDefaultId ?? settings?.activeProfileId ?? "";
 
   useEffect(() => {
     let alive = true;
@@ -149,18 +151,36 @@ function ApiSettingsDialog<
     next: Settings,
     tokens: Record<string, string> = {},
   ) => {
-    if (disabled) return;
+    if (disabled) return false;
     setSaving(true);
     setError("");
     try {
       const saved = await save(next, tokens);
       setSettings(saved);
+      setPendingDefaultId((id) =>
+        id !== saved.activeProfileId &&
+        saved.profiles.some((item) => item.id === id)
+          ? id
+          : null,
+      );
       setTarget(null);
       onSaved(saved);
+      return true;
     } catch (reason) {
       setError(errorMessage(reason));
+      return false;
     } finally {
       setSaving(false);
+    }
+  };
+
+  const confirmDefault = async () => {
+    if (!settings || disabled) return;
+    if (
+      selectedDefaultId === settings.activeProfileId ||
+      (await persist({ ...settings, activeProfileId: selectedDefaultId }))
+    ) {
+      onClose();
     }
   };
 
@@ -229,14 +249,9 @@ function ApiSettingsDialog<
                           type="radio"
                           name={titleId}
                           aria-label={ui.apiProfiles.setDefault(profile.name)}
-                          checked={profile.id === settings.activeProfileId}
+                          checked={profile.id === selectedDefaultId}
                           disabled={disabled}
-                          onChange={() =>
-                            void persist({
-                              ...settings,
-                              activeProfileId: profile.id,
-                            })
-                          }
+                          onChange={() => setPendingDefaultId(profile.id)}
                         />
                       </td>
                       <th scope="row">{profile.name}</th>
@@ -300,7 +315,15 @@ function ApiSettingsDialog<
           )}
           <div className="modal-actions">
             <button type="button" disabled={saving} onClick={onClose}>
-              {saving ? ui.busy : ui.apiProfiles.close}
+              {ui.cancel}
+            </button>
+            <button
+              type="button"
+              className="primary-button"
+              disabled={disabled || !settings}
+              onClick={() => void confirmDefault()}
+            >
+              {saving ? ui.busy : ui.apiProfiles.confirm}
             </button>
           </div>
         </section>
