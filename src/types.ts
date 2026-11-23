@@ -226,9 +226,15 @@ export type BoardField =
   | "resolution"
   | "frameFile"
   | "videoFile";
+export interface FrameAssetItem {
+  label: string;
+  name: string;
+  reference: string;
+}
 export interface ShotCard extends Shot {
   fields: Record<BoardField, SourceField>;
-  frameAssets: { label: string; name: string; reference: string }[];
+  frameAssets: FrameAssetItem[];
+  tempAssets: FrameAssetItem[];
   /** Upload slots from the video-generation mapping table, in document order. */
   videoInputs: {
     param: string;

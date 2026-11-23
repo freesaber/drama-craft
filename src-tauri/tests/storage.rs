@@ -174,9 +174,11 @@ fn rejects_traversal_reserved_names_and_overwrites() {
     );
     assert!(!agents.contains("N ≥ ceil(2 × D)"));
     assert!(agents.contains("不规定每镜最低字数"));
-    assert!(agents.contains("```text\n上一镜尾帧\n```"));
+    assert!(!agents.contains("```text\n上一镜尾帧\n```"));
     assert!(!agents.contains("首帧来源："));
-    assert!(agents.contains("用户生成上一镜视频后"));
+    assert!(agents.contains("## 每镜独立首帧"));
+    assert!(agents.contains("角色多形象（状态变体）提前设计"));
+    assert!(agents.contains("分步生图与 `临时素材：`"));
     assert!(dialogue.contains("## 逐集对白正文"));
     assert!(!dialogue.contains("精简重写台词"));
     assert!(agents.contains("S 镜号是一条 1—15 秒的独立视频生成请求"));
@@ -217,7 +219,9 @@ fn rejects_traversal_reserved_names_and_overwrites() {
     assert!(agents.contains("`0001 S0001.mp4`"));
     assert!(agents.contains("视频提示词已写入已确认的画面风格"));
     assert!(agents.contains("首帧提示词画面风格写法（硬性规则）"));
-    assert!(agents.contains("每个首帧图片提示词在画幅比后直接写出用户确认的完整核心风格词"));
+    assert!(agents.contains(
+        "每个首帧图片提示词（含分步生图各步骤）在画幅比后直接写出用户确认的完整核心风格词"
+    ));
     assert!(agents.contains("附件负责锁定场景、外貌和服饰，不替代文字风格锚点"));
     assert!(agents.contains("16:9横向单幅画面。3D写实，PBR材质，电影级光照。"));
     assert!(agents.contains("首帧已显式写入画面风格"));

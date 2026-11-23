@@ -262,33 +262,86 @@ export function parseStoryboard(source: string): Storyboard {
     };
     const frameAssets: ShotCard["frameAssets"] = [];
     const frameAssetRefs = new Set<string>();
+    const tempAssets: ShotCard["tempAssets"] = [];
+    const tempAssetRefs = new Set<string>();
+    const imageFilePattern = /\.(png|jpe?g|webp|gif|bmp)$/i;
     for (const contents of sections("首帧生成")) {
       for (const node of contents) {
         if (node.type !== "paragraph") continue;
         const nodeRange = range(node);
         const raw = source.slice(nodeRange.start, nodeRange.end);
         const attachment = raw.search(/GPT\s*附件[：:]/i);
-        if (attachment < 0) continue;
-        visit(node, (child) => {
-          if (child.type !== "inlineCode" && child.type !== "link") return;
-          const childRange = range(child);
-          const localStart = childRange.start - nodeRange.start;
-          if (localStart <= attachment) return;
-          const reference = normalizeReference(
-            child.type === "inlineCode" ? child.value : child.url,
-          );
-          if (!reference || frameAssetRefs.has(reference)) return;
-          const prefix = raw.slice(attachment, localStart);
-          const match =
-            /图片\s*(\d+)\s*[＝=]\s*([^；;（(\r\n]*)[（(]?\s*$/.exec(prefix);
-          if (!match) return;
-          frameAssets.push({
-            label: `图片${match[1]}`,
-            name: match[2].trim() || `图片${match[1]}`,
-            reference,
+        const tempSection = raw.search(/临时素材[：:]/i);
+        if (attachment >= 0) {
+          const attachmentEnd =
+            tempSection > attachment ? tempSection : raw.length;
+          visit(node, (child) => {
+            if (child.type !== "inlineCode" && child.type !== "link") return;
+            const childRange = range(child);
+            const localStart = childRange.start - nodeRange.start;
+            if (localStart <= attachment || localStart >= attachmentEnd) return;
+            const reference = normalizeReference(
+              child.type === "inlineCode" ? child.value : child.url,
+            );
+            if (!reference || frameAssetRefs.has(reference)) return;
+            const prefix = raw.slice(attachment, localStart);
+            const match =
+              /图片\s*(\d+)\s*[＝=]\s*([^；;（(\r\n]*)[（(]?\s*$/.exec(prefix);
+            if (!match) return;
+            frameAssets.push({
+              label: `图片${match[1]}`,
+              name: match[2].trim() || `图片${match[1]}`,
+              reference,
+            });
+            frameAssetRefs.add(reference);
           });
-          frameAssetRefs.add(reference);
-        });
+        }
+        if (tempSection >= 0) {
+          const tempEnd =
+            attachment > tempSection ? attachment : raw.length;
+          visit(node, (child) => {
+            if (child.type !== "inlineCode" && child.type !== "link") return;
+            const childRange = range(child);
+            const localStart = childRange.start - nodeRange.start;
+            if (localStart <= tempSection || localStart >= tempEnd) return;
+            const reference = normalizeReference(
+              child.type === "inlineCode" ? child.value : child.url,
+            );
+            if (
+              !reference ||
+              !imageFilePattern.test(reference) ||
+              tempAssetRefs.has(reference)
+            )
+              return;
+            const prefix = raw.slice(tempSection, localStart);
+            const labeled =
+              /(临时|步骤|图片)\s*(\d+)\s*[＝=]\s*([^；;（(\r\n]*)[（(]?\s*$/.exec(
+                prefix,
+              );
+            if (labeled) {
+              const label = `${labeled[1]}${labeled[2]}`;
+              const name =
+                labeled[3].replace(/^\*+|\*+$/g, "").trim() || label;
+              tempAssets.push({ label, name, reference });
+              tempAssetRefs.add(reference);
+              return;
+            }
+            const afterHeader = prefix.replace(/^临时素材[：:]\s*/i, "");
+            const tail = afterHeader
+              .split(/[；;、,，\r\n]/)
+              .at(-1)
+              ?.replace(/[（(]\s*$/, "")
+              .replace(/^\*+|\*+$/g, "")
+              .trim();
+            const label = `临时${tempAssets.length + 1}`;
+            tempAssets.push({
+              label,
+              name: tail || reference.replace(/.*[/\\]/, ""),
+              reference,
+            });
+            tempAssetRefs.add(reference);
+          });
+        }
       }
     }
     const videoInputs: ShotCard["videoInputs"] = [];
@@ -376,6 +429,7 @@ export function parseStoryboard(source: string): Storyboard {
       ...shot,
       fields,
       frameAssets,
+      tempAssets,
       videoInputs,
       references,
       diagnostics: localDiagnostics,

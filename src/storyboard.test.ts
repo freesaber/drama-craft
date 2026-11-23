@@ -86,6 +86,51 @@ describe("storyboard structure", () => {
       },
     ]);
   });
+  it("extracts temporary frame assets from the first-frame section without mixing with GPT attachments", () => {
+    const source =
+      "## S0001 点灯\n\n### 首帧生成\n\n出图文件名：`0001 首帧_S0001.png`。\n\nGPT附件：**图片1＝渡口场景（`0001 素材_渡口.png`）；图片2＝渡口空间机位图（`0001 素材_渡口空间机位图.png`）**。\n\n临时素材：**临时1＝新机位空景（`0001 临时_S0001_01.png`）；临时2＝人物站位草稿（`0001 临时_S0001_02.png`）**。\n\n**首帧图片提示词**\n\n```text\n【分步生图】\n步骤1：生成空景\n```\n\n### 视频生成\n\n临时素材：`不应识别.png`\n";
+    const card = parseStoryboard(source).cards[0];
+    expect(card.frameAssets).toEqual([
+      {
+        label: "图片1",
+        name: "渡口场景",
+        reference: "0001 素材_渡口.png",
+      },
+      {
+        label: "图片2",
+        name: "渡口空间机位图",
+        reference: "0001 素材_渡口空间机位图.png",
+      },
+    ]);
+    expect(card.tempAssets).toEqual([
+      {
+        label: "临时1",
+        name: "新机位空景",
+        reference: "0001 临时_S0001_01.png",
+      },
+      {
+        label: "临时2",
+        name: "人物站位草稿",
+        reference: "0001 临时_S0001_02.png",
+      },
+    ]);
+    expect(card.fields.framePrompt.value).toContain("步骤1：生成空景");
+  });
+  it("handles inline GPT attachments and temporary assets in the same paragraph", () => {
+    const source =
+      "## S0002 合行\n\n### 首帧生成\n\n出图文件名：`0001 首帧_S0002.png`。GPT附件：**图片1＝场景（`场景.png`）**。临时素材：**步骤1＝空景底图（`0001 临时_S0002_01.png`）**。\n";
+    const card = parseStoryboard(source).cards[0];
+    expect(card.frameAssets).toEqual([
+      { label: "图片1", name: "场景", reference: "场景.png" },
+    ]);
+    expect(card.tempAssets).toEqual([
+      {
+        label: "步骤1",
+        name: "空景底图",
+        reference: "0001 临时_S0002_01.png",
+      },
+    ]);
+  });
   it("recognizes only top-level standalone markers including titleless headings", () => {
     const source =
       "# 本集\n\nS1 起点\n\n正文\n\n## s002\n\n```md\n## S0999 假标题\n```\n\n> S0003 引用\n\n| S0004 表格 |\n|---|\n\n这里提到 S0005\n\nS006 连续正文\n不应该拆分\n\n### S0007 终点\n";

@@ -41,6 +41,7 @@ function card(partial: {
       videoFile: field(partial.videoFile ?? ""),
     },
     frameAssets: [],
+    tempAssets: [],
     videoInputs: partial.videoInputs ?? [],
     references: [],
     diagnostics: [],

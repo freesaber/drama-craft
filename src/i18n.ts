@@ -422,8 +422,13 @@ export const ui = {
     frameRestore: "恢复此版本",
     frameReplaceHint: "替换首帧；旧文件加时间戳并保留在历史中",
     materials: "素材",
+    tempMaterials: "临时素材",
     promptTab: "提示词",
     noFrameMaterials: "未从 GPT附件 中识别到首帧素材",
+    noTempMaterials: "未从 临时素材 中识别到中间过程图",
+    tempMaterialPlaceHint:
+      "选择图片保存为该临时素材文件名（替换时直接覆盖，不改名）",
+    noTempPreviewImage: "暂无可预览的临时素材图片，可点击下方按钮上传。",
     videoPrompt: "视频提示词",
     duration: "时长（秒）",
     resolution: "分辨率",

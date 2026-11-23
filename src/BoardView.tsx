@@ -292,7 +292,14 @@ export default function BoardView({
               <FrameImageTabs
                 key={`${document}-${card.id}`}
                 assets={card.frameAssets}
+                tempAssets={card.tempAssets}
                 frameFile={card.fields.frameFile.value.trim()}
+                project={project}
+                document={document}
+                shotId={card.id}
+                refreshKey={refreshKey}
+                busy={busy}
+                onMediaPlaced={onMediaPlaced}
                 place={
                   <FrameFilePlace
                     project={project}
@@ -304,13 +311,14 @@ export default function BoardView({
                     onPlaced={onMediaPlaced}
                   />
                 }
-                asset={(reference) => (
+                asset={(reference, onAvailability) => (
                   <LazyAsset
                     project={project}
                     document={document}
                     reference={reference}
                     refreshKey={refreshKey}
                     hero
+                    onAvailability={onAvailability}
                   />
                 )}
                 prompt={field(card, "framePrompt", true)}
@@ -476,24 +484,128 @@ function FrameFilePlace({
 
 function FrameImageTabs({
   assets,
+  tempAssets,
   frameFile,
+  project,
+  document,
+  shotId,
+  refreshKey,
+  busy,
+  onMediaPlaced,
   place,
   asset,
   prompt,
 }: {
   assets: ShotCard["frameAssets"];
+  tempAssets: ShotCard["tempAssets"];
   frameFile: string;
+  project: Project;
+  document: string;
+  shotId: string;
+  refreshKey: number;
+  busy: boolean;
+  onMediaPlaced?: () => void;
   place: React.ReactNode;
-  asset: (reference: string) => React.ReactNode;
+  asset: (
+    reference: string,
+    onAvailability?: (exists: boolean) => void,
+  ) => React.ReactNode;
   prompt: React.ReactNode;
 }) {
-  const [active, setActive] = useState<"frame" | "assets" | "prompt">("assets");
+  const [active, setActive] = useState<"frame" | "assets" | "temp" | "prompt">(
+    "assets",
+  );
+  const [tempAvailability, setTempAvailability] = useState<
+    Record<string, boolean>
+  >({});
+  const [placingKey, setPlacingKey] = useState<string | null>(null);
+  const [tempError, setTempError] = useState("");
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const [previewAvailable, setPreviewAvailable] = useState<boolean | null>(
+    null,
+  );
+  const previewDialog = useRef<HTMLElement>(null);
+  const previewOpen = previewIndex !== null;
+  useEffect(() => {
+    if (!previewOpen) return;
+    const previousFocus = window.document.activeElement;
+    previewDialog.current?.focus();
+    return () => {
+      if (previousFocus instanceof HTMLElement) previousFocus.focus();
+    };
+  }, [previewOpen]);
+  useEffect(() => {
+    if (previewIndex !== null && previewIndex >= tempAssets.length) {
+      setPreviewIndex(null);
+      setPreviewAvailable(null);
+    }
+  }, [previewIndex, tempAssets.length]);
+  const rememberTemp = (key: string, exists: boolean) =>
+    setTempAvailability((current) =>
+      current[key] === exists ? current : { ...current, [key]: exists },
+    );
+  const openTempPreview = (index: number) => {
+    setPreviewIndex(index);
+    setPreviewAvailable(null);
+    setTempError("");
+  };
+  const closeTempPreview = () => {
+    setPreviewIndex(null);
+    setPreviewAvailable(null);
+  };
+  const moveTempPreview = (offset: -1 | 1) => {
+    if (previewIndex === null) return;
+    const next = previewIndex + offset;
+    if (next >= 0 && next < tempAssets.length) {
+      setPreviewIndex(next);
+      setPreviewAvailable(null);
+    }
+  };
+  const placeTempImage = async (key: string, reference: string) => {
+    if (!desktop || busy || placingKey) return;
+    setTempError("");
+    setPlacingKey(key);
+    try {
+      const selected = await chooseMedia("image");
+      if (!selected) return;
+      await api.placeDocumentMedia(
+        project.handle,
+        document,
+        reference,
+        selected,
+      );
+      rememberTemp(key, true);
+      if (previewIndex !== null && tempAssets[previewIndex]?.reference === reference) {
+        setPreviewAvailable(true);
+      }
+      onMediaPlaced?.();
+    } catch (e) {
+      setTempError(errorMessage(e));
+    } finally {
+      setPlacingKey(null);
+    }
+  };
   const frameName = frameFile.replace(/.*[/\\]/, "");
   const tabs = [
-    { id: "assets" as const, label: ui.board.materials },
-    { id: "prompt" as const, label: ui.board.promptTab },
-    { id: "frame" as const, label: ui.board.frameImage },
+    { id: "assets" as const, label: ui.board.materials, count: 0 },
+    {
+      id: "temp" as const,
+      label: ui.board.tempMaterials,
+      count: tempAssets.length,
+    },
+    { id: "prompt" as const, label: ui.board.promptTab, count: 0 },
+    { id: "frame" as const, label: ui.board.frameImage, count: 0 },
   ];
+  const previewItem =
+    previewIndex !== null ? (tempAssets[previewIndex] ?? null) : null;
+  const previewKey = previewItem
+    ? `temp-${previewItem.label}-${previewItem.reference}`
+    : "";
+  const previewFilename = previewItem
+    ? previewItem.reference.replace(/.*[/\\]/, "")
+    : "";
+  const canPlacePreview =
+    desktop && !!previewItem && isProjectRelativeImage(previewItem.reference);
   return (
     <div className="frame-image-tabs">
       <div role="tablist" aria-label={ui.board.frameImage}>
@@ -506,6 +618,7 @@ function FrameImageTabs({
             onClick={() => setActive(tab.id)}
           >
             {tab.label}
+            {tab.count > 0 && <span>{tab.count}</span>}
           </button>
         ))}
       </div>
@@ -544,6 +657,199 @@ function FrameImageTabs({
           })}
           {!assets.length && (
             <p className="muted">{ui.board.noFrameMaterials}</p>
+          )}
+        </div>
+      ) : active === "temp" ? (
+        <div role="tabpanel" className="frame-temp-panel">
+          {tempError && <p className="diagnostic">{tempError}</p>}
+          <div className="frame-assets">
+            {tempAssets.map((item, index) => {
+              const filename = item.reference.replace(/.*[/\\]/, "");
+              const key = `temp-${item.label}-${item.reference}`;
+              const canPlace = desktop && isProjectRelativeImage(item.reference);
+              const open = () => openTempPreview(index);
+              return (
+                <article
+                  className="frame-asset temp-frame-asset"
+                  key={key}
+                >
+                  <div
+                    className="temp-frame-preview"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${item.label} · ${item.name}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      open();
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        open();
+                      }
+                    }}
+                  >
+                    {asset(item.reference, (exists) =>
+                      rememberTemp(key, exists),
+                    )}
+                  </div>
+                  <strong
+                    title={`${item.label} · ${item.name}\n${item.reference}`}
+                  >
+                    {item.label} · {item.name}
+                  </strong>
+                  <small className="temp-frame-filename" title={item.reference}>
+                    {filename}
+                  </small>
+                  {canPlace && (
+                    <button
+                      type="button"
+                      className="episode-material-place"
+                      title={`${ui.board.tempMaterialPlaceHint}：${item.reference}`}
+                      disabled={busy || placingKey === key}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void placeTempImage(key, item.reference);
+                      }}
+                    >
+                      {placingKey === key
+                        ? ui.busy
+                        : tempAvailability[key]
+                          ? ui.episodeData.replaceImage
+                          : ui.episodeData.uploadImage}
+                    </button>
+                  )}
+                </article>
+              );
+            })}
+            {!tempAssets.length && (
+              <p className="muted">{ui.board.noTempMaterials}</p>
+            )}
+          </div>
+          {previewItem && previewIndex !== null && (
+            <div
+              className="modal-backdrop"
+              onClick={(event) => event.stopPropagation()}
+              onMouseDown={closeTempPreview}
+            >
+              <section
+                ref={previewDialog}
+                className="modal generation-prompt-modal temp-preview-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby={`temp-preview-title-${shotId}`}
+                tabIndex={-1}
+                onMouseDown={(event) => event.stopPropagation()}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") closeTempPreview();
+                  if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                    event.preventDefault();
+                    moveTempPreview(event.key === "ArrowLeft" ? -1 : 1);
+                  }
+                }}
+              >
+                <button
+                  type="button"
+                  className="modal-close"
+                  aria-label={ui.cancel}
+                  onClick={closeTempPreview}
+                >
+                  ×
+                </button>
+                <div className="temp-preview-heading">
+                  <h2 id={`temp-preview-title-${shotId}`}>
+                    {previewItem.label} · {previewItem.name}
+                  </h2>
+                  <small title={previewItem.reference}>{previewFilename}</small>
+                </div>
+                {tempError && (
+                  <p className="diagnostic" role="alert">
+                    {tempError}
+                  </p>
+                )}
+                <div className="material-preview-stage">
+                  {tempAssets.length > 1 ? (
+                    <button
+                      type="button"
+                      className="material-preview-arrow"
+                      aria-label={ui.episodeData.previousMaterial}
+                      aria-disabled={previewIndex === 0}
+                      onClick={() => moveTempPreview(-1)}
+                    >
+                      ‹
+                    </button>
+                  ) : (
+                    <span />
+                  )}
+                  <div className="material-preview-content">
+                    <div className="material-preview-image">
+                      <Asset
+                        key={`${previewItem.reference}:${refreshKey}`}
+                        project={project}
+                        document={document}
+                        reference={previewItem.reference}
+                        refreshKey={refreshKey}
+                        onAvailability={(exists) => {
+                          setPreviewAvailable(exists);
+                          rememberTemp(previewKey, exists);
+                        }}
+                      />
+                      {previewAvailable === false && (
+                        <p className="muted">{ui.board.noTempPreviewImage}</p>
+                      )}
+                    </div>
+                  </div>
+                  {tempAssets.length > 1 ? (
+                    <button
+                      type="button"
+                      className="material-preview-arrow"
+                      aria-label={ui.episodeData.nextMaterial}
+                      aria-disabled={previewIndex === tempAssets.length - 1}
+                      onClick={() => moveTempPreview(1)}
+                    >
+                      ›
+                    </button>
+                  ) : (
+                    <span />
+                  )}
+                </div>
+                <div className="modal-actions">
+                  {previewAvailable && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void api
+                          .openMedia(
+                            project.handle,
+                            document,
+                            previewItem.reference,
+                          )
+                          .catch((e) => setTempError(errorMessage(e)))
+                      }
+                    >
+                      {ui.openFile}
+                    </button>
+                  )}
+                  {canPlacePreview && (
+                    <button
+                      type="button"
+                      className="primary"
+                      disabled={busy || placingKey === previewKey}
+                      onClick={() =>
+                        void placeTempImage(previewKey, previewItem.reference)
+                      }
+                    >
+                      {placingKey === previewKey
+                        ? ui.busy
+                        : previewAvailable || tempAvailability[previewKey]
+                          ? ui.episodeData.replaceImage
+                          : ui.episodeData.uploadImage}
+                    </button>
+                  )}
+                </div>
+              </section>
+            </div>
           )}
         </div>
       ) : (

@@ -1662,6 +1662,9 @@
   border-bottom: 1px solid #e7ecdf;
 }
 .frame-image-tabs [role="tab"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 7px 2px 9px;
   border: 0;
   border-bottom: 2px solid transparent;
@@ -1670,6 +1673,10 @@
   color: #7b8b70;
   font-size: 12px;
 }
+.frame-image-tabs [role="tab"] span {
+  color: #9aa58f;
+  font-size: 10px;
+}
 .frame-image-tabs [role="tab"][aria-selected="true"] {
   border-bottom-color: #456c4f;
   color: #34573f;
@@ -1677,6 +1684,9 @@
 }
 .frame-image-tabs > [role="tabpanel"] {
   padding-top: 16px;
+}
+.frame-temp-panel > .diagnostic {
+  margin: 0 0 12px;
 }
 .frame-assets {
   display: flex;
@@ -1687,6 +1697,33 @@
 .frame-asset {
   flex: 0 0 220px;
   min-width: 0;
+}
+.temp-frame-preview {
+  cursor: pointer;
+  border-radius: 7px;
+  transition: box-shadow 0.15s ease;
+}
+.temp-frame-preview:hover,
+.temp-frame-preview:focus-visible {
+  box-shadow: 0 0 0 2px #456c4f;
+  outline: none;
+}
+.temp-frame-filename {
+  display: block;
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+  color: #7b8b70;
+  font-size: 11px;
+}
+.temp-preview-heading {
+  padding-right: 36px;
+}
+.temp-preview-heading small {
+  display: block;
+  margin-top: 4px;
+  color: #7b8b70;
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }
 .frame-asset .lazy-asset {
   min-height: 0;
