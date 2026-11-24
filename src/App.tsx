@@ -4,6 +4,7 @@ import { api, chooseDirectory, desktop, errorMessage } from "./api";
 import BatchGenerateDialog from "./BatchGenerateDialog";
 import BatchAudioDialog from "./BatchAudioDialog";
 import { AudioApiDialog, VideoApiDialog } from "./ApiSettingsDialog";
+import FirstFrameGalleryDialog from "./FirstFrameGalleryDialog";
 import MergeDialog from "./MergeDialog";
 import { isOverviewDocument, sortDocuments } from "./markdown";
 import {
@@ -93,6 +94,7 @@ export default function App() {
   const [showBatchDialog, setShowBatchDialog] = useState(false);
   const [showAudioBatchDialog, setShowAudioBatchDialog] = useState(false);
   const [apiDialog, setApiDialog] = useState<"video" | "audio" | null>(null);
+  const [showFrameGallery, setShowFrameGallery] = useState(false);
   const [showMergeDialog, setShowMergeDialog] = useState(false);
   const [discardedShots, setDiscardedShots] = useState<string[]>([]);
   const appliedBatchItems = useRef(new Set<string>());
@@ -228,6 +230,7 @@ export default function App() {
     if (nextPath !== path) {
       setMode("board");
       setActiveShot(0);
+      setShowFrameGallery(false);
     }
     setPath(nextPath);
     setSnapshot(next);
@@ -256,6 +259,7 @@ export default function App() {
     setConflict(false);
     setNotice(next.warning ?? "");
     setCandidates(null);
+    setShowFrameGallery(false);
     setModal(null);
     const docs = await scan(next);
     if (docs.length)
@@ -435,6 +439,7 @@ export default function App() {
       appliedBatchItems.current.clear();
       setShowBatchDialog(false);
       setShowAudioBatchDialog(false);
+      setShowFrameGallery(false);
       setApiDialog(null);
     });
   const reload = () =>
@@ -1280,6 +1285,17 @@ export default function App() {
                       disabled={
                         busy ||
                         !board.cards.length ||
+                        isOverviewDocument(path)
+                      }
+                      onClick={() => setShowFrameGallery(true)}
+                    >
+                      {ui.frameGallery.open}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={
+                        busy ||
+                        !board.cards.length ||
                         isOverviewDocument(path) ||
                         snapshot?.readonly
                       }
@@ -1416,6 +1432,32 @@ export default function App() {
           busy={busy}
           onClose={() => setApiDialog(null)}
           onSaved={() => setNotice(ui.audio.settingsSaved)}
+        />
+      )}
+      {showFrameGallery && project && snapshot && (
+        <FirstFrameGalleryDialog
+          project={project}
+          document={path}
+          board={board}
+          refreshKey={refreshKey}
+          initialIndex={activeShot}
+          discardedShotIds={discardedShots}
+          onLocate={(index) => {
+            setShowFrameGallery(false);
+            if (index < 0 || index >= board.cards.length) return;
+            setActiveShot(index);
+            if (mode !== "board") {
+              pendingJump.current = board.cards[index].offset;
+              setMode("board");
+              return;
+            }
+            window.setTimeout(() => {
+              document
+                .getElementById(`shot-card-${index}`)
+                ?.scrollIntoView({ block: "start", behavior: "smooth" });
+            }, 50);
+          }}
+          onClose={() => setShowFrameGallery(false)}
         />
       )}
       {showMergeDialog && project && snapshot && (
