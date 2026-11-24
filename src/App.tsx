@@ -30,7 +30,10 @@ import type {
   Snapshot,
   SourcePatch,
 } from "./types";
-import { migrateGenerationSettings, optionsFromProfile } from "./videoWorkflows";
+import {
+  migrateGenerationSettings,
+  optionsFromProfile,
+} from "./videoWorkflows";
 
 const projectListIcons = {
   search: "M21 21l-4.3-4.3M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z",
@@ -87,9 +90,9 @@ export default function App() {
   const [notice, setNotice] = useState("");
   const [conflict, setConflict] = useState(false);
   const [mode, setMode] = useState<"board" | "source">("board");
-  const [workspaceView, setWorkspaceView] = useState<
-    "storyboard" | "tasks"
-  >("storyboard");
+  const [workspaceView, setWorkspaceView] = useState<"storyboard" | "tasks">(
+    "storyboard",
+  );
   const [batchJobs, setBatchJobs] = useState<BatchJob[]>([]);
   const [showBatchDialog, setShowBatchDialog] = useState(false);
   const [showAudioBatchDialog, setShowAudioBatchDialog] = useState(false);
@@ -107,9 +110,9 @@ export default function App() {
       activeProfileId: "",
       defaultResolution: "480p横(864*480)",
     });
-  const [modal, setModal] = useState<
-    "project" | "open" | "libraries" | null
-  >(null);
+  const [modal, setModal] = useState<"project" | "open" | "libraries" | null>(
+    null,
+  );
   const [name, setName] = useState("");
   const [parent, setParent] = useState("");
   const [characterDirectory, setCharacterDirectory] = useState("");
@@ -1047,7 +1050,8 @@ export default function App() {
           {workspaceView !== "tasks" && (
             <div className="project-toolbar">
               <div className="project-location" title={project.root}>
-                ▱ {project.root.replace(/^\\\\\?\\/, "")}
+                <ProjectListIcon name="folder" />
+                <span>{project.root.replace(/^\\\\\?\\/, "")}</span>
               </div>
               <div className="project-location-actions">
                 <button
@@ -1061,7 +1065,7 @@ export default function App() {
                       .catch((e) => setError(errorMessage(e)));
                   }}
                 >
-                  ⧉
+                  <ProjectListIcon name="copy" />
                 </button>
                 <button
                   disabled={busy}
@@ -1073,7 +1077,7 @@ export default function App() {
                     });
                   }}
                 >
-                  ⌨
+                  <ProjectListIcon name="terminal" />
                 </button>
                 <button
                   disabled={busy}
@@ -1085,7 +1089,7 @@ export default function App() {
                     });
                   }}
                 >
-                  📂
+                  <ProjectListIcon name="folder" />
                 </button>
               </div>
               <span className="project-toolbar-spacer" />
@@ -1095,10 +1099,7 @@ export default function App() {
               <button disabled={busy} onClick={configureGeneration}>
                 {ui.generation.apiSettings}
               </button>
-              <button
-                disabled={busy}
-                onClick={() => setApiDialog("audio")}
-              >
+              <button disabled={busy} onClick={() => setApiDialog("audio")}>
                 {ui.audio.apiSettings}
               </button>
               <button
@@ -1283,9 +1284,7 @@ export default function App() {
                     <button
                       type="button"
                       disabled={
-                        busy ||
-                        !board.cards.length ||
-                        isOverviewDocument(path)
+                        busy || !board.cards.length || isOverviewDocument(path)
                       }
                       onClick={() => setShowFrameGallery(true)}
                     >
@@ -1354,7 +1353,9 @@ export default function App() {
                     source={showSource}
                     active={activeShot}
                     select={setActiveShot}
-                    defaultVideoApiProfileId={generationSettings.activeProfileId}
+                    defaultVideoApiProfileId={
+                      generationSettings.activeProfileId
+                    }
                     videoApiProfiles={generationSettings.profiles}
                     videoWorkflow={activeVideoOptions}
                     configureGeneration={configureGeneration}
@@ -1375,7 +1376,10 @@ export default function App() {
                   />
                 ) : (
                   <div className="empty-editor">
-                    ▤<p>{ui.empty}</p>
+                    <span className="empty-editor-icon">
+                      <ProjectListIcon name="project" />
+                    </span>
+                    <p>{ui.empty}</p>
                   </div>
                 )}
                 <div className="editor-footer">
