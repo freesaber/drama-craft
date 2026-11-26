@@ -947,7 +947,6 @@ input[type="radio"] {
   background: var(--accent-soft);
   color: var(--accent);
   font-weight: 600;
-  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .document-list button.selected span {
@@ -993,7 +992,6 @@ input[type="radio"] {
   color: var(--accent);
   font-weight: 600;
   border-radius: var(--radius-sm);
-  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .shot-list code {
@@ -2522,7 +2520,6 @@ input[type="radio"] {
 .generation-history article.current {
   background: var(--accent-soft);
   border-color: var(--accent-border);
-  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .generation-history article > div:first-child {
