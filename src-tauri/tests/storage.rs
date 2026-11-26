@@ -229,6 +229,12 @@ fn rejects_traversal_reserved_names_and_overwrites() {
     assert!(agents.contains("<Subject 1> 是 <Picture 2> 中的年轻学徒"));
     assert!(agents.contains("<Subject 1> (S1) 使用 <Audio 1> 的音色，在画内恼火地说："));
     assert!(agents.contains("没有可见主体的系统声或旁白"));
+    assert!(agents.contains("`</d>` 后必须立刻闭口，严禁后置声音评价或二次引词"));
+    assert!(agents.contains("严禁无 `<d>` 开口（零“无声问答/唇动无词”）"));
+    assert!(agents.contains("`summary:` 严禁复述台词原词"));
+    assert!(agents.contains("`overall_soundscape:` 严禁再次描述人声或对白"));
+    assert!(agents.contains("单镜 `[Shot 1]` 内不写自定义 `0—3秒：` / `3—6.3秒：` 中文秒数前缀"));
+    assert!(agents.contains("摘要与声景纯净"));
 }
 
 #[test]
